@@ -7,6 +7,7 @@ import {
   receipts, deliveryNotes, eInvoices, parsedInvoices,
   customers, suppliers,
 } from "@db/schema";
+import { sendInvoice, checkInvoiceStatus, lookupCompany, generateUJPXml, type UJPInvoicePayload } from "./ujp-service";
 
 export const accountingRouter = createRouter({
   // ===== OUTGOING INVOICES (Излезни фактури) =====
@@ -458,21 +459,148 @@ export const accountingRouter = createRouter({
       };
     }),
 
-  // ===== E-INVOICE (УЈП) =====
-  eInvoiceList: publicQuery.query(async () => {
-    const db = getDb();
-    return await db.select().from(eInvoices).orderBy(desc(eInvoices.createdAt));
-  }),
+  // ===== УЈП E-FAKTURA INTEGRATION =====
+  ujpCompanyLookup: publicQuery
+    .input(z.object({ edb: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const result = await lookupCompany(input.edb);
+      return result;
+    }),
 
-  eInvoiceCreate: publicQuery
+  ujpSendInvoice: publicQuery
     .input(z.object({
       invoiceId: z.number(),
-      xmlContent: z.string(),
+      sellerEdb: z.string(),
+      sellerName: z.string(),
+      sellerAddress: z.string().optional(),
+      sellerCity: z.string().optional(),
+      sellerVatNumber: z.string().optional(),
+      buyerEdb: z.string(),
+      buyerName: z.string(),
+      buyerAddress: z.string().optional(),
+      buyerCity: z.string().optional(),
+      buyerVatNumber: z.string().optional(),
+      certificateData: z.object({ cert: z.string(), pin: z.string() }).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db.insert(eInvoices).values(input);
-      return { success: true };
+      const { invoiceId, certificateData, ...sellerBuyerData } = input;
+
+      // Fetch invoice from DB
+      const inv = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+      if (!inv[0]) throw new Error("Фактурата не постои");
+      const invoice = inv[0];
+
+      // Fetch invoice items
+      const items = await db.select().from(documentItems).where(
+        and(eq(documentItems.documentId, invoiceId), eq(documentItems.documentType, "invoice"))
+      );
+
+      // Fetch customer for buyer details
+      const cust = await db.select().from(customers).where(eq(customers.id, invoice.customerId));
+      const customer = cust[0];
+
+      // Build UJP payload
+      const payload: UJPInvoicePayload = {
+        invoiceNumber: invoice.invoiceNumber,
+        issueDate: invoice.issueDate ? String(invoice.issueDate).split("T")[0] : new Date().toISOString().split("T")[0],
+        dueDate: invoice.dueDate ? String(invoice.dueDate).split("T")[0] : undefined,
+        sellerEdb: sellerBuyerData.sellerEdb,
+        sellerName: sellerBuyerData.sellerName,
+        sellerAddress: sellerBuyerData.sellerAddress || "",
+        sellerCity: sellerBuyerData.sellerCity || "",
+        sellerVatNumber: sellerBuyerData.sellerVatNumber || null,
+        buyerEdb: sellerBuyerData.buyerEdb,
+        buyerName: sellerBuyerData.buyerName,
+        buyerAddress: sellerBuyerData.buyerAddress || customer?.address || "",
+        buyerCity: sellerBuyerData.buyerCity || customer?.city || "",
+        buyerVatNumber: sellerBuyerData.buyerVatNumber || null,
+        currency: invoice.currency,
+        paymentType: "42",
+        subtotal: parseFloat(invoice.subtotal),
+        vatAmount: parseFloat(invoice.vatAmount),
+        totalAmount: parseFloat(invoice.totalAmount),
+        items: items.map((item, idx) => ({
+          lineNumber: idx + 1,
+          description: item.description,
+          quantity: parseFloat(item.quantity),
+          unit: item.unit || "ком",
+          unitPrice: parseFloat(item.unitPrice),
+          totalPrice: parseFloat(item.totalPrice),
+          vatRate: parseFloat(item.vatRate),
+          vatAmount: parseFloat(item.totalPrice) * parseFloat(item.vatRate) / 100,
+        })),
+        notes: invoice.notes || undefined,
+      };
+
+      // Send to UJP
+      const response = await sendInvoice(payload, certificateData);
+
+      // Save e-invoice record
+      if (response.euid) {
+        await db.insert(eInvoices).values({
+          invoiceId,
+          ujpInvoiceId: response.euid,
+          status: response.status === 200 ? "sent_to_ujp" : "rejected",
+          responseMessage: response.message,
+          sentAt: new Date(),
+        } as any);
+
+        // Update invoice with eInvoiceId
+        await db.update(invoices).set({ eInvoiceId: response.euid }).where(eq(invoices.id, invoiceId));
+      }
+
+      return response;
+    }),
+
+  ujpCheckStatus: publicQuery
+    .input(z.object({ euid: z.string() }))
+    .query(async ({ input }) => {
+      const status = await checkInvoiceStatus(input.euid);
+      return status;
+    }),
+
+  ujpGenerateXml: publicQuery
+    .input(z.object({ invoiceId: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const inv = await db.select().from(invoices).where(eq(invoices.id, input.invoiceId));
+      if (!inv[0]) return null;
+      const items = await db.select().from(documentItems).where(
+        and(eq(documentItems.documentId, input.invoiceId), eq(documentItems.documentType, "invoice"))
+      );
+      const cust = await db.select().from(customers).where(eq(customers.id, inv[0].customerId));
+      const xml = generateUJPXml({ ...inv[0], items, customer: cust[0] || {} });
+      return xml;
+    }),
+
+  ujpInvoiceList: publicQuery
+    .input(z.object({ search: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      const db = getDb();
+      const result = await db
+        .select({
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          customerId: invoices.customerId,
+          status: invoices.status,
+          invoiceType: invoices.invoiceType,
+          issueDate: invoices.issueDate,
+          totalAmount: invoices.totalAmount,
+          currency: invoices.currency,
+          eInvoiceId: invoices.eInvoiceId,
+          customerName: customers.name,
+          customerCompany: customers.company,
+        })
+        .from(invoices)
+        .leftJoin(customers, eq(invoices.customerId, customers.id))
+        .orderBy(desc(invoices.createdAt));
+
+      if (input?.search) {
+        const s = input.search.toLowerCase();
+        return result.filter(r => r.invoiceNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
+      }
+      return result;
     }),
 
   // ===== PARSED INVOICES =====
