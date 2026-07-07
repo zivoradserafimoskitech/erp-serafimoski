@@ -5,6 +5,7 @@ import Storage from "@/pages/Storage";
 import Production from "@/pages/Production";
 import Customers from "@/pages/Customers";
 import Procurement from "@/pages/Procurement";
+import Accounting from "@/pages/Accounting";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 
@@ -49,6 +50,14 @@ export default function App() {
         element={
           <Layout>
             <Procurement />
+          </Layout>
+        }
+      />
+      <Route
+        path="/smetkovodstvo"
+        element={
+          <Layout>
+            <Accounting />
           </Layout>
         }
       />

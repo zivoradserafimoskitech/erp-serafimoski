@@ -13,6 +13,7 @@ import {
   X,
   ChevronRight,
   ShieldCheck,
+  Calculator,
 } from "lucide-react";
 
 const navItems = [
@@ -21,6 +22,7 @@ const navItems = [
   { path: "/proizvodstvo", label: "Производство", icon: Factory },
   { path: "/klienti", label: "Клиенти и нарачки", icon: Users },
   { path: "/nabavka", label: "Набавка", icon: ShoppingCart },
+  { path: "/smetkovodstvo", label: "Сметководство", icon: Calculator },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {

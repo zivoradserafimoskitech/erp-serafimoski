@@ -4,6 +4,7 @@ import { productionRouter } from "./production-router";
 import { customersRouter } from "./customers-router";
 import { procurementRouter } from "./procurement-router";
 import { dashboardRouter } from "./dashboard-router";
+import { accountingRouter } from "./accounting-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -14,6 +15,7 @@ export const appRouter = createRouter({
   customers: customersRouter,
   procurement: procurementRouter,
   dashboard: dashboardRouter,
+  accounting: accountingRouter,
 });
 
 export type AppRouter = typeof appRouter;
