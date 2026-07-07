@@ -6,6 +6,7 @@ import Production from "@/pages/Production";
 import Customers from "@/pages/Customers";
 import Procurement from "@/pages/Procurement";
 import Accounting from "@/pages/Accounting";
+import Quotations from "@/pages/Quotations";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 
@@ -58,6 +59,14 @@ export default function App() {
         element={
           <Layout>
             <Accounting />
+          </Layout>
+        }
+      />
+      <Route
+        path="/ponudi"
+        element={
+          <Layout>
+            <Quotations />
           </Layout>
         }
       />

@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Calculator,
+  FileText,
 } from "lucide-react";
 
 const navItems = [
@@ -23,6 +24,7 @@ const navItems = [
   { path: "/klienti", label: "Клиенти и нарачки", icon: Users },
   { path: "/nabavka", label: "Набавка", icon: ShoppingCart },
   { path: "/smetkovodstvo", label: "Сметководство", icon: Calculator },
+  { path: "/ponudi", label: "Понуди", icon: FileText },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {

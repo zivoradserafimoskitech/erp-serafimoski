@@ -5,6 +5,7 @@ import { customersRouter } from "./customers-router";
 import { procurementRouter } from "./procurement-router";
 import { dashboardRouter } from "./dashboard-router";
 import { accountingRouter } from "./accounting-router";
+import { quotationRouter } from "./quotation-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -16,6 +17,7 @@ export const appRouter = createRouter({
   procurement: procurementRouter,
   dashboard: dashboardRouter,
   accounting: accountingRouter,
+  quotation: quotationRouter,
 });
 
 export type AppRouter = typeof appRouter;

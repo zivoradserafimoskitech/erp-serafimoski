@@ -410,6 +410,123 @@ export const eInvoices = mysqlTable("e_invoices", {
 export type EInvoice = typeof eInvoices.$inferSelect;
 export type InsertEInvoice = typeof eInvoices.$inferInsert;
 
+// ============= SERVICES (Услуги - ласер, виткање, фарбање...) =============
+export const services = mysqlTable("services", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 100 }).notNull().unique(),
+  type: mysqlEnum("type", [
+    "laser_cutting",       // ласерско сечење
+    "plasma_cutting",      // плазма сечење
+    "bending",             // виткање
+    "mig_welding",         // MIG заварување
+    "tig_welding",         // TIG заварување
+    "grinding",            // брусење
+    "drilling",            // дупчење
+    "electrostatic_paint", // електростатско фарбање
+    "wet_paint",           // мокро бојадисување
+    "galvanizing",         // галванизација
+    "cnc_machining",       // ЦНЦ обработка
+    "labor",               // работна рака
+    "design",              // проектирање
+    "transport",           // транспорт
+    "installation",        // монтажа
+    "other",               // други
+  ]).notNull(),
+  unit: mysqlEnum("unit", ["m2", "m", "kg", "hour", "pcs", "job"]).notNull(),
+  description: text("description"),
+  defaultPrice: decimal("defaultPrice", { precision: 12, scale: 2 }).default("0").notNull(),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Service = typeof services.$inferSelect;
+export type InsertService = typeof services.$inferInsert;
+
+// ============= PRODUCTS (Готови производи) =============
+export const products = mysqlTable("products", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 100 }).notNull().unique(),
+  category: mysqlEnum("category", [
+    "laser_fence",           // ласер ЦНЦ ограда
+    "decorative_fence",      // декоративна ограда
+    "metal_fence",           // метална ограда
+    "balcony_railing",       // балконски огради
+    "stair_railing",         // скалилшни огради
+    "gate",                  // порта/кapija
+    "pergola",               // пергола
+    "canopy",                // надвес/настрешница
+    "metal_door",            // метална врата
+    "industrial_product",    // индустриски производ
+    "custom_metalwork",      // сопствен метален производ
+    "shelf",                 // полица
+    "worktable",             // работна маса
+    "other",                 // други
+  ]).notNull(),
+  description: text("description"),
+  unit: mysqlEnum("unit", ["m2", "m", "kg", "pcs", "set"]).notNull(),
+  defaultPrice: decimal("defaultPrice", { precision: 12, scale: 2 }).default("0").notNull(),
+  materialCost: decimal("materialCost", { precision: 12, scale: 2 }).default("0").notNull(),
+  laborCost: decimal("laborCost", { precision: 12, scale: 2 }).default("0").notNull(),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = typeof products.$inferInsert;
+
+// ============= QUOTATIONS (Понуди) =============
+export const quotations = mysqlTable("quotations", {
+  id: serial("id").primaryKey(),
+  quoteNumber: varchar("quoteNumber", { length: 50 }).notNull().unique(),
+  customerId: bigint("customerId", { mode: "number", unsigned: true }).notNull(),
+  status: mysqlEnum("status", [
+    "draft",        // нацрт
+    "sent",         // испратена
+    "accepted",     // прифатена
+    "rejected",     // одбиена
+    "expired",      // истечена
+    "converted",    // претворена во нарачка
+  ]).default("draft").notNull(),
+  subtotal: decimal("subtotal", { precision: 14, scale: 2 }).default("0").notNull(),
+  vatRate: decimal("vatRate", { precision: 5, scale: 2 }).default("18").notNull(),
+  vatAmount: decimal("vatAmount", { precision: 14, scale: 2 }).default("0").notNull(),
+  totalAmount: decimal("totalAmount", { precision: 14, scale: 2 }).default("0").notNull(),
+  currency: varchar("currency", { length: 10 }).default("MKD").notNull(),
+  validUntil: date("validUntil"),
+  deliveryDays: int("deliveryDays").default(14),
+  paymentTerms: varchar("paymentTerms", { length: 255 }).default("14 дена"),
+  notes: text("notes"),
+  convertedOrderId: bigint("convertedOrderId", { mode: "number", unsigned: true }),
+  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type Quotation = typeof quotations.$inferSelect;
+export type InsertQuotation = typeof quotations.$inferInsert;
+
+// ============= QUOTATION ITEMS (Ставки во понуда) =============
+export const quotationItems = mysqlTable("quotation_items", {
+  id: serial("id").primaryKey(),
+  quotationId: bigint("quotationId", { mode: "number", unsigned: true }).notNull(),
+  itemType: mysqlEnum("itemType", ["material", "service", "product"]).notNull(),
+  referenceId: bigint("referenceId", { mode: "number", unsigned: true }),
+  description: varchar("description", { length: 500 }).notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  unitPrice: decimal("unitPrice", { precision: 12, scale: 2 }).notNull(),
+  totalPrice: decimal("totalPrice", { precision: 12, scale: 2 }).notNull(),
+  vatRate: decimal("vatRate", { precision: 5, scale: 2 }).default("18").notNull(),
+  notes: text("notes"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type QuotationItem = typeof quotationItems.$inferSelect;
+export type InsertQuotationItem = typeof quotationItems.$inferInsert;
+
 // ============= PARSED INVOICES (Парсирани фактури од PDF) =============
 export const parsedInvoices = mysqlTable("parsed_invoices", {
   id: serial("id").primaryKey(),
