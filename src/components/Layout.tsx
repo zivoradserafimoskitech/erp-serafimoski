@@ -15,6 +15,9 @@ import {
   ShieldCheck,
   Calculator,
   FileText,
+  ClipboardCheck,
+  Settings,
+  BookOpen,
 } from "lucide-react";
 
 const navItems = [
@@ -25,6 +28,9 @@ const navItems = [
   { path: "/nabavka", label: "Набавка", icon: ShoppingCart },
   { path: "/smetkovodstvo", label: "Сметководство", icon: Calculator },
   { path: "/ponudi", label: "Понуди", icon: FileText },
+  { path: "/priemnici", label: "Приемници", icon: ClipboardCheck },
+  { path: "/katalog", label: "Каталог", icon: BookOpen },
+  { path: "/podesuvanja", label: "Подесувања", icon: Settings },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -53,9 +59,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <div className="flex items-center gap-2">
-            <Factory className="h-6 w-6 text-amber-400" />
-            <span className="text-lg font-bold">Metal ERP</span>
+          <div className="flex items-center">
+            <img src="/logo.png" alt="Serafimoski Tech" className="h-10 w-auto object-contain" />
           </div>
           <button
             className="lg:hidden text-slate-400 hover:text-white"
@@ -74,7 +79,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <div className="text-xs text-slate-500 mt-1 capitalize">
-            Улога: {user?.role === "admin" ? "Администратор" : user?.role === "manager" ? "Менаџер" : "Оператер"}
+            Улога: {user?.role === "admin" ? "Администратор" : user?.role === "office" ? "Канцеларија" : user?.role === "production" ? "Производство" : user?.role === "warehouse" ? "Магацин" : "Оператер"}
           </div>
         </div>
 

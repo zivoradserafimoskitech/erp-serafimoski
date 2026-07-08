@@ -1,6 +1,10 @@
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { orders, workOrders, materials, purchaseOrders, customers } from "@db/schema";
+import {
+  orders, workOrders, materials, purchaseOrders, customers,
+  invoices, incomingInvoices, warehouses, materialStock,
+  quotations,
+} from "@db/schema";
 
 export const dashboardRouter = createRouter({
   stats: publicQuery.query(async () => {
@@ -11,6 +15,11 @@ export const dashboardRouter = createRouter({
     const allMaterials = await db.select().from(materials);
     const allPOs = await db.select().from(purchaseOrders);
     const allCustomers = await db.select().from(customers);
+    const allInvoices = await db.select().from(invoices);
+    const allIncoming = await db.select().from(incomingInvoices);
+    const allWarehouses = await db.select().from(warehouses);
+    const allStock = await db.select().from(materialStock);
+    const allQuotes = await db.select().from(quotations);
 
     // Orders
     const pendingOrders = allOrders.filter((o) => o.status === "pending").length;
@@ -30,20 +39,38 @@ export const dashboardRouter = createRouter({
     const lowStockCount = allMaterials.filter(
       (m) => parseFloat(m.currentStock) <= parseFloat(m.minStock)
     ).length;
+    const totalInventoryValue = allStock.reduce(
+      (sum, s) => sum + parseFloat(s.quantity) * parseFloat(s.avgCost), 0
+    );
 
     // Procurement
     const draftPO = allPOs.filter((p) => p.status === "draft").length;
     const sentPO = allPOs.filter((p) => p.status === "sent").length;
-    const confirmedPO = allPOs.filter((p) => p.status === "confirmed").length;
+    const partialPO = allPOs.filter((p) => p.status === "partial").length;
 
-    // Revenue
+    // Revenue & Profit
     const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0);
-    const pendingRevenue = allOrders
-      .filter((o) => o.status === "pending" || o.status === "confirmed")
-      .reduce((sum, o) => sum + parseFloat(o.totalAmount), 0);
+    const totalCost = allOrders.reduce((sum, o) => sum + parseFloat(o.costAmount), 0);
+    const totalMargin = allOrders.reduce((sum, o) => sum + parseFloat(o.marginAmount), 0);
+    const totalInvoiced = allInvoices
+      .filter(i => i.invoiceType === "standard")
+      .reduce((sum, i) => sum + parseFloat(i.totalAmount), 0);
+    const totalPayables = allIncoming
+      .filter(i => i.status === "received")
+      .reduce((sum, i) => sum + parseFloat(i.totalAmount), 0);
 
     // Customers
     const activeCustomers = allCustomers.filter((c) => c.isActive === "active").length;
+
+    // Quotes
+    const pendingQuotes = allQuotes.filter(q => q.status === "draft" || q.status === "sent").length;
+
+    // Warehouses
+    const warehouseCount = allWarehouses.length;
+
+    // VAT
+    const outgoingVat = allInvoices.reduce((sum, i) => sum + parseFloat(i.vatAmount), 0);
+    const incomingVat = allIncoming.reduce((sum, i) => sum + parseFloat(i.vatAmount), 0);
 
     return {
       orders: {
@@ -64,20 +91,32 @@ export const dashboardRouter = createRouter({
       storage: {
         totalMaterials,
         lowStock: lowStockCount,
+        inventoryValue: totalInventoryValue.toFixed(2),
+        warehouseCount,
       },
       procurement: {
         total: allPOs.length,
         draft: draftPO,
         sent: sentPO,
-        confirmed: confirmedPO,
+        partial: partialPO,
       },
       financial: {
         totalRevenue: totalRevenue.toFixed(2),
-        pendingRevenue: pendingRevenue.toFixed(2),
+        totalCost: totalCost.toFixed(2),
+        totalMargin: totalMargin.toFixed(2),
+        totalInvoiced: totalInvoiced.toFixed(2),
+        totalPayables: totalPayables.toFixed(2),
+        outgoingVat: outgoingVat.toFixed(2),
+        incomingVat: incomingVat.toFixed(2),
+        vatBalance: (outgoingVat - incomingVat).toFixed(2),
       },
       customers: {
         total: allCustomers.length,
         active: activeCustomers,
+      },
+      quotes: {
+        total: allQuotes.length,
+        pending: pendingQuotes,
       },
     };
   }),

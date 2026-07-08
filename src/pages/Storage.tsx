@@ -30,6 +30,7 @@ export default function Storage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
+  const [warehouseFilter, setWarehouseFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [txDialogOpen, setTxDialogOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<number | null>(null);
@@ -51,6 +52,7 @@ export default function Storage() {
   });
 
   const { data: stats } = trpc.storage.storageStats.useQuery();
+  const { data: warehousesData } = trpc.warehouse.warehouseList.useQuery();
 
   const createMutation = trpc.storage.materialCreate.useMutation({
     onSuccess: () => {
@@ -180,14 +182,14 @@ export default function Storage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Код</TableHead><TableHead>Назив</TableHead><TableHead>Тип</TableHead>
-                <TableHead>Залиха</TableHead><TableHead>Мин.</TableHead><TableHead>Локација</TableHead><TableHead>Акции</TableHead>
+                <TableHead>Залиха</TableHead><TableHead>Прос.цена</TableHead><TableHead>Мин.</TableHead><TableHead>Локација</TableHead><TableHead>Акции</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>
               ) : !materials || materials.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема материјали</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Нема материјали</TableCell></TableRow>
               ) : (
                 materials.map((m) => {
                   const isLow = parseFloat(m.currentStock) <= parseFloat(m.minStock);
@@ -200,6 +202,7 @@ export default function Storage() {
                         <span className={isLow ? "text-red-600 font-semibold" : ""}>{m.currentStock} {units[m.unit]}</span>
                         {isLow && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-red-500" />}
                       </TableCell>
+                      <TableCell className="text-gray-500">{m.avgCost} ден</TableCell>
                       <TableCell className="text-gray-500">{m.minStock} {units[m.unit]}</TableCell>
                           <TableCell className="text-gray-500">{m.location || "-"}</TableCell>
                       <TableCell>

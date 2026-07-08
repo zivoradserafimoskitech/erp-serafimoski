@@ -9,10 +9,28 @@ import {
   TrendingUp,
   ClipboardList,
   CheckCircle,
+  FileText,
+  ScanLine,
+  ArrowRight,
+  TestTube,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router";
+import { useState } from "react";
 
 export default function Dashboard() {
   const { data: stats } = trpc.dashboard.stats.useQuery();
+  const { data: parsedDocs } = trpc.ocr.parsedDocumentList.useQuery({ documentType: "receipt" });
+  const navigate = useNavigate();
+  const pendingParsed = parsedDocs?.filter(d => d.status === "parsed").length ?? 0;
+  const [testLog, setTestLog] = useState<string[]>([]);
+  const [testRunning, setTestRunning] = useState(false);
+
+  const testMutation = trpc.test.fullFlow.useMutation({
+    onMutate: () => { setTestRunning(true); setTestLog([]); },
+    onSuccess: (data) => { setTestLog(data.log); setTestRunning(false); },
+    onError: (e) => { setTestLog([`❌ Грешка: ${e.message}`]); setTestRunning(false); },
+  });
 
   const cards = [
     {
@@ -56,6 +74,13 @@ export default function Dashboard() {
       icon: CheckCircle,
       color: "text-teal-600",
       bg: "bg-teal-50",
+    },
+    {
+      title: "Парсирани приемници",
+      value: pendingParsed,
+      icon: ScanLine,
+      color: "text-indigo-600",
+      bg: "bg-indigo-50",
     },
   ];
 
@@ -151,7 +176,7 @@ export default function Dashboard() {
             {[
               { label: "Нацрт", value: stats?.procurement.draft ?? 0, color: "bg-gray-400" },
               { label: "Испратени", value: stats?.procurement.sent ?? 0, color: "bg-blue-400" },
-              { label: "Потврдени", value: stats?.procurement.confirmed ?? 0, color: "bg-emerald-400" },
+              { label: "Делумно", value: stats?.procurement.partial ?? 0, color: "bg-amber-400" },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-3">
                 <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
@@ -159,6 +184,48 @@ export default function Dashboard() {
                 <span className="text-sm font-semibold text-gray-800">{item.value}</span>
               </div>
             ))}
+          </CardContent>
+        </Card>
+
+        {/* Parsed Documents */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ScanLine className="h-4 w-4" />
+              OCR - Парсирани документи
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendingParsed > 0 ? (
+              <>
+                <p className="text-sm text-gray-600">
+                  Имате <span className="font-semibold text-indigo-600">{pendingParsed}</span> парсирани приемници за ревизија
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                  onClick={() => navigate("/priemnici")}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Прегледај приемници
+                  <ArrowRight className="h-4 w-4 ml-auto" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500">Нема парсирани документи за ревизија</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate("/priemnici")}
+                >
+                  <ScanLine className="h-4 w-4 mr-2" />
+                  Учитај приемница (OCR)
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -179,9 +246,23 @@ export default function Dashboard() {
             </div>
             <div className="h-px bg-gray-100" />
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Неплатени нарачки</span>
+              <span className="text-sm text-gray-600">Вкупна маржа</span>
               <span className="text-lg font-bold text-amber-600">
-                {stats?.financial.pendingRevenue ?? "0"} ден.
+                {stats?.financial.totalMargin ?? "0"} ден.
+              </span>
+            </div>
+            <div className="h-px bg-gray-100" />
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Обврски</span>
+              <span className="text-lg font-bold text-red-600">
+                {stats?.financial.totalPayables ?? "0"} ден.
+              </span>
+            </div>
+            <div className="h-px bg-gray-100" />
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">ДДВ салдо</span>
+              <span className="text-lg font-bold text-blue-600">
+                {stats?.financial.vatBalance ?? "0"} ден.
               </span>
             </div>
             <div className="h-px bg-gray-100" />
@@ -191,6 +272,34 @@ export default function Dashboard() {
                 {stats?.storage.totalMaterials ?? 0}
               </span>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* E2E Test */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <TestTube className="h-4 w-4 text-emerald-600" />
+              Тест: Приемница {'->'} Производство {'->'} Фактура
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              onClick={() => testMutation.mutate({})}
+              disabled={testRunning}
+              className="w-full bg-emerald-600 hover:bg-emerald-700"
+            >
+              {testRunning ? "Се тестира..." : <><TestTube className="h-4 w-4 mr-2" />Пушти E2E тест</>}
+            </Button>
+            {testLog.length > 0 && (
+              <div className="bg-slate-50 rounded p-3 space-y-1 text-xs font-mono max-h-64 overflow-y-auto">
+                {testLog.map((line, i) => (
+                  <div key={i} className={line.startsWith("❌") ? "text-red-600" : line.startsWith("✅") ? "text-emerald-700 font-bold" : "text-gray-700"}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -11,6 +11,34 @@ import {
   date,
 } from "drizzle-orm/mysql-core";
 
+// ============= COMPANY SETTINGS =============
+export const companySettings = mysqlTable("company_settings", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  address: text("address"),
+  edb: varchar("edb", { length: 20 }).notNull(),
+  embs: varchar("embs", { length: 20 }),
+  bankName: varchar("bank_name", { length: 255 }),
+  bankAccount: varchar("bank_account", { length: 50 }),
+  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 320 }),
+  logoUrl: text("logo_url"),
+  defaultVatRate: decimal("default_vat_rate", { precision: 5, scale: 2 }).default("18").notNull(),
+  valuationMethod: mysqlEnum("valuation_method", ["weighted_average", "fifo"]).default("weighted_average").notNull(),
+  currency: varchar("currency", { length: 10 }).default("MKD").notNull(),
+  timezone: varchar("timezone", { length: 50 }).default("Europe/Skopje").notNull(),
+  emailImapHost: varchar("emailImapHost", { length: 255 }),
+  emailImapPort: int("emailImapPort").default(993),
+  emailImapSecure: int("emailImapSecure").default(1),
+  emailUsername: varchar("emailUsername", { length: 255 }),
+  emailPassword: varchar("emailPassword", { length: 255 }),
+  emailCheckInterval: int("emailCheckInterval").default(60),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type CompanySetting = typeof companySettings.$inferSelect;
+
 // ============= USERS =============
 export const users = mysqlTable("users", {
   id: serial("id").primaryKey(),
@@ -18,7 +46,7 @@ export const users = mysqlTable("users", {
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
-  role: mysqlEnum("role", ["admin", "manager", "operator"]).default("operator").notNull(),
+  role: mysqlEnum("role", ["admin", "office", "production", "warehouse"]).default("office").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt")
     .defaultNow()
@@ -30,31 +58,89 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// ============= MATERIALS (Суровини/Материјали) =============
+// ============= AUDIT LOG =============
+export const auditLog = mysqlTable("audit_log", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number", unsigned: true }),
+  userName: varchar("user_name", { length: 255 }),
+  action: varchar("action", { length: 50 }).notNull(), // CREATE, UPDATE, DELETE, CONFIRM
+  entityType: varchar("entity_type", { length: 50 }).notNull(), // material, receipt, invoice, etc.
+  entityId: bigint("entity_id", { mode: "number", unsigned: true }),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuditLog = typeof auditLog.$inferSelect;
+
+// ============= UNITS =============
+export const units = mysqlTable("units", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  nameMk: varchar("name_mk", { length: 100 }),
+  category: mysqlEnum("category", ["weight", "length", "area", "volume", "piece", "time", "other"]).default("other").notNull(),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Unit = typeof units.$inferSelect;
+
+// ============= UNIT CONVERSIONS =============
+export const unitConversions = mysqlTable("unit_conversions", {
+  id: serial("id").primaryKey(),
+  fromUnitId: bigint("from_unit_id", { mode: "number", unsigned: true }).notNull(),
+  toUnitId: bigint("to_unit_id", { mode: "number", unsigned: true }).notNull(),
+  factor: decimal("factor", { precision: 18, scale: 8 }).notNull(), // multiply fromUnit by factor to get toUnit
+  materialType: varchar("material_type", { length: 50 }), // e.g. "steel_sheet" for density-based conversions
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UnitConversion = typeof unitConversions.$inferSelect;
+
+// ============= WAREHOUSES =============
+export const warehouses = mysqlTable("warehouses", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  type: mysqlEnum("type", ["raw_materials", "finished_goods", "construction_site", "other"]).notNull(),
+  address: text("address"),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Warehouse = typeof warehouses.$inferSelect;
+
+// ============= MATERIALS =============
 export const materials = mysqlTable("materials", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   code: varchar("code", { length: 100 }).notNull().unique(),
   type: mysqlEnum("type", [
-    "steel_sheet",      // челичен лим
-    "steel_profile",    // челичен профил
-    "steel_bar",        // челична прачка
-    "aluminum_sheet",   // алуминиумски лим
-    "aluminum_profile", // алуминиумски профил
-    "stainless_sheet",  // нерѓосувачки лим
-    "pipe",             // цевка
-    "angle",            // аголник
-    "channel",          // канал
-    "screws",           // завртки
-    "welding",          // заварување
-    "paint",            // боја
-    "other",            // други
+    "steel_sheet",
+    "steel_profile",
+    "steel_bar",
+    "aluminum_sheet",
+    "aluminum_profile",
+    "stainless_sheet",
+    "pipe",
+    "angle",
+    "channel",
+    "screws",
+    "welding",
+    "paint",
+    "other",
   ]).notNull(),
-  unit: mysqlEnum("unit", ["kg", "m", "m2", "pcs", "l"]).notNull(),
+  unit: mysqlEnum("unit", ["kg", "m", "m2", "pcs", "l", "sheet", "hour", "m_cut", "bend"]).notNull(),
   description: text("description"),
   minStock: decimal("minStock", { precision: 12, scale: 3 }).default("0").notNull(),
   currentStock: decimal("currentStock", { precision: 12, scale: 3 }).default("0").notNull(),
+  avgCost: decimal("avgCost", { precision: 12, scale: 2 }).default("0").notNull(),
+  lastPurchasePrice: decimal("lastPurchasePrice", { precision: 12, scale: 2 }).default("0").notNull(),
   location: varchar("location", { length: 100 }),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -62,15 +148,47 @@ export const materials = mysqlTable("materials", {
 export type Material = typeof materials.$inferSelect;
 export type InsertMaterial = typeof materials.$inferInsert;
 
-// ============= INVENTORY TRANSACTIONS (Движења во склад) =============
+// ============= MATERIAL WAREHOUSE STOCK =============
+export const materialStock = mysqlTable("material_stock", {
+  id: serial("id").primaryKey(),
+  materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
+  warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }).notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).default("0").notNull(),
+  avgCost: decimal("avgCost", { precision: 12, scale: 2 }).default("0").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type MaterialStock = typeof materialStock.$inferSelect;
+
+// ============= MATERIAL LOTS (for FIFO) =============
+export const materialLots = mysqlTable("material_lots", {
+  id: serial("id").primaryKey(),
+  materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
+  warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }).notNull(),
+  receiptId: bigint("receiptId", { mode: "number", unsigned: true }),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+  remainingQty: decimal("remaining_qty", { precision: 12, scale: 3 }).notNull(),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull(),
+  landedCost: decimal("landed_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  date: date("date").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type MaterialLot = typeof materialLots.$inferSelect;
+
+// ============= INVENTORY TRANSACTIONS =============
 export const inventoryTransactions = mysqlTable("inventory_transactions", {
   id: serial("id").primaryKey(),
   materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
-  type: mysqlEnum("type", ["receipt", "issue", "adjustment", "return", "scrap"]).notNull(),
+  warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }).notNull(),
+  type: mysqlEnum("type", ["receipt", "issue", "adjustment", "return", "scrap", "transfer_in", "transfer_out"]).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
-  unitPrice: decimal("unitPrice", { precision: 12, scale: 2 }),
-  totalPrice: decimal("totalPrice", { precision: 12, scale: 2 }),
+  unitCost: decimal("unitCost", { precision: 12, scale: 2 }),
+  totalCost: decimal("totalCost", { precision: 12, scale: 2 }),
   reference: varchar("reference", { length: 255 }),
+  sourceDocType: varchar("source_doc_type", { length: 50 }), // receipt, work_order, adjustment, transfer
+  sourceDocId: bigint("source_doc_id", { mode: "number", unsigned: true }),
   notes: text("notes"),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -79,7 +197,65 @@ export const inventoryTransactions = mysqlTable("inventory_transactions", {
 export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;
 export type InsertInventoryTransaction = typeof inventoryTransactions.$inferInsert;
 
-// ============= CUSTOMERS (Клиенти) =============
+// ============= STOCK TRANSFERS =============
+export const stockTransfers = mysqlTable("stock_transfers", {
+  id: serial("id").primaryKey(),
+  transferNumber: varchar("transfer_number", { length: 50 }).notNull().unique(),
+  fromWarehouseId: bigint("from_warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  toWarehouseId: bigint("to_warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  status: mysqlEnum("status", ["draft", "confirmed", "cancelled"]).default("draft").notNull(),
+  transferDate: date("transfer_date").notNull(),
+  notes: text("notes"),
+  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type StockTransfer = typeof stockTransfers.$inferSelect;
+
+// ============= STOCK TRANSFER ITEMS =============
+export const stockTransferItems = mysqlTable("stock_transfer_items", {
+  id: serial("id").primaryKey(),
+  transferId: bigint("transfer_id", { mode: "number", unsigned: true }).notNull(),
+  materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type StockTransferItem = typeof stockTransferItems.$inferSelect;
+
+// ============= INVENTORY COUNTS (Popis) =============
+export const inventoryCounts = mysqlTable("inventory_counts", {
+  id: serial("id").primaryKey(),
+  countNumber: varchar("count_number", { length: 50 }).notNull().unique(),
+  warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }).notNull(),
+  status: mysqlEnum("status", ["draft", "in_progress", "completed", "cancelled"]).default("draft").notNull(),
+  countDate: date("count_date").notNull(),
+  notes: text("notes"),
+  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type InventoryCount = typeof inventoryCounts.$inferSelect;
+
+// ============= INVENTORY COUNT ITEMS =============
+export const inventoryCountItems = mysqlTable("inventory_count_items", {
+  id: serial("id").primaryKey(),
+  countId: bigint("count_id", { mode: "number", unsigned: true }).notNull(),
+  materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
+  systemQty: decimal("system_qty", { precision: 12, scale: 3 }).notNull(),
+  countedQty: decimal("counted_qty", { precision: 12, scale: 3 }),
+  difference: decimal("difference", { precision: 12, scale: 3 }),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
+  totalDifference: decimal("total_difference", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type InventoryCountItem = typeof inventoryCountItems.$inferSelect;
+
+// ============= CUSTOMERS =============
 export const customers = mysqlTable("customers", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -91,6 +267,7 @@ export const customers = mysqlTable("customers", {
   city: varchar("city", { length: 100 }),
   country: varchar("country", { length: 100 }).default("Македонија"),
   taxNumber: varchar("taxNumber", { length: 50 }),
+  edb: varchar("edb", { length: 20 }),
   notes: text("notes"),
   isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -100,21 +277,25 @@ export const customers = mysqlTable("customers", {
 export type Customer = typeof customers.$inferSelect;
 export type InsertCustomer = typeof customers.$inferInsert;
 
-// ============= ORDERS (Нарачки од клиенти) =============
+// ============= ORDERS =============
 export const orders = mysqlTable("orders", {
   id: serial("id").primaryKey(),
   orderNumber: varchar("orderNumber", { length: 50 }).notNull().unique(),
   customerId: bigint("customerId", { mode: "number", unsigned: true }).notNull(),
+  quoteId: bigint("quoteId", { mode: "number", unsigned: true }),
   status: mysqlEnum("status", [
-    "pending",      // чекање
-    "confirmed",    // потврдена
-    "in_production", // во производство
-    "ready",        // готова
-    "delivered",    // испорачана
-    "cancelled",    // откажана
+    "pending",
+    "confirmed",
+    "in_production",
+    "ready",
+    "delivered",
+    "cancelled",
   ]).default("pending").notNull(),
   priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"]).default("normal").notNull(),
   totalAmount: decimal("totalAmount", { precision: 14, scale: 2 }).default("0").notNull(),
+  costAmount: decimal("cost_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+  marginAmount: decimal("margin_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+  marginPercent: decimal("margin_percent", { precision: 5, scale: 2 }).default("0").notNull(),
   deliveryDate: date("deliveryDate"),
   notes: text("notes"),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
@@ -125,7 +306,7 @@ export const orders = mysqlTable("orders", {
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = typeof orders.$inferInsert;
 
-// ============= ORDER ITEMS (Ставки во нарачка) =============
+// ============= ORDER ITEMS =============
 export const orderItems = mysqlTable("order_items", {
   id: serial("id").primaryKey(),
   orderId: bigint("orderId", { mode: "number", unsigned: true }).notNull(),
@@ -134,8 +315,11 @@ export const orderItems = mysqlTable("order_items", {
   quantity: int("quantity").notNull(),
   unitPrice: decimal("unitPrice", { precision: 12, scale: 2 }).notNull(),
   totalPrice: decimal("totalPrice", { precision: 12, scale: 2 }).notNull(),
+  costPrice: decimal("cost_price", { precision: 12, scale: 2 }).default("0").notNull(),
+  marginAmount: decimal("margin_amount", { precision: 12, scale: 2 }).default("0").notNull(),
   material: varchar("material", { length: 255 }),
   dimensions: varchar("dimensions", { length: 255 }),
+  productId: bigint("product_id", { mode: "number", unsigned: true }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -143,16 +327,19 @@ export const orderItems = mysqlTable("order_items", {
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = typeof orderItems.$inferInsert;
 
-// ============= SUPPLIERS (Добавувачи) =============
+// ============= SUPPLIERS =============
 export const suppliers = mysqlTable("suppliers", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+  edb: varchar("edb", { length: 20 }),
   contactPerson: varchar("contactPerson", { length: 255 }),
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 50 }),
   address: text("address"),
   city: varchar("city", { length: 100 }),
   country: varchar("country", { length: 100 }).default("Македонија"),
+  paymentTerms: varchar("payment_terms", { length: 100 }).default("30 дена"),
+  defaultCurrency: varchar("default_currency", { length: 10 }).default("MKD"),
   materials: text("materials"),
   isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -162,17 +349,18 @@ export const suppliers = mysqlTable("suppliers", {
 export type Supplier = typeof suppliers.$inferSelect;
 export type InsertSupplier = typeof suppliers.$inferInsert;
 
-// ============= PURCHASE ORDERS (Набавни нарачки) =============
+// ============= PURCHASE ORDERS =============
 export const purchaseOrders = mysqlTable("purchase_orders", {
   id: serial("id").primaryKey(),
   poNumber: varchar("poNumber", { length: 50 }).notNull().unique(),
   supplierId: bigint("supplierId", { mode: "number", unsigned: true }).notNull(),
   status: mysqlEnum("status", [
-    "draft",        // нацрт
-    "sent",         // испратена
-    "confirmed",    // потврдена
-    "received",     // примена
-    "cancelled",    // откажана
+    "draft",
+    "sent",
+    "confirmed",
+    "partial",
+    "received",
+    "cancelled",
   ]).default("draft").notNull(),
   totalAmount: decimal("totalAmount", { precision: 14, scale: 2 }).default("0").notNull(),
   expectedDate: date("expectedDate"),
@@ -202,18 +390,18 @@ export const purchaseOrderItems = mysqlTable("purchase_order_items", {
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
 export type InsertPurchaseOrderItem = typeof purchaseOrderItems.$inferInsert;
 
-// ============= WORK ORDERS (Работни налози) =============
+// ============= WORK ORDERS =============
 export const workOrders = mysqlTable("work_orders", {
   id: serial("id").primaryKey(),
   woNumber: varchar("woNumber", { length: 50 }).notNull().unique(),
   orderId: bigint("orderId", { mode: "number", unsigned: true }),
   description: varchar("description", { length: 500 }).notNull(),
   status: mysqlEnum("status", [
-    "pending",      // чекање
-    "in_progress",  // во тек
-    "on_hold",      // ставено на чекање
-    "completed",    // завршено
-    "cancelled",    // откажано
+    "pending",
+    "in_progress",
+    "on_hold",
+    "completed",
+    "cancelled",
   ]).default("pending").notNull(),
   priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"]).default("normal").notNull(),
   plannedStart: date("plannedStart"),
@@ -221,6 +409,7 @@ export const workOrders = mysqlTable("work_orders", {
   actualStart: date("actualStart"),
   actualEnd: date("actualEnd"),
   assignedTo: varchar("assignedTo", { length: 255 }),
+  costAmount: decimal("cost_amount", { precision: 14, scale: 2 }).default("0").notNull(),
   notes: text("notes"),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -230,29 +419,34 @@ export const workOrders = mysqlTable("work_orders", {
 export type WorkOrder = typeof workOrders.$inferSelect;
 export type InsertWorkOrder = typeof workOrders.$inferInsert;
 
-// ============= WORK ORDER OPERATIONS (Операции во работен налог) =============
+// ============= WORK ORDER OPERATIONS =============
 export const workOrderOperations = mysqlTable("work_order_operations", {
   id: serial("id").primaryKey(),
   workOrderId: bigint("workOrderId", { mode: "number", unsigned: true }).notNull(),
   operation: mysqlEnum("operation", [
-    "cutting_laser",    // ласерско сечење
-    "cutting_plasma",   // плазма сечење
-    "bending",          // виткање
-    "welding_mig",      // MIG заварување
-    "welding_tig",      // TIG заварување
-    "grinding",         // брусење
-    "drilling",         // дупчење
-    "painting",         // бојадисување
-    "assembly",         // монтажа
-    "quality_control",  // контрола на квалитет
-    "packaging",        // пакување
+    "cutting_laser",
+    "cutting_plasma",
+    "bending",
+    "welding_mig",
+    "welding_tig",
+    "grinding",
+    "drilling",
+    "painting",
+    "assembly",
+    "quality_control",
+    "packaging",
   ]).notNull(),
   sequence: int("sequence").notNull(),
   description: varchar("description", { length: 500 }),
   estimatedTime: decimal("estimatedTime", { precision: 8, scale: 2 }),
   actualTime: decimal("actualTime", { precision: 8, scale: 2 }),
+  estimatedQty: decimal("estimated_qty", { precision: 12, scale: 3 }),
+  actualQty: decimal("actual_qty", { precision: 12, scale: 3 }),
+  qtyUnit: varchar("qty_unit", { length: 20 }), // m2, m_cut, bend, hour
   status: mysqlEnum("status", ["pending", "in_progress", "completed", "skipped"]).default("pending").notNull(),
   operator: varchar("operator", { length: 255 }),
+  costRate: decimal("cost_rate", { precision: 12, scale: 2 }).default("0").notNull(),
+  costAmount: decimal("cost_amount", { precision: 12, scale: 2 }).default("0").notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -260,24 +454,242 @@ export const workOrderOperations = mysqlTable("work_order_operations", {
 export type WorkOrderOperation = typeof workOrderOperations.$inferSelect;
 export type InsertWorkOrderOperation = typeof workOrderOperations.$inferInsert;
 
-// ============= OUTGOING INVOICES (Излезни фактури) =============
+// ============= WORK ORDER MATERIALS =============
+export const workOrderMaterials = mysqlTable("work_order_materials", {
+  id: serial("id").primaryKey(),
+  workOrderId: bigint("workOrderId", { mode: "number", unsigned: true }).notNull(),
+  materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  totalCost: decimal("total_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  isActual: mysqlEnum("is_actual", ["planned", "actual"]).default("planned").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type WorkOrderMaterial = typeof workOrderMaterials.$inferSelect;
+
+// ============= MACHINES =============
+export const machines = mysqlTable("machines", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  type: mysqlEnum("type", [
+    "laser",
+    "plasma",
+    "bending",
+    "welding",
+    "painting",
+    "grinding",
+    "drilling",
+    "cnc",
+    "other",
+  ]).notNull(),
+  costPerHour: decimal("cost_per_hour", { precision: 12, scale: 2 }).default("0").notNull(),
+  costPerMeter: decimal("cost_per_meter", { precision: 12, scale: 2 }).default("0").notNull(),
+  annualAmortization: decimal("annual_amortization", { precision: 14, scale: 2 }).default("0").notNull(),
+  annualElectricity: decimal("annual_electricity", { precision: 14, scale: 2 }).default("0").notNull(),
+  annualGas: decimal("annual_gas", { precision: 14, scale: 2 }).default("0").notNull(),
+  annualService: decimal("annual_service", { precision: 14, scale: 2 }).default("0").notNull(),
+  annualHours: decimal("annual_hours", { precision: 8, scale: 2 }).default("2000").notNull(),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Machine = typeof machines.$inferSelect;
+
+// ============= LABOR RATES =============
+export const laborRates = mysqlTable("labor_rates", {
+  id: serial("id").primaryKey(),
+  role: varchar("role", { length: 255 }).notNull(),
+  roleCode: varchar("role_code", { length: 50 }).notNull().unique(),
+  costPerHour: decimal("cost_per_hour", { precision: 12, scale: 2 }).notNull(),
+  grossSalary: decimal("gross_salary", { precision: 12, scale: 2 }).default("0").notNull(),
+  contributionsPct: decimal("contributions_pct", { precision: 5, scale: 2 }).default("32").notNull(),
+  description: text("description"),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LaborRate = typeof laborRates.$inferSelect;
+
+// ============= OVERHEAD =============
+export const overhead = mysqlTable("overhead", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  rateType: mysqlEnum("rate_type", ["pct_of_labor", "per_hour", "per_m2", "fixed"]).notNull(),
+  rateValue: decimal("rate_value", { precision: 12, scale: 4 }).notNull(),
+  annualAmount: decimal("annual_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+  description: text("description"),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Overhead = typeof overhead.$inferSelect;
+
+// ============= SERVICES =============
+export const services = mysqlTable("services", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 100 }).notNull().unique(),
+  type: mysqlEnum("type", [
+    "laser_cutting",
+    "plasma_cutting",
+    "bending",
+    "mig_welding",
+    "tig_welding",
+    "grinding",
+    "drilling",
+    "electrostatic_paint",
+    "wet_paint",
+    "galvanizing",
+    "cnc_machining",
+    "labor",
+    "design",
+    "transport",
+    "installation",
+    "other",
+  ]).notNull(),
+  unit: mysqlEnum("unit", ["m2", "m", "kg", "hour", "pcs", "job", "m_cut", "bend"]).notNull(),
+  description: text("description"),
+  costRate: decimal("cost_rate", { precision: 12, scale: 2 }).default("0").notNull(),
+  saleRate: decimal("sale_rate", { precision: 12, scale: 2 }).default("0").notNull(),
+  machineId: bigint("machine_id", { mode: "number", unsigned: true }),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Service = typeof services.$inferSelect;
+export type InsertService = typeof services.$inferInsert;
+
+// ============= PRODUCTS =============
+export const products = mysqlTable("products", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 100 }).notNull().unique(),
+  category: mysqlEnum("category", [
+    "laser_fence",
+    "decorative_fence",
+    "metal_fence",
+    "balcony_railing",
+    "stair_railing",
+    "gate",
+    "pergola",
+    "canopy",
+    "metal_door",
+    "industrial_product",
+    "custom_metalwork",
+    "shelf",
+    "worktable",
+    "other",
+  ]).notNull(),
+  description: text("description"),
+  unit: mysqlEnum("unit", ["m2", "m", "kg", "pcs", "set"]).notNull(),
+  basis: mysqlEnum("basis", ["m2", "m", "pcs"]).default("m2").notNull(),
+  defaultPrice: decimal("defaultPrice", { precision: 12, scale: 2 }).default("0").notNull(),
+  materialCost: decimal("materialCost", { precision: 12, scale: 2 }).default("0").notNull(),
+  laborCost: decimal("laborCost", { precision: 12, scale: 2 }).default("0").notNull(),
+  machineCost: decimal("machine_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  overheadCost: decimal("overhead_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  totalCost: decimal("total_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = typeof products.$inferInsert;
+
+// ============= PRODUCT COMPONENTS (BOM / Normativi) =============
+export const productComponents = mysqlTable("product_components", {
+  id: serial("id").primaryKey(),
+  productId: bigint("product_id", { mode: "number", unsigned: true }).notNull(),
+  kind: mysqlEnum("kind", ["material", "service"]).notNull(),
+  refId: bigint("ref_id", { mode: "number", unsigned: true }).notNull(),
+  perUnit: decimal("per_unit", { precision: 12, scale: 6 }).notNull(),
+  wastePct: decimal("waste_pct", { precision: 5, scale: 2 }).default("0").notNull(),
+  scale: mysqlEnum("scale", ["area", "perimeter", "length", "fixed"]).default("area").notNull(),
+  notes: text("notes"),
+  sortOrder: int("sort_order").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ProductComponent = typeof productComponents.$inferSelect;
+
+// ============= QUOTATIONS =============
+export const quotations = mysqlTable("quotations", {
+  id: serial("id").primaryKey(),
+  quoteNumber: varchar("quoteNumber", { length: 50 }).notNull().unique(),
+  customerId: bigint("customerId", { mode: "number", unsigned: true }).notNull(),
+  status: mysqlEnum("status", [
+    "draft",
+    "sent",
+    "accepted",
+    "rejected",
+    "expired",
+    "converted",
+  ]).default("draft").notNull(),
+  subtotal: decimal("subtotal", { precision: 14, scale: 2 }).default("0").notNull(),
+  costAmount: decimal("cost_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+  marginAmount: decimal("margin_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+  marginPercent: decimal("margin_percent", { precision: 5, scale: 2 }).default("0").notNull(),
+  vatRate: decimal("vatRate", { precision: 5, scale: 2 }).default("18").notNull(),
+  vatAmount: decimal("vatAmount", { precision: 14, scale: 2 }).default("0").notNull(),
+  totalAmount: decimal("totalAmount", { precision: 14, scale: 2 }).default("0").notNull(),
+  currency: varchar("currency", { length: 10 }).default("MKD").notNull(),
+  validUntil: date("validUntil"),
+  deliveryDays: int("deliveryDays").default(14),
+  paymentTerms: varchar("paymentTerms", { length: 255 }).default("14 дена"),
+  notes: text("notes"),
+  convertedOrderId: bigint("convertedOrderId", { mode: "number", unsigned: true }),
+  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type Quotation = typeof quotations.$inferSelect;
+export type InsertQuotation = typeof quotations.$inferInsert;
+
+// ============= QUOTATION ITEMS =============
+export const quotationItems = mysqlTable("quotation_items", {
+  id: serial("id").primaryKey(),
+  quotationId: bigint("quotationId", { mode: "number", unsigned: true }).notNull(),
+  itemType: mysqlEnum("itemType", ["material", "service", "product"]).notNull(),
+  referenceId: bigint("referenceId", { mode: "number", unsigned: true }),
+  description: varchar("description", { length: 500 }).notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  unitPrice: decimal("unitPrice", { precision: 12, scale: 2 }).notNull(),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  totalPrice: decimal("totalPrice", { precision: 12, scale: 2 }).notNull(),
+  totalCost: decimal("total_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  vatRate: decimal("vatRate", { precision: 5, scale: 2 }).default("18").notNull(),
+  notes: text("notes"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type QuotationItem = typeof quotationItems.$inferSelect;
+export type InsertQuotationItem = typeof quotationItems.$inferInsert;
+
+// ============= OUTGOING INVOICES =============
 export const invoices = mysqlTable("invoices", {
   id: serial("id").primaryKey(),
   invoiceNumber: varchar("invoiceNumber", { length: 50 }).notNull().unique(),
   customerId: bigint("customerId", { mode: "number", unsigned: true }).notNull(),
   orderId: bigint("orderId", { mode: "number", unsigned: true }),
+  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }),
   status: mysqlEnum("status", [
-    "draft",        // нацрт
-    "issued",       // издадена
-    "sent",         // испратена
-    "paid",         // платена
-    "overdue",      // задоцнета
-    "cancelled",    // откажана
+    "draft",
+    "issued",
+    "sent",
+    "paid",
+    "overdue",
+    "cancelled",
   ]).default("draft").notNull(),
   invoiceType: mysqlEnum("invoiceType", [
-    "standard",     // стандардна
-    "proforma",     // проформа
-    "credit_note",  // кредитна нота
+    "standard",
+    "proforma",
+    "credit_note",
   ]).default("standard").notNull(),
   issueDate: date("issueDate").notNull(),
   dueDate: date("dueDate"),
@@ -288,6 +700,7 @@ export const invoices = mysqlTable("invoices", {
   currency: varchar("currency", { length: 10 }).default("MKD").notNull(),
   notes: text("notes"),
   eInvoiceId: varchar("eInvoiceId", { length: 255 }),
+  originalInvoiceId: bigint("original_invoice_id", { mode: "number", unsigned: true }), // for credit notes
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -296,18 +709,19 @@ export const invoices = mysqlTable("invoices", {
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = typeof invoices.$inferInsert;
 
-// ============= INCOMING INVOICES (Влезни фактури од добавувачи) =============
+// ============= INCOMING INVOICES =============
 export const incomingInvoices = mysqlTable("incoming_invoices", {
   id: serial("id").primaryKey(),
   supplierInvoiceNumber: varchar("supplierInvoiceNumber", { length: 50 }).notNull(),
   supplierId: bigint("supplierId", { mode: "number", unsigned: true }).notNull(),
   poId: bigint("poId", { mode: "number", unsigned: true }),
+  receiptId: bigint("receipt_id", { mode: "number", unsigned: true }),
   status: mysqlEnum("status", [
-    "received",     // примена
-    "verified",     // верифицирана
-    "paid",         // платена
-    "disputed",     // оспорена
-    "cancelled",    // откажана
+    "received",
+    "verified",
+    "paid",
+    "disputed",
+    "cancelled",
   ]).default("received").notNull(),
   issueDate: date("issueDate"),
   receivedDate: date("receivedDate").notNull(),
@@ -326,7 +740,7 @@ export const incomingInvoices = mysqlTable("incoming_invoices", {
 export type IncomingInvoice = typeof incomingInvoices.$inferSelect;
 export type InsertIncomingInvoice = typeof incomingInvoices.$inferInsert;
 
-// ============= DOCUMENT ITEMS (Ставки за фактури/приемници/испратници) =============
+// ============= DOCUMENT ITEMS =============
 export const documentItems = mysqlTable("document_items", {
   id: serial("id").primaryKey(),
   documentId: bigint("documentId", { mode: "number", unsigned: true }).notNull(),
@@ -338,6 +752,9 @@ export const documentItems = mysqlTable("document_items", {
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0").notNull(),
   totalPrice: decimal("totalPrice", { precision: 12, scale: 2 }).notNull(),
   vatRate: decimal("vatRate", { precision: 5, scale: 2 }).default("18").notNull(),
+  productId: bigint("product_id", { mode: "number", unsigned: true }),
+  serviceId: bigint("service_id", { mode: "number", unsigned: true }),
+  itemType: mysqlEnum("item_type", ["product", "service", "manual"]).default("manual").notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -345,20 +762,26 @@ export const documentItems = mysqlTable("document_items", {
 export type DocumentItem = typeof documentItems.$inferSelect;
 export type InsertDocumentItem = typeof documentItems.$inferInsert;
 
-// ============= RECEIPTS (Приемници) =============
+// ============= RECEIPTS =============
 export const receipts = mysqlTable("receipts", {
   id: serial("id").primaryKey(),
   receiptNumber: varchar("receiptNumber", { length: 50 }).notNull().unique(),
   supplierId: bigint("supplierId", { mode: "number", unsigned: true }),
   poId: bigint("poId", { mode: "number", unsigned: true }),
+  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
   status: mysqlEnum("status", [
-    "draft",        // нацрт
-    "confirmed",    // потврден
-    "cancelled",    // откажан
+    "draft",
+    "confirmed",
+    "cancelled",
   ]).default("draft").notNull(),
   receiptDate: date("receiptDate").notNull(),
+  supplierDocNumber: varchar("supplier_doc_number", { length: 100 }),
+  transportCost: decimal("transport_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  customsCost: decimal("customs_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  otherCost: decimal("other_cost", { precision: 12, scale: 2 }).default("0").notNull(),
   totalAmount: decimal("totalAmount", { precision: 14, scale: 2 }).default("0").notNull(),
   notes: text("notes"),
+  fileUrl: text("file_url"),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -366,17 +789,34 @@ export const receipts = mysqlTable("receipts", {
 export type Receipt = typeof receipts.$inferSelect;
 export type InsertReceipt = typeof receipts.$inferInsert;
 
-// ============= DELIVERY NOTES (Испратници) =============
+// ============= RECEIPT ITEMS =============
+export const receiptItems = mysqlTable("receipt_items", {
+  id: serial("id").primaryKey(),
+  receiptId: bigint("receipt_id", { mode: "number", unsigned: true }).notNull(),
+  materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull(),
+  landedCostAlloc: decimal("landed_cost_alloc", { precision: 12, scale: 2 }).default("0").notNull(),
+  vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).default("18").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ReceiptItem = typeof receiptItems.$inferSelect;
+
+// ============= DELIVERY NOTES =============
 export const deliveryNotes = mysqlTable("delivery_notes", {
   id: serial("id").primaryKey(),
   dnNumber: varchar("dnNumber", { length: 50 }).notNull().unique(),
   customerId: bigint("customerId", { mode: "number", unsigned: true }).notNull(),
   orderId: bigint("orderId", { mode: "number", unsigned: true }),
   status: mysqlEnum("status", [
-    "draft",        // нацрт
-    "issued",       // издаден
-    "delivered",    // испорачан
-    "cancelled",    // откажан
+    "draft",
+    "issued",
+    "delivered",
+    "cancelled",
   ]).default("draft").notNull(),
   issueDate: date("issueDate").notNull(),
   deliveryDate: date("deliveryDate"),
@@ -389,17 +829,17 @@ export const deliveryNotes = mysqlTable("delivery_notes", {
 export type DeliveryNote = typeof deliveryNotes.$inferSelect;
 export type InsertDeliveryNote = typeof deliveryNotes.$inferInsert;
 
-// ============= E-INVOICES (УЈП е-фактури) =============
+// ============= E-INVOICES =============
 export const eInvoices = mysqlTable("e_invoices", {
   id: serial("id").primaryKey(),
   invoiceId: bigint("invoiceId", { mode: "number", unsigned: true }).notNull(),
   ujpInvoiceId: varchar("ujpInvoiceId", { length: 255 }),
   status: mysqlEnum("status", [
-    "pending",       // чекање
-    "sent_to_ujp",   // испратена до УЈП
-    "approved",      // одобрена
-    "rejected",      // одбиена
-    "cancelled",     // откажана
+    "pending",
+    "sent_to_ujp",
+    "approved",
+    "rejected",
+    "cancelled",
   ]).default("pending").notNull(),
   xmlContent: text("xmlContent"),
   responseMessage: text("responseMessage"),
@@ -410,124 +850,7 @@ export const eInvoices = mysqlTable("e_invoices", {
 export type EInvoice = typeof eInvoices.$inferSelect;
 export type InsertEInvoice = typeof eInvoices.$inferInsert;
 
-// ============= SERVICES (Услуги - ласер, виткање, фарбање...) =============
-export const services = mysqlTable("services", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  code: varchar("code", { length: 100 }).notNull().unique(),
-  type: mysqlEnum("type", [
-    "laser_cutting",       // ласерско сечење
-    "plasma_cutting",      // плазма сечење
-    "bending",             // виткање
-    "mig_welding",         // MIG заварување
-    "tig_welding",         // TIG заварување
-    "grinding",            // брусење
-    "drilling",            // дупчење
-    "electrostatic_paint", // електростатско фарбање
-    "wet_paint",           // мокро бојадисување
-    "galvanizing",         // галванизација
-    "cnc_machining",       // ЦНЦ обработка
-    "labor",               // работна рака
-    "design",              // проектирање
-    "transport",           // транспорт
-    "installation",        // монтажа
-    "other",               // други
-  ]).notNull(),
-  unit: mysqlEnum("unit", ["m2", "m", "kg", "hour", "pcs", "job"]).notNull(),
-  description: text("description"),
-  defaultPrice: decimal("defaultPrice", { precision: 12, scale: 2 }).default("0").notNull(),
-  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type Service = typeof services.$inferSelect;
-export type InsertService = typeof services.$inferInsert;
-
-// ============= PRODUCTS (Готови производи) =============
-export const products = mysqlTable("products", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  code: varchar("code", { length: 100 }).notNull().unique(),
-  category: mysqlEnum("category", [
-    "laser_fence",           // ласер ЦНЦ ограда
-    "decorative_fence",      // декоративна ограда
-    "metal_fence",           // метална ограда
-    "balcony_railing",       // балконски огради
-    "stair_railing",         // скалилшни огради
-    "gate",                  // порта/кapija
-    "pergola",               // пергола
-    "canopy",                // надвес/настрешница
-    "metal_door",            // метална врата
-    "industrial_product",    // индустриски производ
-    "custom_metalwork",      // сопствен метален производ
-    "shelf",                 // полица
-    "worktable",             // работна маса
-    "other",                 // други
-  ]).notNull(),
-  description: text("description"),
-  unit: mysqlEnum("unit", ["m2", "m", "kg", "pcs", "set"]).notNull(),
-  defaultPrice: decimal("defaultPrice", { precision: 12, scale: 2 }).default("0").notNull(),
-  materialCost: decimal("materialCost", { precision: 12, scale: 2 }).default("0").notNull(),
-  laborCost: decimal("laborCost", { precision: 12, scale: 2 }).default("0").notNull(),
-  isActive: mysqlEnum("isActive", ["active", "inactive"]).default("active").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type Product = typeof products.$inferSelect;
-export type InsertProduct = typeof products.$inferInsert;
-
-// ============= QUOTATIONS (Понуди) =============
-export const quotations = mysqlTable("quotations", {
-  id: serial("id").primaryKey(),
-  quoteNumber: varchar("quoteNumber", { length: 50 }).notNull().unique(),
-  customerId: bigint("customerId", { mode: "number", unsigned: true }).notNull(),
-  status: mysqlEnum("status", [
-    "draft",        // нацрт
-    "sent",         // испратена
-    "accepted",     // прифатена
-    "rejected",     // одбиена
-    "expired",      // истечена
-    "converted",    // претворена во нарачка
-  ]).default("draft").notNull(),
-  subtotal: decimal("subtotal", { precision: 14, scale: 2 }).default("0").notNull(),
-  vatRate: decimal("vatRate", { precision: 5, scale: 2 }).default("18").notNull(),
-  vatAmount: decimal("vatAmount", { precision: 14, scale: 2 }).default("0").notNull(),
-  totalAmount: decimal("totalAmount", { precision: 14, scale: 2 }).default("0").notNull(),
-  currency: varchar("currency", { length: 10 }).default("MKD").notNull(),
-  validUntil: date("validUntil"),
-  deliveryDays: int("deliveryDays").default(14),
-  paymentTerms: varchar("paymentTerms", { length: 255 }).default("14 дена"),
-  notes: text("notes"),
-  convertedOrderId: bigint("convertedOrderId", { mode: "number", unsigned: true }),
-  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
-
-export type Quotation = typeof quotations.$inferSelect;
-export type InsertQuotation = typeof quotations.$inferInsert;
-
-// ============= QUOTATION ITEMS (Ставки во понуда) =============
-export const quotationItems = mysqlTable("quotation_items", {
-  id: serial("id").primaryKey(),
-  quotationId: bigint("quotationId", { mode: "number", unsigned: true }).notNull(),
-  itemType: mysqlEnum("itemType", ["material", "service", "product"]).notNull(),
-  referenceId: bigint("referenceId", { mode: "number", unsigned: true }),
-  description: varchar("description", { length: 500 }).notNull(),
-  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
-  unit: varchar("unit", { length: 20 }).notNull(),
-  unitPrice: decimal("unitPrice", { precision: 12, scale: 2 }).notNull(),
-  totalPrice: decimal("totalPrice", { precision: 12, scale: 2 }).notNull(),
-  vatRate: decimal("vatRate", { precision: 5, scale: 2 }).default("18").notNull(),
-  notes: text("notes"),
-  sortOrder: int("sortOrder").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type QuotationItem = typeof quotationItems.$inferSelect;
-export type InsertQuotationItem = typeof quotationItems.$inferInsert;
-
-// ============= PARSED INVOICES (Парсирани фактури од PDF) =============
+// ============= PARSED INVOICES =============
 export const parsedInvoices = mysqlTable("parsed_invoices", {
   id: serial("id").primaryKey(),
   originalFileName: varchar("originalFileName", { length: 500 }).notNull(),
@@ -539,7 +862,99 @@ export const parsedInvoices = mysqlTable("parsed_invoices", {
   vatAmount: decimal("vatAmount", { precision: 14, scale: 2 }),
   currency: varchar("currency", { length: 10 }),
   rawText: text("rawText"),
+  fileUrl: text("fileUrl"),
+  documentType: mysqlEnum("document_type", ["invoice", "receipt", "delivery_note", "other"]).default("invoice").notNull(),
   status: mysqlEnum("status", ["parsed", "verified", "imported"]).default("parsed").notNull(),
   matchedInvoiceId: bigint("matchedInvoiceId", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+// ============= PARSED RECEIPT ITEMS (OCR results) =============
+export const parsedReceiptItems = mysqlTable("parsed_receipt_items", {
+  id: serial("id").primaryKey(),
+  parsedInvoiceId: bigint("parsed_invoice_id", { mode: "number", unsigned: true }).notNull(),
+  rawDescription: text("raw_description").notNull(),
+  matchedMaterialId: bigint("matched_material_id", { mode: "number", unsigned: true }),
+  matchedMaterialName: varchar("matched_material_name", { length: 255 }),
+  matchConfidence: decimal("match_confidence", { precision: 5, scale: 2 }).default("0").notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }),
+  unit: varchar("unit", { length: 20 }),
+  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }),
+  totalPrice: decimal("total_price", { precision: 12, scale: 2 }),
+  vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).default("18"),
+  isConfirmed: mysqlEnum("is_confirmed", ["pending", "confirmed", "rejected"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ParsedReceiptItem = typeof parsedReceiptItems.$inferSelect;
+
+// ============= FINISHED GOODS STOCK (for invoicing products)
+export const finishedGoodsStock = mysqlTable("finished_goods_stock", {
+  id: serial("id").primaryKey(),
+  productId: bigint("product_id", { mode: "number", unsigned: true }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).default("0").notNull(),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  notes: text("notes"),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type FinishedGoodsStock = typeof finishedGoodsStock.$inferSelect;
+
+// ============= DIGITAL CERTIFICATES (for UJP e-Faktura signing) =============
+export const digitalCertificates = mysqlTable("digital_certificates", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  certType: mysqlEnum("cert_type", ["qualified", "advanced", "test"]).default("qualified").notNull(),
+  // PEM encoded certificate (public key)
+  certificatePem: text("certificate_pem").notNull(),
+  // Encrypted private key (PEM, encrypted with AES-256-GCM)
+  privateKeyEncrypted: text("private_key_encrypted"),
+  // Key encryption IV
+  encryptionIv: varchar("encryption_iv", { length: 100 }),
+  // Key encryption auth tag
+  encryptionAuthTag: varchar("encryption_auth_tag", { length: 100 }),
+  issuer: varchar("issuer", { length: 255 }),
+  serialNumber: varchar("serial_number", { length: 100 }),
+  validFrom: date("valid_from"),
+  validTo: date("valid_to"),
+  edb: varchar("edb", { length: 20 }),
+  isActive: mysqlEnum("isActive", ["active", "inactive", "expired"]).default("active").notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DigitalCertificate = typeof digitalCertificates.$inferSelect;
+
+// ============= DOCUMENT COUNTERS =============
+export const docCounters = mysqlTable("doc_counters", {
+  id: serial("id").primaryKey(),
+  kind: varchar("kind", { length: 10 }).notNull(), // PO, RN, IS, PF, VF, PR, FV, KN
+  year: int("year").notNull(),
+  value: int("value").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type DocCounter = typeof docCounters.$inferSelect;
+
+// ============= EMAIL INVOICES (received via email) =============
+export const emailInvoices = mysqlTable("email_invoices", {
+  id: serial("id").primaryKey(),
+  subject: varchar("subject", { length: 500 }),
+  senderEmail: varchar("sender_email", { length: 255 }),
+  senderName: varchar("sender_name", { length: 255 }),
+  receivedAt: timestamp("received_at").defaultNow().notNull(),
+  pdfBase64: text("pdf_base64"),
+  pdfFilename: varchar("pdf_filename", { length: 255 }),
+  parsedSupplierName: varchar("parsed_supplier_name", { length: 255 }),
+  parsedInvoiceNumber: varchar("parsed_invoice_number", { length: 100 }),
+  parsedTotalAmount: varchar("parsed_total_amount", { length: 50 }),
+  parsedIssueDate: varchar("parsed_issue_date", { length: 20 }),
+  matchedSupplierId: bigint("matched_supplier_id", { mode: "number", unsigned: true }),
+  status: mysqlEnum("status", ["new", "parsed", "reviewed", "imported", "rejected"]).default("new").notNull(),
+  rawText: text("raw_text"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EmailInvoice = typeof emailInvoices.$inferSelect;

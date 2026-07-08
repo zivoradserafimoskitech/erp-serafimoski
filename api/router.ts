@@ -6,6 +6,12 @@ import { procurementRouter } from "./procurement-router";
 import { dashboardRouter } from "./dashboard-router";
 import { accountingRouter } from "./accounting-router";
 import { quotationRouter } from "./quotation-router";
+import { settingsRouter } from "./settings-router";
+import { warehouseRouter } from "./warehouse-router";
+import { catalogRouter } from "./catalog-router";
+import { ocrRouter } from "./ocr-router";
+import { emailRouter } from "./email-router";
+import { testRouter } from "./test-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -18,6 +24,12 @@ export const appRouter = createRouter({
   dashboard: dashboardRouter,
   accounting: accountingRouter,
   quotation: quotationRouter,
+  settings: settingsRouter,
+  warehouse: warehouseRouter,
+  catalog: catalogRouter,
+  ocr: ocrRouter,
+  email: emailRouter,
+  test: testRouter,
 });
 
 export type AppRouter = typeof appRouter;

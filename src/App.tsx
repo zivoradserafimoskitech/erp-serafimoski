@@ -7,6 +7,9 @@ import Customers from "@/pages/Customers";
 import Procurement from "@/pages/Procurement";
 import Accounting from "@/pages/Accounting";
 import Quotations from "@/pages/Quotations";
+import Receipts from "@/pages/Receipts";
+import SettingsPage from "@/pages/Settings";
+import CatalogPage from "@/pages/Catalog";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 
@@ -67,6 +70,30 @@ export default function App() {
         element={
           <Layout>
             <Quotations />
+          </Layout>
+        }
+      />
+      <Route
+        path="/priemnici"
+        element={
+          <Layout>
+            <Receipts />
+          </Layout>
+        }
+      />
+      <Route
+        path="/podesuvanja"
+        element={
+          <Layout>
+            <SettingsPage />
+          </Layout>
+        }
+      />
+      <Route
+        path="/katalog"
+        element={
+          <Layout>
+            <CatalogPage />
           </Layout>
         }
       />

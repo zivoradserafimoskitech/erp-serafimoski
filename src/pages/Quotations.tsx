@@ -76,8 +76,17 @@ export default function Quotations() {
     totalPrice: string; notes: string; sortOrder: number;
   }>>([]);
 
-  const [svcForm, setSvcForm] = useState({ name: "", code: "", type: "laser_cutting" as keyof typeof svcTypes, unit: "m2" as keyof typeof svcUnits, description: "", defaultPrice: "0" });
+  const [svcForm, setSvcForm] = useState({ name: "", code: "", type: "laser_cutting" as keyof typeof svcTypes, unit: "m2" as keyof typeof svcUnits, description: "", saleRate: "0", costRate: "0" });
   const [prodForm, setProdForm] = useState({ name: "", code: "", category: "laser_fence" as keyof typeof prodCats, unit: "m2" as keyof typeof prodUnits, description: "", defaultPrice: "0", materialCost: "0", laborCost: "0" });
+
+  // BOM Estimator state
+  const [estDialog, setEstDialog] = useState(false);
+  const [estProduct, setEstProduct] = useState<number | null>(null);
+  const [estForm, setEstForm] = useState({ area: "", perimeter: "", length: "", quantity: "1" });
+  const { data: estimateData } = trpc.quotation.estimateFromProduct.useQuery(
+    { productId: estProduct!, area: estForm.area, perimeter: estForm.perimeter || undefined, length: estForm.length || undefined, quantity: estForm.quantity },
+    { enabled: !!estProduct && !!estForm.area }
+  );
 
   const { data: customers } = trpc.customers.customerList.useQuery({});
   const { data: materialsData } = trpc.quotation.materialList.useQuery({});
@@ -86,7 +95,7 @@ export default function Quotations() {
     onSuccess: () => { utils.quotation.quotationList.invalidate(); setQDialog(false); resetQForm(); },
   });
   const createSvc = trpc.quotation.serviceCreate.useMutation({
-    onSuccess: () => { utils.quotation.serviceList.invalidate(); setSvcDialog(false); setSvcForm({ name: "", code: "", type: "laser_cutting", unit: "m2", description: "", defaultPrice: "0" }); },
+    onSuccess: () => { utils.quotation.serviceList.invalidate(); setSvcDialog(false); setSvcForm({ name: "", code: "", type: "laser_cutting", unit: "m2", description: "", saleRate: "0", costRate: "0" }); },
   });
   const createProd = trpc.quotation.productCreate.useMutation({
     onSuccess: () => { utils.quotation.productList.invalidate(); setProdDialog(false); setProdForm({ name: "", code: "", category: "laser_fence", unit: "m2", description: "", defaultPrice: "0", materialCost: "0", laborCost: "0" }); },
@@ -195,18 +204,18 @@ export default function Quotations() {
                       {/* Services */}
                       <div className="space-y-1">
                         <Label className="text-xs text-gray-500">Услуги</Label>
-                        <Select onValueChange={v => { const s = servicesData?.find(x => x.id.toString() === v); if (s) addItem("service", s.id, s.name, svcUnits[s.unit] || s.unit, s.defaultPrice); }}>
+                        <Select onValueChange={v => { const s = servicesData?.find(x => x.id.toString() === v); if (s) addItem("service", s.id, s.name, svcUnits[s.unit] || s.unit, s.saleRate); }}>
                           <SelectTrigger className="text-xs"><SelectValue placeholder="Избери услуга" /></SelectTrigger>
                           <SelectContent className="max-h-60">
-                            {servicesData?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name} ({svcTypes[s.type]}) - {s.defaultPrice} ден/{svcUnits[s.unit]}</SelectItem>)}
+                            {servicesData?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name} ({svcTypes[s.type]}) - {s.saleRate} ден/{svcUnits[s.unit]}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
-                      {/* Products */}
+                      {/* Products with BOM estimator */}
                       <div className="space-y-1">
-                        <Label className="text-xs text-gray-500">Производи</Label>
-                        <Select onValueChange={v => { const p = productsData?.find(x => x.id.toString() === v); if (p) addItem("product", p.id, p.name, prodUnits[p.unit] || p.unit, p.defaultPrice); }}>
-                          <SelectTrigger className="text-xs"><SelectValue placeholder="Избери производ" /></SelectTrigger>
+                        <Label className="text-xs text-gray-500">Производи (со естиматор)</Label>
+                        <Select onValueChange={v => { const p = productsData?.find(x => x.id.toString() === v); if (p) { setEstProduct(p.id); setEstForm({ area: "", perimeter: "", length: "", quantity: "1" }); setEstDialog(true); } }}>
+                          <SelectTrigger className="text-xs"><SelectValue placeholder="Избери производ за естимација" /></SelectTrigger>
                           <SelectContent className="max-h-60">
                             {productsData?.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.name} ({prodCats[p.category]}) - {p.defaultPrice} ден/{prodUnits[p.unit]}</SelectItem>)}
                           </SelectContent>
@@ -268,7 +277,8 @@ export default function Quotations() {
                       <Select value={svcForm.unit} onValueChange={v => setSvcForm({ ...svcForm, unit: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(svcUnits).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
                     </div>
                   </div>
-                  <div className="space-y-2"><Label>Цена по единица</Label><Input type="number" step="0.01" value={svcForm.defaultPrice} onChange={e => setSvcForm({ ...svcForm, defaultPrice: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Цена на чинење</Label><Input type="number" step="0.01" value={svcForm.costRate} onChange={e => setSvcForm({ ...svcForm, costRate: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Продажна цена</Label><Input type="number" step="0.01" value={svcForm.saleRate} onChange={e => setSvcForm({ ...svcForm, saleRate: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Опис</Label><Textarea value={svcForm.description} onChange={e => setSvcForm({ ...svcForm, description: e.target.value })} /></div>
                   <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createSvc.isPending}>{createSvc.isPending ? "Зачувување..." : "Зачувај услуга"}</Button>
                 </form>
@@ -373,7 +383,7 @@ export default function Quotations() {
                       <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell><Badge variant="outline">{svcTypes[s.type]}</Badge></TableCell>
                       <TableCell>{svcUnits[s.unit] || s.unit}</TableCell>
-                      <TableCell className="font-medium">{s.defaultPrice} ден.</TableCell>
+                      <TableCell className="font-medium">{s.saleRate} ден.</TableCell>
                       <TableCell><Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) delSvc.mutate({ id: s.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
                     </TableRow>
                   ))}
@@ -472,6 +482,53 @@ export default function Quotations() {
             <Button className="w-full bg-purple-500 hover:bg-purple-600" disabled={convertQ.isPending || !convOrderNum} onClick={() => convertQ.mutate({ quotationId: selQ!, orderNumber: convOrderNum })}>
               {convertQ.isPending ? "Конвертирање..." : "Конвертирај во нарачка"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* BOM Estimator Dialog */}
+      <Dialog open={estDialog} onOpenChange={setEstDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Естиматор за производ</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-4 gap-3">
+              <div className="space-y-1"><Label>Површина (m2) *</Label><Input type="number" step="0.01" value={estForm.area} onChange={e => setEstForm({ ...estForm, area: e.target.value })} placeholder="пр. 15.5" /></div>
+              <div className="space-y-1"><Label>Периметар (м)</Label><Input type="number" step="0.01" value={estForm.perimeter} onChange={e => setEstForm({ ...estForm, perimeter: e.target.value })} placeholder="пр. 24" /></div>
+              <div className="space-y-1"><Label>Должина (м)</Label><Input type="number" step="0.01" value={estForm.length} onChange={e => setEstForm({ ...estForm, length: e.target.value })} placeholder="пр. 5" /></div>
+              <div className="space-y-1"><Label>Количина</Label><Input type="number" value={estForm.quantity} onChange={e => setEstForm({ ...estForm, quantity: e.target.value })} /></div>
+            </div>
+            {estimateData && (
+              <div className="space-y-3">
+                <div className="flex gap-4 text-sm">
+                  <span className="text-gray-600">Материјал: <b>{estimateData.materialCost} ден</b></span>
+                  <span className="text-gray-600">Услуги: <b>{estimateData.serviceCost} ден</b></span>
+                  <span className="text-gray-800 font-bold">ВКУПНО: {estimateData.totalCost} ден</span>
+                </div>
+                <Table>
+                  <TableHeader><TableRow className="text-xs"><TableHead>Тип</TableHead><TableHead>Опис</TableHead><TableHead>Кол</TableHead><TableHead>Ед</TableHead><TableHead>Цена</TableHead><TableHead>Вкупно</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {estimateData.lineItems.map((li: any, idx: number) => (
+                      <TableRow key={idx}><TableCell className="text-xs"><Badge variant="outline">{li.itemType === "material" ? "Мат" : "Усл"}</Badge></TableCell>
+                        <TableCell className="text-xs">{li.description}</TableCell><TableCell className="text-xs">{li.quantity}</TableCell>
+                        <TableCell className="text-xs">{li.unit}</TableCell><TableCell className="text-xs">{li.unitCost}</TableCell>
+                        <TableCell className="text-xs font-medium">{li.totalCost}</TableCell></TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => {
+                  const p = productsData?.find(x => x.id === estProduct);
+                  if (p && estimateData) {
+                    // Add product header item
+                    addItem("product", p.id, `${p.name} (${estForm.area}m2)`, prodUnits[p.unit] || "m2", estimateData.totalCost);
+                    // Add breakdown items
+                    estimateData.lineItems.forEach((li: any) => {
+                      addItem(li.itemType as any, li.referenceId, li.description, li.unit, li.totalCost);
+                    });
+                    setEstDialog(false);
+                  }
+                }}>Додади ставки во понуда</Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
