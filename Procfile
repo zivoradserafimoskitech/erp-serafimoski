@@ -1,1 +1,1 @@
-web: npm run start
+web: node api/health-server.js
