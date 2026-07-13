@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && esbuild api/index.ts --platform=node --bundle --format=esm --outfile=dist/server.mjs --external:fuse.js --external:pdf-parse --external:@trpc/* --external:hono --external:@hono/* --external:drizzle-orm --external:mysql2 --external:dotenv --external:jose --external:superjson --external:zod",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "NODE_ENV=production node dist/boot.js",
@@ -67,6 +67,7 @@
     "esbuild": "^0.27.2",
     "fuse.js": "^7.4.2",
     "hono": "^4.8.3",
+    "html-to-text": "^10.0.0",
     "imap": "^0.8.19",
     "input-otp": "^1.4.2",
     "jose": "^6.1.3",

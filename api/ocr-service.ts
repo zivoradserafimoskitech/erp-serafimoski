@@ -6,16 +6,20 @@ import { eq } from "drizzle-orm";
 let Fuse: any;
 let pdfParse: any;
 
-async function loadDeps() {
-  if (!Fuse) {
-    const fuseMod = await import("fuse.js");
-    Fuse = fuseMod.default || fuseMod;
-  }
+async function loadPdfParse() {
   if (!pdfParse) {
-    const { createRequire } = await import("module");
-    const require = createRequire(import.meta.url);
-    pdfParse = require("pdf-parse");
+    const mod = await import("pdf-parse");
+    pdfParse = mod.default || mod;
   }
+  return pdfParse;
+}
+
+async function loadFuse() {
+  if (!Fuse) {
+    const mod = await import("fuse.js");
+    Fuse = mod.default || mod.Fuse || mod;
+  }
+  return Fuse;
 }
 
 export interface ExtractedItem {
@@ -385,7 +389,7 @@ export async function matchItemsToMaterials(
     }));
   }
 
-  await loadDeps();
+  const Fuse = await loadFuse();
 
   // Build searchable list
   const searchList = allMaterials.map(m => ({
@@ -432,7 +436,7 @@ export async function parsePdfDocument(buffer: Buffer): Promise<ParsedDocument> 
   let rawText = "";
 
   try {
-    await loadDeps();
+    const pdfParse = await loadPdfParse();
     const pdfData = await pdfParse(buffer);
     rawText = pdfData.text;
   } catch (error) {

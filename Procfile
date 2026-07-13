@@ -1,1 +1,1 @@
-web: node --import tsx api/index.ts
+web: node dist/server.mjs
