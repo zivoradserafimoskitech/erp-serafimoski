@@ -7,11 +7,16 @@ import type { ReactNode } from "react";
 
 export const trpc = createTRPCReact<AppRouter>();
 
+// Backend URL - сменете го со вашиот домен
+// Локално: "/api/trpc"
+// Production: "https://erp.vashdomain.mk/api/trpc"
+const API_URL = import.meta.env.VITE_API_URL || "/api/trpc";
+
 const queryClient = new QueryClient();
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      url: API_URL,
       transformer: superjson,
       fetch(input, init) {
         return globalThis.fetch(input, {
