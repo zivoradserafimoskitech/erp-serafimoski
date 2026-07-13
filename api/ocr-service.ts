@@ -132,25 +132,13 @@ function extractDocumentInfo(text: string): {
   }
   // Fallback: check known suppliers from text
   if (!supplierName) {
-    const knownSuppliers = ["Metal Net", "Метал Нет", "BAUMANN", "SALVAGNINI", "ARKU", "WEMO", "Rimi", "Рими"];
+    const knownSuppliers = ["Metal Net", "Метал Нет", "BAUMANN", "SALVAGNINI", "ARKU", "WEMO"];
     for (const name of knownSuppliers) {
       if (text.toLowerCase().includes(name.toLowerCase())) {
         supplierName = name;
         break;
       }
     }
-  }
-
-  // Rimi-specific detection
-  if (!supplierName && (
-    text.includes("4020990115480") ||
-    text.includes("Rimi ДООЕЛ") ||
-    text.includes("Rimi dooel") ||
-    text.includes("RIMI DOOEL") ||
-    text.includes("Jane Sandanski") ||
-    text.includes("Сандански 88")
-  )) {
-    supplierName = "Rimi ДООЕЛ Скопје";
   }
 
   // Find document number - patterns like "ПР-001/2025", "Invoice #123", "Ф-123"

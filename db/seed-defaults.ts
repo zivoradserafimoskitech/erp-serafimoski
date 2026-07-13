@@ -1,6 +1,5 @@
 import { getDb } from "../api/queries/connection";
-import { warehouses, units, companySettings, customers, suppliers } from "./schema";
-import { eq } from "drizzle-orm";
+import { warehouses, units, companySettings } from "./schema";
 
 async function seedDefaults() {
   const db = getDb();
@@ -53,49 +52,6 @@ async function seedDefaults() {
     console.log("Created default company settings for Serafimoski Tek");
   } else {
     console.log("Company settings already exist");
-  }
-
-  // 4. Create Rimi as customer and supplier
-  const rimiAsCustomer = await db.select().from(customers).where(eq(customers.company, "Rimi ДООЕЛ Скопје"));
-  if (rimiAsCustomer.length === 0) {
-    await db.insert(customers).values({
-      name: "Rimi ДООЕЛ Скопје",
-      company: "Rimi ДООЕЛ Скопје",
-      contactPerson: "Оддел за набавки",
-      email: "nabavki@rimi.mk",
-      phone: "02/3290-800",
-      address: "Бул. Јане Сандански 88",
-      city: "Скопје",
-      country: "Македонија",
-      taxNumber: "МК4020990115480",
-      edb: "4020990115480",
-      notes: "ЕДБ: 4020990115480 | Најголем синџир на супермаркети во Македонија. Контакт за е-фактура: fakturi@rimi.mk",
-      isActive: "active",
-    });
-    console.log("Created Rimi as customer");
-  } else {
-    console.log("Rimi customer already exists");
-  }
-
-  const rimiAsSupplier = await db.select().from(suppliers).where(eq(suppliers.name, "Rimi ДООЕЛ Скопје"));
-  if (rimiAsSupplier.length === 0) {
-    await db.insert(suppliers).values({
-      name: "Rimi ДООЕЛ Скопје",
-      edb: "4020990115480",
-      contactPerson: "Оддел за продажба",
-      email: "prodazba@rimi.mk",
-      phone: "02/3290-800",
-      address: "Бул. Јане Сандански 88",
-      city: "Скопје",
-      country: "Македонија",
-      paymentTerms: "30 дена",
-      defaultCurrency: "MKD",
-      materials: "Опрема за хигиена, канцелариски материјали, заштитна опрема",
-      isActive: "active",
-    });
-    console.log("Created Rimi as supplier");
-  } else {
-    console.log("Rimi supplier already exists");
   }
 
   console.log("Default seed complete!");
