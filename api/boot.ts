@@ -30,11 +30,18 @@ export default app;
 
 if (env.isProduction) {
   const { serve } = await import("@hono/node-server");
-  const { serveStaticFiles } = await import("./lib/vite");
-  serveStaticFiles(app);
+
+  // Try to serve static files, but don't fail if dist/public doesn't exist
+  try {
+    const { serveStaticFiles } = await import("./lib/vite");
+    serveStaticFiles(app);
+    console.log("Static files serving enabled");
+  } catch (e) {
+    console.warn("Static files not available:", (e as Error).message);
+  }
 
   const port = parseInt(process.env.PORT || "3000");
   serve({ fetch: app.fetch, port }, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    console.log(`Server running on port ${port}`);
   });
 }
