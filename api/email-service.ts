@@ -1,10 +1,19 @@
 // ===== Е-маил сервис за примање на влезни фактури =====
 // IMAP поврзување, влечење на PDF фактури, парсирање
 
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const Imap = require("imap");
-const { simpleParser } = require("mailparser");
+// Lazy-load IMAP modules for CJS/ESM compatibility
+let Imap: any;
+let simpleParser: any;
+
+function loadImap() {
+  if (!Imap) {
+    // Use eval to access require in CJS contexts
+    const req = (globalThis as any).require || eval("require");
+    Imap = req("imap");
+    simpleParser = req("mailparser").simpleParser;
+  }
+  return { Imap, simpleParser };
+}
 import { getDb } from "./queries/connection";
 import { companySettings, emailInvoices, suppliers } from "@db/schema";
 import { desc, eq, like, or } from "drizzle-orm";
@@ -53,6 +62,7 @@ export async function fetchInvoicesFromEmail(
   sinceDays: number = 7
 ): Promise<FetchedInvoice[]> {
   return new Promise((resolve, reject) => {
+    const { Imap } = loadImap();
     const imap = new Imap({
       host: config.imapHost,
       port: config.imapPort,
@@ -104,6 +114,7 @@ export async function fetchInvoicesFromEmail(
 
             msg.once("end", async () => {
               try {
+                const { simpleParser } = loadImap();
                 const parsed = await simpleParser(bodyBuffer);
                 const attachments = parsed.attachments || [];
 
