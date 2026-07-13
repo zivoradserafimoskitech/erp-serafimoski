@@ -1,47 +1,53 @@
 import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
+import { serve } from "@hono/node-server";
 import type { HttpBindings } from "@hono/node-server";
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { appRouter } from "./router";
-import { createContext } from "./context";
-import { env } from "./lib/env";
-import { createOAuthCallbackHandler } from "./kimi/auth";
-import { Paths } from "@contracts/constants";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
+const port = parseInt(process.env.PORT || "3000");
 
-app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+// Health check — мора да биде прв и сигурен
+app.get("/health", (c) => c.json({ ok: true, time: Date.now(), port }));
 
-// Health check for Railway
-app.get("/health", (c) => c.json({ ok: true, time: Date.now() }));
-
-app.get(Paths.oauthCallback, createOAuthCallbackHandler());
-app.use("/api/trpc/*", async (c) => {
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req: c.req.raw,
-    router: appRouter,
-    createContext,
-  });
+// Пушти го серверот ВЕДНАШ
+serve({ fetch: app.fetch, port }, () => {
+  console.log(`[BOOT] Server running on port ${port}`);
 });
-app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
-export default app;
+// Остатокот од иницијализацијата во позадина
+try {
+  const { bodyLimit } = await import("hono/body-limit");
+  const { fetchRequestHandler } = await import("@trpc/server/adapters/fetch");
+  const { appRouter } = await import("./router");
+  const { createContext } = await import("./context");
+  const { createOAuthCallbackHandler } = await import("./kimi/auth");
+  const { Paths } = await import("@contracts/constants");
 
-if (env.isProduction) {
-  const { serve } = await import("@hono/node-server");
+  app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
-  // Try to serve static files, but don't fail if dist/public doesn't exist
+  app.get(Paths.oauthCallback, createOAuthCallbackHandler());
+  app.use("/api/trpc/*", async (c) => {
+    return fetchRequestHandler({
+      endpoint: "/api/trpc",
+      req: c.req.raw,
+      router: appRouter,
+      createContext,
+    });
+  });
+  app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
+
+  // Static files
   try {
     const { serveStaticFiles } = await import("./lib/vite");
     serveStaticFiles(app);
-    console.log("Static files serving enabled");
+    console.log("[BOOT] Static files serving enabled");
   } catch (e) {
-    console.warn("Static files not available:", (e as Error).message);
+    console.warn("[BOOT] Static files not available:", (e as Error).message);
   }
 
-  const port = parseInt(process.env.PORT || "3000");
-  serve({ fetch: app.fetch, port }, () => {
-    console.log(`Server running on port ${port}`);
-  });
+  console.log("[BOOT] Full initialization complete");
+} catch (err) {
+  console.error("[BOOT] Initialization error:", (err as Error).message);
+  console.error("[BOOT] Server is running but API routes may not work");
 }
+
+export default app;
