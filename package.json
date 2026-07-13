@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "echo 'No build needed'","
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "NODE_ENV=production node dist/boot.js",
