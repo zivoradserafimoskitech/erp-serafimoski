@@ -38,6 +38,6 @@ app.notFound((c) => {
   return c.redirect("/");
 });
 
-serve({ fetch: app.fetch, port }, () => {
-  console.log(`[BOOT] Server running on port ${port}`);
+serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
+  console.log(`[BOOT] Server running on 0.0.0.0:${port}`);
 });
