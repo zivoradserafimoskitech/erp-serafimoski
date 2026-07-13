@@ -2,10 +2,10 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "echo 'Build skipped - TypeScript runs directly'"
+    "buildCommand": "echo 'No build needed'"
   },
   "deploy": {
-    "startCommand": "bash scripts/start.sh",
+    "startCommand": "node api/health-server.js",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
