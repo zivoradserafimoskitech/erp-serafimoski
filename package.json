@@ -11,7 +11,7 @@
     "build": "vite build && esbuild api/index.ts --platform=node --bundle --format=esm --outfile=dist/server.mjs --external:fuse.js --external:pdf-parse --external:@trpc/* --external:hono --external:@hono/* --external:drizzle-orm --external:mysql2 --external:dotenv --external:jose --external:superjson --external:zod",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "NODE_ENV=production node dist/boot.js",
+    "start": "NODE_ENV=production node dist/server.mjs",
     "check": "tsc -b",
     "format": "prettier --write .",
     "test": "vitest run",
