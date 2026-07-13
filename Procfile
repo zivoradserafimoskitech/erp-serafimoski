@@ -1,1 +1,1 @@
-web: node api/health-server.js
+web: node --import tsx api/index.ts
