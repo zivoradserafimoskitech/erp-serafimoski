@@ -1,3 +1,4 @@
 #!/bin/bash
-echo "=== Serafimoski Tek ERP - Starting on port $PORT ==="
-NODE_ENV=production node dist/boot.js
+echo "=== Serafimoski Tek ERP ==="
+echo "Port: $PORT"
+node --import tsx api/index.ts

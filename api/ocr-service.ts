@@ -1,11 +1,22 @@
-import Fuse from "fuse.js";
-// pdf-parse is CJS only, use dynamic require
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
 import { getDb } from "./queries/connection";
 import { materials, suppliers } from "@db/schema";
 import { eq } from "drizzle-orm";
+
+// Dynamic imports for ESM compatibility
+let Fuse: any;
+let pdfParse: any;
+
+async function loadDeps() {
+  if (!Fuse) {
+    const fuseMod = await import("fuse.js");
+    Fuse = fuseMod.default || fuseMod;
+  }
+  if (!pdfParse) {
+    const { createRequire } = await import("module");
+    const require = createRequire(import.meta.url);
+    pdfParse = require("pdf-parse");
+  }
+}
 
 export interface ExtractedItem {
   rawDescription: string;
@@ -374,6 +385,8 @@ export async function matchItemsToMaterials(
     }));
   }
 
+  await loadDeps();
+
   // Build searchable list
   const searchList = allMaterials.map(m => ({
     id: m.id,
@@ -419,6 +432,7 @@ export async function parsePdfDocument(buffer: Buffer): Promise<ParsedDocument> 
   let rawText = "";
 
   try {
+    await loadDeps();
     const pdfData = await pdfParse(buffer);
     rawText = pdfData.text;
   } catch (error) {
