@@ -8,8 +8,8 @@ import type { ReactNode } from "react";
 export const trpc = createTRPCReact<AppRouter>();
 
 // Backend URL
-// Railway production backend
-const API_URL = import.meta.env.VITE_API_URL || "https://web-production-dceb8.up.railway.app/api/trpc";
+// Автоматски детектирај го URL-от од тековниот домен
+const API_URL = import.meta.env.VITE_API_URL || `${window.location.origin}/api/trpc`;
 
 const queryClient = new QueryClient();
 const trpcClient = trpc.createClient({
