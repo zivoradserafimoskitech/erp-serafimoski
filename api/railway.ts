@@ -11,15 +11,10 @@ import { cors } from "hono/cors";
 const app = new Hono();
 const port = parseInt(process.env.PORT || "3000");
 
-// CORS for cross-domain API calls
-app.use("/api/*", cors({
-  origin: ["https://inycxs6rg5wyq.kimi.page", "https://web-production-dceb8.up.railway.app", "http://localhost:5173"],
-  credentials: true,
-  allowHeaders: ["Content-Type", "Authorization"],
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-}));
-
+// 1. Health check
 app.get("/health", (c) => c.json({ ok: true, time: Date.now(), port }));
+
+// 2. DB test
 app.get("/api/test-db", async (c) => {
   try {
     const { getDb } = await import("./queries/connection");
@@ -30,6 +25,13 @@ app.get("/api/test-db", async (c) => {
     return c.json({ db: "error", message: e.message }, 500);
   }
 });
+
+// 3. CORS + tRPC API
+app.use("/api/*", cors({
+  origin: ["https://web-production-dceb8.up.railway.app", "http://localhost:5173"],
+  credentials: true,
+}));
+
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
@@ -39,6 +41,8 @@ app.use("/api/trpc/*", async (c) => {
     createContext,
   });
 });
+
+// 4. Static files (frontend) — LAST!
 app.use("*", serveStatic({ root: "./dist/public" }));
 
 app.notFound((c) => {
