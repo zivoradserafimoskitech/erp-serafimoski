@@ -20,6 +20,16 @@ app.use("/api/*", cors({
 }));
 
 app.get("/health", (c) => c.json({ ok: true, time: Date.now(), port }));
+app.get("/api/test-db", async (c) => {
+  try {
+    const { getDb } = await import("./queries/connection");
+    const db = getDb();
+    const result = await db.execute("SELECT 1 as test, NOW() as time");
+    return c.json({ db: "connected", result });
+  } catch (e: any) {
+    return c.json({ db: "error", message: e.message }, 500);
+  }
+});
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
