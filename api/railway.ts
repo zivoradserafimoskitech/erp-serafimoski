@@ -37,19 +37,18 @@ app.get("/api/init-db", async (c) => {
   }
 });
 
-// 4. Test customer creation (public, no auth)
-app.post("/api/test-customer", async (c) => {
+// 4. Test customer creation (public, no auth) — GET for easy browser test
+app.get("/api/test-customer", async (c) => {
   try {
     const { getDb } = await import("./queries/connection");
     const db = getDb();
-    const body = await c.req.json();
     const result = await db.execute(
       `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW())`,
-      [body.name, body.company, body.email, body.phone, body.address, body.city, body.country]
+      ['Тест Клиент', 'Тест ДООЕЛ', 'test@test.mk', '070123456', 'Тест Улица 1', 'Скопје', 'Македонија']
     );
-    return c.json({ success: true, result });
+    return c.json({ success: true, message: "Клиентот е креиран!", result });
   } catch (e: any) {
-    return c.json({ success: false, error: e.message }, 500);
+    return c.json({ success: false, error: e.message, hint: "Пробај /api/init-db прво" }, 500);
   }
 });
 
