@@ -6,9 +6,18 @@ import { createContext } from "./context";
 import { createOAuthCallbackHandler } from "./kimi/auth";
 import { Paths } from "@contracts/constants";
 import { serveStatic } from "@hono/node-server/serve-static";
+import { cors } from "hono/cors";
 
 const app = new Hono();
 const port = parseInt(process.env.PORT || "3000");
+
+// CORS for cross-domain API calls
+app.use("/api/*", cors({
+  origin: ["https://inycxs6rg5wyq.kimi.page", "https://web-production-dceb8.up.railway.app", "http://localhost:5173"],
+  credentials: true,
+  allowHeaders: ["Content-Type", "Authorization"],
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+}));
 
 app.get("/health", (c) => c.json({ ok: true, time: Date.now(), port }));
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
