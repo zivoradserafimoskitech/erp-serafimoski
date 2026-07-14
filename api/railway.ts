@@ -14,7 +14,7 @@ const port = parseInt(process.env.PORT || "3000");
 // 1. Health check
 app.get("/health", (c) => c.json({ ok: true, time: Date.now(), port }));
 
-// 2. DB test
+// 2. DB test + init
 app.get("/api/test-db", async (c) => {
   try {
     const { getDb } = await import("./queries/connection");
@@ -23,6 +23,17 @@ app.get("/api/test-db", async (c) => {
     return c.json({ db: "connected", result });
   } catch (e: any) {
     return c.json({ db: "error", message: e.message }, 500);
+  }
+});
+
+// 3. Init database tables
+app.get("/api/init-db", async (c) => {
+  try {
+    const { execSync } = await import("child_process");
+    execSync("npx drizzle-kit push --force", { cwd: "/app", stdio: "pipe" });
+    return c.json({ status: "tables created" });
+  } catch (e: any) {
+    return c.json({ status: "error", message: e.message }, 500);
   }
 });
 
