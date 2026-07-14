@@ -37,6 +37,22 @@ app.get("/api/init-db", async (c) => {
   }
 });
 
+// 4. Test customer creation (public, no auth)
+app.post("/api/test-customer", async (c) => {
+  try {
+    const { getDb } = await import("./queries/connection");
+    const db = getDb();
+    const body = await c.req.json();
+    const result = await db.execute(
+      `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW())`,
+      [body.name, body.company, body.email, body.phone, body.address, body.city, body.country]
+    );
+    return c.json({ success: true, result });
+  } catch (e: any) {
+    return c.json({ success: false, error: e.message }, 500);
+  }
+});
+
 // 3. CORS + tRPC API
 app.use("/api/*", cors({
   origin: ["https://web-production-dceb8.up.railway.app", "http://localhost:5173"],
