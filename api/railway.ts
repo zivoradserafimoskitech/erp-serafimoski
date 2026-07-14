@@ -48,6 +48,11 @@ app.get("/api/test-customer", async (c) => {
   try {
     const { getDb } = await import("./queries/connection");
     const db = getDb();
+    // Провери дали табелата постои
+    const tables = await db.execute("SHOW TABLES LIKE 'customers'");
+    if ((tables as any)[0].length === 0) {
+      return c.json({ success: false, error: "Табелата customers не постои", hint: "Отвори /api/init-db прво" }, 500);
+    }
     const result = await db.execute(
       `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW())`,
       ['Тест Клиент', 'Тест ДООЕЛ', 'test@test.mk', '070123456', 'Тест Улица 1', 'Скопје', 'Македонија']
