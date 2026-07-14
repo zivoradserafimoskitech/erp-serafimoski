@@ -8,6 +8,7 @@
   },
   "scripts": {
     "boot": "NODE_ENV=production node dist/app.cjs",
+    "boot": "NODE_ENV=production node dist/app.cjs",
     "dev": "vite",
     "build": "rm -rf dist/app.cjs dist/public && vite build && esbuild api/railway.ts --platform=node --bundle --format=cjs --outfile=dist/app.cjs --external:pdf-parse --external:fuse.js --external:mysql2",
     "lint": "eslint .",
