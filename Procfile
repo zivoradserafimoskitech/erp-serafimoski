@@ -1,1 +1,1 @@
-web: rm -rf dist/server.cjs && npm install && npm run build && node dist/server.cjs
+web: rm -rf dist/server.cjs dist/public && npm install && npx esbuild api/railway.ts --platform=node --bundle --format=cjs --outfile=dist/server.cjs --external:pdf-parse --external:fuse.js --external:mysql2 && npx vite build && node dist/server.cjs
