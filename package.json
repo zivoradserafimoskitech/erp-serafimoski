@@ -9,7 +9,7 @@
   "scripts": {
     "boot": "node dist/server.cjs",
     "dev": "vite",
-    "build": "vite build && esbuild api/railway.ts --platform=node --bundle --format=cjs --outfile=dist/server.cjs --external:pdf-parse --external:fuse.js --external:mysql2",
+    "build": "rm -rf dist/server.cjs dist/public && vite build && esbuild api/railway.ts --platform=node --bundle --format=cjs --outfile=dist/server.cjs --external:pdf-parse --external:fuse.js --external:mysql2",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "NODE_ENV=production node dist/server.mjs",
