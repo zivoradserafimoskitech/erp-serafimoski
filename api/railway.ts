@@ -22,6 +22,14 @@ app.use("/api/trpc/*", async (c) => {
 });
 app.use("*", serveStatic({ root: "./dist/public" }));
 
+app.notFound((c) => {
+  const accept = c.req.header("accept") ?? "";
+  if (accept.includes("text/html")) {
+    return c.redirect("/");
+  }
+  return c.json({ error: "Not Found" }, 404);
+});
+
 serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   console.log(`[BOOT] Server on 0.0.0.0:${port}`);
 });
