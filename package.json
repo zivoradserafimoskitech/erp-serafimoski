@@ -9,10 +9,10 @@
   "scripts": {
     "boot": "node dist/server.cjs",
     "dev": "vite",
-    "build": "rm -rf dist/server.cjs dist/public && vite build && esbuild api/railway.ts --platform=node --bundle --format=cjs --outfile=dist/server.cjs --external:pdf-parse --external:fuse.js --external:mysql2",
+    "build": "rm -rf dist/app.cjs dist/public && vite build && esbuild api/railway.ts --platform=node --bundle --format=cjs --outfile=dist/app.cjs --external:pdf-parse --external:fuse.js --external:mysql2",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "rm -rf dist/server.cjs dist/public && npm install && npm run build && NODE_ENV=production node dist/server.cjs",
+    "start": "rm -rf dist/app.cjs dist/public && npm install && npm run build && NODE_ENV=production node dist/app.cjs",
     "check": "tsc -b",
     "format": "prettier --write .",
     "test": "vitest run",
