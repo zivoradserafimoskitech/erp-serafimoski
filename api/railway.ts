@@ -26,12 +26,18 @@ app.get("/api/test-db", async (c) => {
   }
 });
 
-// 3. Init database tables
+// 3. Init database tables (SQL method — reliable in production)
 app.get("/api/init-db", async (c) => {
   try {
-    const { execSync } = await import("child_process");
-    execSync("npx drizzle-kit push --force", { cwd: "/app", stdio: "pipe" });
-    return c.json({ status: "tables created" });
+    const { getInitSql } = await import("./init-db-sql");
+    const { getDb } = await import("./queries/connection");
+    const db = getDb();
+    const sql = getInitSql();
+    const statements = sql.split(';').filter(s => s.trim());
+    for (const stmt of statements) {
+      if (stmt.trim()) await db.execute(stmt + ';');
+    }
+    return c.json({ status: "tables created", count: statements.length });
   } catch (e: any) {
     return c.json({ status: "error", message: e.message }, 500);
   }
