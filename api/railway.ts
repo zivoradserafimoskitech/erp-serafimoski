@@ -31,9 +31,10 @@ app.get("/api/init-db", async (c) => {
   try {
     const { getInitSql } = await import("./init-db-sql");
     const { Pool } = await import("pg");
+    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
     const pool = new Pool({ 
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl
     });
     const sql = getInitSql();
     const statements = sql.split(';').filter(s => s.trim());
@@ -79,9 +80,10 @@ app.get("/api/test-customer", async (c) => {
   try {
     const pgModule = await import("pg");
     const Pool = pgModule.default?.Pool || pgModule.Pool;
+    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
     const pool = new Pool({ 
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl
     });
     
     const result = await pool.query(
@@ -100,9 +102,10 @@ app.get("/api/debug", async (c) => {
   try {
     const pgModule = await import("pg");
     const Pool = pgModule.default?.Pool || pgModule.Pool;
+    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
     const pool = new Pool({ 
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl
     });
     
     const t1 = await pool.query("SELECT 1 as test");
@@ -124,7 +127,7 @@ app.get("/api/debug", async (c) => {
 
 // 3. CORS + tRPC API
 app.use("/api/*", cors({
-  origin: ["https://web-production-dceb8.up.railway.app", "http://localhost:5173"],
+  origin: ["https://web-production-dceb8.up.railway.app", "http://localhost:5173", "https://erp-serafimoski.onrender.com"],
   credentials: true,
 }));
 

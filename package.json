@@ -7,8 +7,8 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "vite build",
-    "start": "NODE_ENV=production node index.js"
+    "build": "vite build && esbuild api/railway.ts --platform=node --bundle --format=esm --outfile=dist/server.mjs --external:pg --external:pdf-parse --external:fuse.js --external:dotenv",
+    "start": "NODE_ENV=production node dist/server.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.1",

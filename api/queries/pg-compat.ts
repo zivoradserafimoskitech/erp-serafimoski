@@ -9,7 +9,8 @@ function getPool() {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL required");
-    pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
+    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
+    pool = new Pool({ connectionString, ssl });
   }
   return pool;
 }
