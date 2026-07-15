@@ -50,19 +50,27 @@ app.get("/api/init-db", async (c) => {
 // 4. Test customer creation (public, no auth) — GET for easy browser test
 app.get("/api/test-customer", async (c) => {
   try {
-    const { getDb } = await import("./queries/connection");
-    const db = getDb();
-    // Провери дали табелата постои (PostgreSQL синтакса)
-    const tables = await db.execute("SELECT tablename FROM pg_tables WHERE tablename = 'customers'");
-    if ((tables as any)[0].length === 0) {
+    // Use raw pg Pool for proper PostgreSQL handling
+    const { Pool } = await import("pg");
+    const pool = new Pool({ 
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    
+    // Check if table exists
+    const tables = await pool.query("SELECT tablename FROM pg_tables WHERE tablename = 'customers'");
+    if (tables.rows.length === 0) {
+      await pool.end();
       return c.json({ success: false, error: "Табелата customers не постои", hint: "Отвори /api/init-db прво" }, 500);
     }
-    // PostgreSQL користи $1, $2 наместо ?
-    const result = await db.execute(
+    
+    // Insert with PostgreSQL parameters ($1, $2...)
+    const result = await pool.query(
       `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW())`,
       ['Тест Клиент', 'Тест ДООЕЛ', 'test@test.mk', '070123456', 'Тест Улица 1', 'Скопје', 'Македонија']
     );
-    return c.json({ success: true, message: "Клиентот е креиран!", result });
+    await pool.end();
+    return c.json({ success: true, message: "Клиентот е креиран!", result: result.rowCount });
   } catch (e: any) {
     return c.json({ success: false, error: e.message, stack: e.stack?.substring(0, 200) }, 500);
   }
