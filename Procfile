@@ -1,1 +1,1 @@
-web: npm install && npm run build && NODE_ENV=production node dist/server.cjs
+web: npm install && npm run build && npm start

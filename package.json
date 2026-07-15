@@ -7,8 +7,8 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "vite build && esbuild api/railway.ts --platform=node --bundle --format=cjs --outfile=dist/server.cjs --external:pg --external:pdf-parse --external:fuse.js",
-    "start": "NODE_ENV=production node dist/server.cjs"
+    "build": "vite build",
+    "start": "NODE_ENV=production npx tsx api/railway.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.1",
