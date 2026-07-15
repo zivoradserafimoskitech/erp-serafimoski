@@ -30,13 +30,17 @@ app.get("/api/test-db", async (c) => {
 app.get("/api/init-db", async (c) => {
   try {
     const { getInitSql } = await import("./init-db-sql");
-    const { getDb } = await import("./queries/connection");
-    const db = getDb();
+    const { Pool } = await import("pg");
+    const pool = new Pool({ 
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
     const sql = getInitSql();
     const statements = sql.split(';').filter(s => s.trim());
     for (const stmt of statements) {
-      if (stmt.trim()) await db.execute(stmt + ';');
+      if (stmt.trim()) await pool.query(stmt + ';');
     }
+    await pool.end();
     return c.json({ status: "tables created", count: statements.length });
   } catch (e: any) {
     return c.json({ status: "error", message: e.message }, 500);
