@@ -10,7 +10,10 @@ export function getDb() {
     if (!connectionString) {
       throw new Error("DATABASE_URL environment variable is required");
     }
-    pool = new Pool({ connectionString });
+    pool = new Pool({ 
+      connectionString,
+      ssl: { rejectUnauthorized: false }
+    });
     db = drizzle(pool);
   }
   return db;
