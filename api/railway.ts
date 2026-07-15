@@ -48,18 +48,19 @@ app.get("/api/test-customer", async (c) => {
   try {
     const { getDb } = await import("./queries/connection");
     const db = getDb();
-    // Провери дали табелата постои
-    const tables = await db.execute("SHOW TABLES LIKE 'customers'");
+    // Провери дали табелата постои (PostgreSQL синтакса)
+    const tables = await db.execute("SELECT tablename FROM pg_tables WHERE tablename = 'customers'");
     if ((tables as any)[0].length === 0) {
       return c.json({ success: false, error: "Табелата customers не постои", hint: "Отвори /api/init-db прво" }, 500);
     }
+    // PostgreSQL користи $1, $2 наместо ?
     const result = await db.execute(
-      `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW())`,
+      `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW())`,
       ['Тест Клиент', 'Тест ДООЕЛ', 'test@test.mk', '070123456', 'Тест Улица 1', 'Скопје', 'Македонија']
     );
     return c.json({ success: true, message: "Клиентот е креиран!", result });
   } catch (e: any) {
-    return c.json({ success: false, error: e.message, hint: "Пробај /api/init-db прво" }, 500);
+    return c.json({ success: false, error: e.message, stack: e.stack?.substring(0, 200) }, 500);
   }
 });
 
