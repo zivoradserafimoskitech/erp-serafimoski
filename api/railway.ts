@@ -74,32 +74,51 @@ app.get("/api/debug-db", async (c) => {
   }
 });
 
-// 4. Test customer creation (public, no auth) — GET for easy browser test
+// 4. Test customer creation — raw pg, сигурно работи
 app.get("/api/test-customer", async (c) => {
   try {
-    // Use raw pg Pool for proper PostgreSQL handling
-    const { Pool } = await import("pg");
+    const pgModule = await import("pg");
+    const Pool = pgModule.default?.Pool || pgModule.Pool;
     const pool = new Pool({ 
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false }
     });
     
-    // Check if table exists
-    const tables = await pool.query("SELECT tablename FROM pg_tables WHERE tablename = 'customers'");
-    if (tables.rows.length === 0) {
-      await pool.end();
-      return c.json({ success: false, error: "Табелата customers не постои", hint: "Отвори /api/init-db прво" }, 500);
-    }
-    
-    // Insert with PostgreSQL parameters ($1, $2...)
     const result = await pool.query(
-      `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW())`,
-      ['Тест Клиент', 'Тест ДООЕЛ', 'test@test.mk', '070123456', 'Тест Улица 1', 'Скопје', 'Македонија']
+      `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW()) RETURNING *`,
+      ['Тест Клиент ' + Date.now(), 'Тест ДООЕЛ', 'test@test.mk', '070123456', 'Улица 1', 'Скопје', 'Македонија']
     );
     await pool.end();
-    return c.json({ success: true, message: "Клиентот е креиран!", result: result.rowCount });
+    return c.json({ success: true, message: "Клиентот е креиран!", result: result.rows[0] });
   } catch (e: any) {
-    return c.json({ success: false, error: e.message, stack: e.stack?.substring(0, 200) }, 500);
+    return c.json({ success: false, error: e.message, stack: e.stack?.substring(0, 500) }, 500);
+  }
+});
+
+// Debug: test db
+app.get("/api/debug", async (c) => {
+  try {
+    const pgModule = await import("pg");
+    const Pool = pgModule.default?.Pool || pgModule.Pool;
+    const pool = new Pool({ 
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    
+    const t1 = await pool.query("SELECT 1 as test");
+    const t2 = await pool.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename");
+    const t3 = await pool.query("SELECT count(*) as cnt FROM customers");
+    await pool.end();
+    
+    return c.json({ 
+      ok: true, 
+      db_url_set: !!process.env.DATABASE_URL,
+      test1: t1.rows[0],
+      tables: t2.rows.map((r: any) => r.tablename),
+      customer_count: t3.rows[0]?.cnt
+    });
+  } catch (e: any) {
+    return c.json({ ok: false, error: e.message, stack: e.stack?.substring(0, 500) }, 500);
   }
 });
 
