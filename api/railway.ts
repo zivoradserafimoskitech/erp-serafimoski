@@ -47,6 +47,33 @@ app.get("/api/init-db", async (c) => {
   }
 });
 
+// Debug: test db compatibility layer
+app.get("/api/debug-db", async (c) => {
+  try {
+    const { getDb } = await import("./queries/pg-compat");
+    const db = getDb();
+    
+    // Test 1: Raw execute
+    const t1 = await db.execute("SELECT 1 as test");
+    
+    // Test 2: Check pg_tables
+    const t2 = await db.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+    
+    // Test 3: Insert with pg-compat
+    const { customers } = await import("../db/schema");
+    const t3 = await db.insert(customers).values({
+      name: "DEBUG клиент",
+      company: "DEBUG",
+      email: "debug@test.mk",
+      is_active: "active"
+    });
+    
+    return c.json({ success: true, t1, tables: t2.rows.map((r: any) => r.tablename), t3 });
+  } catch (e: any) {
+    return c.json({ success: false, error: e.message, stack: e.stack?.substring(0, 500) }, 500);
+  }
+});
+
 // 4. Test customer creation (public, no auth) — GET for easy browser test
 app.get("/api/test-customer", async (c) => {
   try {
