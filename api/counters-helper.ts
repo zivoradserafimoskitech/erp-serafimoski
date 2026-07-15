@@ -1,4 +1,4 @@
-import { eq, and } from "./queries/pg-compat";
+import { eq, and } from "../queries/pg-compat";
 // PostgreSQL compat
 import { getDb } from "./queries/connection";
 import { docCounters } from "@db/schema";
