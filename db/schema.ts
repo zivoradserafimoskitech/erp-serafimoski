@@ -24,7 +24,7 @@ export const companySettings = pgTable("company_settings", {
   email: varchar("email", { length: 320 }),
   logoUrl: text("logo_url"),
   defaultVatRate: decimal("default_vat_rate", { precision: 5, scale: 2 }).notNull(),
-  valuationMethod: varchar.notNull(),
+  valuationMethod: varchar("valuation_method", { length: 50 }).notNull(),
   currency: varchar("currency", { length: 10 }).notNull(),
   timezone: varchar("timezone", { length: 50 }).notNull(),
   emailImapHost: varchar("emailImapHost", { length: 255 }),
@@ -46,7 +46,7 @@ export const users = pgTable("users", {
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
-  role: varchar.notNull(),
+  role: varchar("role", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt")
     .defaultNow()
@@ -80,8 +80,8 @@ export const units = pgTable("units", {
   code: varchar("code", { length: 20 }).notNull().unique(),
   name: varchar("name", { length: 100 }).notNull(),
   nameMk: varchar("name_mk", { length: 100 }),
-  category: varchar.notNull(),
-  isActive: varchar.notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -105,9 +105,9 @@ export const warehouses = pgTable("warehouses", {
   id: serial("id").primaryKey(),
   code: varchar("code", { length: 20 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
-  type: varchar.notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
   address: text("address"),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -133,14 +133,14 @@ export const materials = pgTable("materials", {
     "paint",
     "other",
   ]).notNull(),
-  unit: varchar.notNull(),
+  unit: varchar("unit", { length: 50 }).notNull(),
   description: text("description"),
   minStock: decimal("minStock", { precision: 12, scale: 3 }).notNull(),
   currentStock: decimal("currentStock", { precision: 12, scale: 3 }).notNull(),
   avgCost: decimal("avgCost", { precision: 12, scale: 2 }).notNull(),
   lastPurchasePrice: decimal("lastPurchasePrice", { precision: 12, scale: 2 }).notNull(),
   location: varchar("location", { length: 100 }),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -182,7 +182,7 @@ export const inventoryTransactions = pgTable("inventory_transactions", {
   id: serial("id").primaryKey(),
   materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
   warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }).notNull(),
-  type: varchar.notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
   unitCost: decimal("unitCost", { precision: 12, scale: 2 }),
   totalCost: decimal("totalCost", { precision: 12, scale: 2 }),
@@ -203,7 +203,7 @@ export const stockTransfers = pgTable("stock_transfers", {
   transferNumber: varchar("transfer_number", { length: 50 }).notNull().unique(),
   fromWarehouseId: bigint("from_warehouse_id", { mode: "number", unsigned: true }).notNull(),
   toWarehouseId: bigint("to_warehouse_id", { mode: "number", unsigned: true }).notNull(),
-  status: varchar.notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
   transferDate: date("transfer_date").notNull(),
   notes: text("notes"),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
@@ -230,7 +230,7 @@ export const inventoryCounts = pgTable("inventory_counts", {
   id: serial("id").primaryKey(),
   countNumber: varchar("count_number", { length: 50 }).notNull().unique(),
   warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }).notNull(),
-  status: varchar.notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
   countDate: date("count_date").notNull(),
   notes: text("notes"),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
@@ -269,7 +269,7 @@ export const customers = pgTable("customers", {
   taxNumber: varchar("taxNumber", { length: 50 }),
   edb: varchar("edb", { length: 20 }),
   notes: text("notes"),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -291,7 +291,7 @@ export const orders = pgTable("orders", {
     "delivered",
     "cancelled",
   ]).notNull(),
-  priority: varchar.notNull(),
+  priority: varchar("priority", { length: 50 }).notNull(),
   totalAmount: decimal("totalAmount", { precision: 14, scale: 2 }).notNull(),
   costAmount: decimal("cost_amount", { precision: 14, scale: 2 }).notNull(),
   marginAmount: decimal("margin_amount", { precision: 14, scale: 2 }).notNull(),
@@ -341,7 +341,7 @@ export const suppliers = pgTable("suppliers", {
   paymentTerms: varchar("payment_terms", { length: 100 }),
   defaultCurrency: varchar("default_currency", { length: 10 }),
   materials: text("materials"),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -403,7 +403,7 @@ export const workOrders = pgTable("work_orders", {
     "completed",
     "cancelled",
   ]).notNull(),
-  priority: varchar.notNull(),
+  priority: varchar("priority", { length: 50 }).notNull(),
   plannedStart: date("plannedStart"),
   plannedEnd: date("plannedEnd"),
   actualStart: date("actualStart"),
@@ -443,7 +443,7 @@ export const workOrderOperations = pgTable("work_order_operations", {
   estimatedQty: decimal("estimated_qty", { precision: 12, scale: 3 }),
   actualQty: decimal("actual_qty", { precision: 12, scale: 3 }),
   qtyUnit: varchar("qty_unit", { length: 20 }), // m2, m_cut, bend, hour
-  status: varchar.notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
   operator: varchar("operator", { length: 255 }),
   costRate: decimal("cost_rate", { precision: 12, scale: 2 }).notNull(),
   costAmount: decimal("cost_amount", { precision: 12, scale: 2 }).notNull(),
@@ -462,7 +462,7 @@ export const workOrderMaterials = pgTable("work_order_materials", {
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull(),
   totalCost: decimal("total_cost", { precision: 12, scale: 2 }).notNull(),
-  isActual: varchar.notNull(),
+  isActual: varchar("is_actual", { length: 50 }).notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -492,7 +492,7 @@ export const machines = pgTable("machines", {
   annualGas: decimal("annual_gas", { precision: 14, scale: 2 }).notNull(),
   annualService: decimal("annual_service", { precision: 14, scale: 2 }).notNull(),
   annualHours: decimal("annual_hours", { precision: 8, scale: 2 }).notNull(),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -507,7 +507,7 @@ export const laborRates = pgTable("labor_rates", {
   grossSalary: decimal("gross_salary", { precision: 12, scale: 2 }).notNull(),
   contributionsPct: decimal("contributions_pct", { precision: 5, scale: 2 }).notNull(),
   description: text("description"),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -517,11 +517,11 @@ export type LaborRate = typeof laborRates.$inferSelect;
 export const overhead = pgTable("overhead", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  rateType: varchar.notNull(),
+  rateType: varchar("rate_type", { length: 50 }).notNull(),
   rateValue: decimal("rate_value", { precision: 12, scale: 4 }).notNull(),
   annualAmount: decimal("annual_amount", { precision: 14, scale: 2 }).notNull(),
   description: text("description"),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -550,12 +550,12 @@ export const services = pgTable("services", {
     "installation",
     "other",
   ]).notNull(),
-  unit: varchar.notNull(),
+  unit: varchar("unit", { length: 50 }).notNull(),
   description: text("description"),
   costRate: decimal("cost_rate", { precision: 12, scale: 2 }).notNull(),
   saleRate: decimal("sale_rate", { precision: 12, scale: 2 }).notNull(),
   machineId: bigint("machine_id", { mode: "number", unsigned: true }),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -584,15 +584,15 @@ export const products = pgTable("products", {
     "other",
   ]).notNull(),
   description: text("description"),
-  unit: varchar.notNull(),
-  basis: varchar.notNull(),
+  unit: varchar("unit", { length: 50 }).notNull(),
+  basis: varchar("basis", { length: 50 }).notNull(),
   defaultPrice: decimal("defaultPrice", { precision: 12, scale: 2 }).notNull(),
   materialCost: decimal("materialCost", { precision: 12, scale: 2 }).notNull(),
   laborCost: decimal("laborCost", { precision: 12, scale: 2 }).notNull(),
   machineCost: decimal("machine_cost", { precision: 12, scale: 2 }).notNull(),
   overheadCost: decimal("overhead_cost", { precision: 12, scale: 2 }).notNull(),
   totalCost: decimal("total_cost", { precision: 12, scale: 2 }).notNull(),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -603,11 +603,11 @@ export type InsertProduct = typeof products.$inferInsert;
 export const productComponents = pgTable("product_components", {
   id: serial("id").primaryKey(),
   productId: bigint("product_id", { mode: "number", unsigned: true }).notNull(),
-  kind: varchar.notNull(),
+  kind: varchar("kind", { length: 50 }).notNull(),
   refId: bigint("ref_id", { mode: "number", unsigned: true }).notNull(),
   perUnit: decimal("per_unit", { precision: 12, scale: 6 }).notNull(),
   wastePct: decimal("waste_pct", { precision: 5, scale: 2 }).notNull(),
-  scale: varchar.notNull(),
+  scale: varchar("scale", { length: 50 }).notNull(),
   notes: text("notes"),
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -653,7 +653,7 @@ export type InsertQuotation = typeof quotations.$inferInsert;
 export const quotationItems = pgTable("quotation_items", {
   id: serial("id").primaryKey(),
   quotationId: bigint("quotationId", { mode: "number", unsigned: true }).notNull(),
-  itemType: varchar.notNull(),
+  itemType: varchar("item_type", { length: 50 }).notNull(),
   referenceId: bigint("referenceId", { mode: "number", unsigned: true }),
   description: varchar("description", { length: 500 }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
@@ -744,7 +744,7 @@ export type InsertIncomingInvoice = typeof incomingInvoices.$inferInsert;
 export const documentItems = pgTable("document_items", {
   id: serial("id").primaryKey(),
   documentId: bigint("documentId", { mode: "number", unsigned: true }).notNull(),
-  documentType: varchar.notNull(),
+  documentType: varchar("document_type", { length: 50 }).notNull(),
   description: varchar("description", { length: 500 }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
   unit: varchar("unit", { length: 20 }).notNull(),
@@ -754,7 +754,7 @@ export const documentItems = pgTable("document_items", {
   vatRate: decimal("vatRate", { precision: 5, scale: 2 }).notNull(),
   productId: bigint("product_id", { mode: "number", unsigned: true }),
   serviceId: bigint("service_id", { mode: "number", unsigned: true }),
-  itemType: varchar.notNull(),
+  itemType: varchar("item_type", { length: 50 }).notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -863,8 +863,8 @@ export const parsedInvoices = pgTable("parsed_invoices", {
   currency: varchar("currency", { length: 10 }),
   rawText: text("rawText"),
   fileUrl: text("fileUrl"),
-  documentType: varchar.notNull(),
-  status: varchar.notNull(),
+  documentType: varchar("document_type", { length: 50 }).notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
   matchedInvoiceId: bigint("matchedInvoiceId", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -882,7 +882,7 @@ export const parsedReceiptItems = pgTable("parsed_receipt_items", {
   unitPrice: decimal("unit_price", { precision: 12, scale: 2 }),
   totalPrice: decimal("total_price", { precision: 12, scale: 2 }),
   vatRate: decimal("vat_rate", { precision: 5, scale: 2 }),
-  isConfirmed: varchar.notNull(),
+  isConfirmed: varchar("is_confirmed", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -905,7 +905,7 @@ export type FinishedGoodsStock = typeof finishedGoodsStock.$inferSelect;
 export const digitalCertificates = pgTable("digital_certificates", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  certType: varchar.notNull(),
+  certType: varchar("cert_type", { length: 50 }).notNull(),
   // PEM encoded certificate (public key)
   certificatePem: text("certificate_pem").notNull(),
   // Encrypted private key (PEM, encrypted with AES-256-GCM)
@@ -919,7 +919,7 @@ export const digitalCertificates = pgTable("digital_certificates", {
   validFrom: date("valid_from"),
   validTo: date("valid_to"),
   edb: varchar("edb", { length: 20 }),
-  isActive: varchar.notNull(),
+  isActive: varchar("is_active", { length: 50 }).notNull(),
   lastUsedAt: timestamp("last_used_at"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -952,7 +952,7 @@ export const emailInvoices = pgTable("email_invoices", {
   parsedTotalAmount: varchar("parsed_total_amount", { length: 50 }),
   parsedIssueDate: varchar("parsed_issue_date", { length: 20 }),
   matchedSupplierId: bigint("matched_supplier_id", { mode: "number", unsigned: true }),
-  status: varchar.notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
   rawText: text("raw_text"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
