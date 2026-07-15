@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc } from "../queries/pg-compat";
+// PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import {

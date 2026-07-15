@@ -82,7 +82,15 @@ app.use("/api/*", cors({
   credentials: true,
 }));
 
-app.get(Paths.oauthCallback, createOAuthCallbackHandler());
+// Debug: catch all tRPC errors
+app.use("/api/trpc/*", async (c, next) => {
+  try {
+    return await next();
+  } catch (err: any) {
+    console.error("[tRPC ERROR]", err.message, err.stack?.substring(0, 300));
+    return c.json({ error: err.message, stack: err.stack?.substring(0, 500) }, 500);
+  }
+});
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
