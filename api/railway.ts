@@ -150,14 +150,23 @@ app.use("/api/trpc/*", async (c) => {
 });
 
 // 4. Static files (frontend) — LAST!
-app.use("*", serveStatic({ root: "./dist/public" }));
+// Serve assets first (JS, CSS, etc.)
+app.use("/assets/*", serveStatic({ root: "./dist/public" }));
+app.use("/favicon.ico", serveStatic({ path: "./dist/public/favicon.ico" }));
 
-app.notFound((c) => {
-  const accept = c.req.header("accept") ?? "";
-  if (accept.includes("text/html")) {
-    return c.redirect("/");
+// SPA fallback: serve index.html for all non-API routes
+app.get("*", async (c) => {
+  const path = c.req.path;
+  // Don't interfere with API routes
+  if (path.startsWith("/api/")) return c.notFound();
+  // Serve index.html for all other routes (SPA)
+  try {
+    const fs = await import("fs");
+    const html = fs.readFileSync("./dist/public/index.html", "utf-8");
+    return c.html(html);
+  } catch {
+    return c.json({ error: "index.html not found" }, 500);
   }
-  return c.json({ error: "Not Found" }, 404);
 });
 
 serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
