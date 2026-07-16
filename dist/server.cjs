@@ -8443,9 +8443,39 @@ __export(connection_exports, {
   getDb: () => getDb,
   getPool: () => getPool
 });
+function sanitizeRow(table, row) {
+  if (!row || typeof row !== "object") return row;
+  const out = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (v === "") {
+      const col = table?.[k];
+      const ct = col?.columnType;
+      if (ct && !TEXT_COLUMN_TYPES.has(ct)) continue;
+    }
+    out[k] = v;
+  }
+  return out;
+}
+function sanitizeValues(table, data) {
+  return Array.isArray(data) ? data.map((r) => sanitizeRow(table, r)) : sanitizeRow(table, data);
+}
 function wrapDb(real2) {
   return new Proxy(real2, {
     get(target, prop) {
+      if (prop === "update") {
+        return (table) => {
+          const builder = target.update(table);
+          return new Proxy(builder, {
+            get(bt, bprop) {
+              if (bprop === "set") {
+                return (data) => bt.set(sanitizeRow(table, data));
+              }
+              const v2 = bt[bprop];
+              return typeof v2 === "function" ? v2.bind(bt) : v2;
+            }
+          });
+        };
+      }
       if (prop === "insert") {
         return (table) => {
           const builder = target.insert(table);
@@ -8453,7 +8483,7 @@ function wrapDb(real2) {
             get(bt, bprop) {
               if (bprop === "values") {
                 return (data) => {
-                  const q = bt.values(data);
+                  const q = bt.values(sanitizeValues(table, data));
                   const idCol = table?.id;
                   if (!idCol || typeof q.returning !== "function") return q;
                   const withRet = q.returning({ insertId: idCol });
@@ -8497,11 +8527,12 @@ function getPool() {
   }
   return pool;
 }
-var import_pg3, pool, db;
+var import_pg3, TEXT_COLUMN_TYPES, pool, db;
 var init_connection = __esm({
   "api/queries/connection.ts"() {
     init_node_postgres();
     import_pg3 = require("pg");
+    TEXT_COLUMN_TYPES = /* @__PURE__ */ new Set(["PgVarchar", "PgText", "PgChar"]);
     pool = null;
     db = null;
   }
