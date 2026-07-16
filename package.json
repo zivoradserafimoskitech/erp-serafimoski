@@ -7,7 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "vite build && esbuild api/railway.ts --platform=node --bundle --format=esm --outfile=dist/server.mjs --external:pg --external:pdf-parse --external:fuse.js --external:dotenv",
+    "build": "vite build && esbuild api/railway.ts --platform=node --bundle --format=cjs --outfile=dist/server.cjs --external:pg --external:pdf-parse --external:fuse.js --external:dotenv",
     "start": "NODE_ENV=production node dist/server.mjs"
   },
   "dependencies": {
