@@ -22,7 +22,7 @@ export const settingsRouter = createRouter({
       bankName: z.string().optional(),
       bankAccount: z.string().optional(),
       phone: z.string().optional(),
-      email: z.string().email().optional(),
+      email: z.preprocess((v) => (v === "" ? undefined : v), z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional())),
       logoUrl: z.string().optional(),
       defaultVatRate: z.string().default("18"),
       valuationMethod: z.enum(["weighted_average", "fifo"]).default("weighted_average"),
