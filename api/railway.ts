@@ -36,12 +36,21 @@ app.get("/api/init-db", async (c) => {
       connectionString: process.env.DATABASE_URL,
       ssl
     });
-    const sql = getInitSql();
-    const statements = sql.split(';').filter(s => s.trim());
+    const statements: string[] = getInitSql();
+    let created = 0, skipped = 0;
+    const errors: string[] = [];
     for (const stmt of statements) {
-      if (stmt.trim()) await pool.query(stmt + ';');
+      try {
+        await pool.query(stmt);
+        created++;
+      } catch (e: any) {
+        // 42P07 duplicate_table, 42710 duplicate_object, 42701 duplicate_column — веќе постои, прескокни
+        if (["42P07", "42710", "42701"].includes(e.code)) skipped++;
+        else errors.push(`${e.code}: ${e.message.slice(0, 120)}`);
+      }
     }
     await pool.end();
+    if (errors.length) return c.json({ status: "partial", created, skipped, errors }, 500);
     return c.json({ status: "tables created", count: statements.length });
   } catch (e: any) {
     return c.json({ status: "error", message: e.message }, 500);

@@ -1,12 +1,12 @@
 {
   "version": "7",
-  "dialect": "mysql",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1783501485918,
-      "tag": "0000_wooden_bastion",
+      "version": "7",
+      "when": 1784211254183,
+      "tag": "0000_full_schema",
       "breakpoints": true
     }
   ]

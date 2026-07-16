@@ -1,9 +1,4 @@
-// АВТОГЕНЕРИРАНО од db/migrations/0000_full_schema.sql (drizzle-kit generate)
-// Целосна Postgres шема — сите 44 табели. Идемпотентно: IF NOT EXISTS + try/catch на constraints.
-
-export function getInitSql(): string[] {
-  return [
-    `CREATE TABLE IF NOT EXISTS "audit_log" (
+CREATE TABLE "audit_log" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" bigint,
 	"user_name" varchar(255),
@@ -14,8 +9,9 @@ export function getInitSql(): string[] {
 	"new_value" text,
 	"description" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "company_settings" (
+);
+--> statement-breakpoint
+CREATE TABLE "company_settings" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"address" text,
@@ -38,8 +34,9 @@ export function getInitSql(): string[] {
 	"email_check_interval" integer DEFAULT 60,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "customers" (
+);
+--> statement-breakpoint
+CREATE TABLE "customers" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"company" varchar(255),
@@ -55,8 +52,9 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "delivery_notes" (
+);
+--> statement-breakpoint
+CREATE TABLE "delivery_notes" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"dn_number" varchar(50) NOT NULL,
 	"customer_id" bigint NOT NULL,
@@ -69,8 +67,9 @@ export function getInitSql(): string[] {
 	"created_by" bigint,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "delivery_notes_dn_number_unique" UNIQUE("dn_number")
-);`,
-    `CREATE TABLE IF NOT EXISTS "digital_certificates" (
+);
+--> statement-breakpoint
+CREATE TABLE "digital_certificates" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"cert_type" varchar(50) NOT NULL,
@@ -86,16 +85,18 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"last_used_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "doc_counters" (
+);
+--> statement-breakpoint
+CREATE TABLE "doc_counters" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"kind" varchar(10) NOT NULL,
 	"year" integer NOT NULL,
 	"value" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "document_items" (
+);
+--> statement-breakpoint
+CREATE TABLE "document_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"document_id" bigint NOT NULL,
 	"document_type" varchar(50) NOT NULL,
@@ -111,8 +112,9 @@ export function getInitSql(): string[] {
 	"item_type" varchar(50) NOT NULL,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "e_invoices" (
+);
+--> statement-breakpoint
+CREATE TABLE "e_invoices" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"invoice_id" bigint NOT NULL,
 	"ujp_invoice_id" varchar(255),
@@ -121,8 +123,9 @@ export function getInitSql(): string[] {
 	"response_message" text,
 	"sent_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "email_invoices" (
+);
+--> statement-breakpoint
+CREATE TABLE "email_invoices" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"subject" varchar(500),
 	"sender_email" varchar(255),
@@ -138,8 +141,9 @@ export function getInitSql(): string[] {
 	"status" varchar(50) NOT NULL,
 	"raw_text" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "finished_goods_stock" (
+);
+--> statement-breakpoint
+CREATE TABLE "finished_goods_stock" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"product_id" bigint NOT NULL,
 	"warehouse_id" bigint NOT NULL,
@@ -147,8 +151,9 @@ export function getInitSql(): string[] {
 	"unit_cost" numeric(12, 2) DEFAULT '0' NOT NULL,
 	"notes" text,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "incoming_invoices" (
+);
+--> statement-breakpoint
+CREATE TABLE "incoming_invoices" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"supplier_invoice_number" varchar(50) NOT NULL,
 	"supplier_id" bigint NOT NULL,
@@ -167,8 +172,9 @@ export function getInitSql(): string[] {
 	"file_url" text,
 	"created_by" bigint,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "inventory_count_items" (
+);
+--> statement-breakpoint
+CREATE TABLE "inventory_count_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"count_id" bigint NOT NULL,
 	"material_id" bigint NOT NULL,
@@ -179,8 +185,9 @@ export function getInitSql(): string[] {
 	"total_difference" numeric(12, 2),
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "inventory_counts" (
+);
+--> statement-breakpoint
+CREATE TABLE "inventory_counts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"count_number" varchar(50) NOT NULL,
 	"warehouse_id" bigint NOT NULL,
@@ -190,8 +197,9 @@ export function getInitSql(): string[] {
 	"created_by" bigint,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "inventory_counts_count_number_unique" UNIQUE("count_number")
-);`,
-    `CREATE TABLE IF NOT EXISTS "inventory_transactions" (
+);
+--> statement-breakpoint
+CREATE TABLE "inventory_transactions" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"material_id" bigint NOT NULL,
 	"warehouse_id" bigint NOT NULL,
@@ -205,8 +213,9 @@ export function getInitSql(): string[] {
 	"notes" text,
 	"created_by" bigint,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "invoices" (
+);
+--> statement-breakpoint
+CREATE TABLE "invoices" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"invoice_number" varchar(50) NOT NULL,
 	"customer_id" bigint NOT NULL,
@@ -228,8 +237,9 @@ export function getInitSql(): string[] {
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "invoices_invoice_number_unique" UNIQUE("invoice_number")
-);`,
-    `CREATE TABLE IF NOT EXISTS "labor_rates" (
+);
+--> statement-breakpoint
+CREATE TABLE "labor_rates" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"role" varchar(255) NOT NULL,
 	"role_code" varchar(50) NOT NULL,
@@ -240,8 +250,9 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "labor_rates_role_code_unique" UNIQUE("role_code")
-);`,
-    `CREATE TABLE IF NOT EXISTS "machines" (
+);
+--> statement-breakpoint
+CREATE TABLE "machines" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"code" varchar(50) NOT NULL,
@@ -256,8 +267,9 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "machines_code_unique" UNIQUE("code")
-);`,
-    `CREATE TABLE IF NOT EXISTS "material_lots" (
+);
+--> statement-breakpoint
+CREATE TABLE "material_lots" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"material_id" bigint NOT NULL,
 	"warehouse_id" bigint NOT NULL,
@@ -268,8 +280,9 @@ export function getInitSql(): string[] {
 	"landed_cost" numeric(12, 2) DEFAULT '0' NOT NULL,
 	"date" date NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "material_stock" (
+);
+--> statement-breakpoint
+CREATE TABLE "material_stock" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"material_id" bigint NOT NULL,
 	"warehouse_id" bigint NOT NULL,
@@ -277,8 +290,9 @@ export function getInitSql(): string[] {
 	"avg_cost" numeric(12, 2) DEFAULT '0' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "materials" (
+);
+--> statement-breakpoint
+CREATE TABLE "materials" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"code" varchar(100) NOT NULL,
@@ -294,8 +308,9 @@ export function getInitSql(): string[] {
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "materials_code_unique" UNIQUE("code")
-);`,
-    `CREATE TABLE IF NOT EXISTS "order_items" (
+);
+--> statement-breakpoint
+CREATE TABLE "order_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"order_id" bigint NOT NULL,
 	"description" varchar(500) NOT NULL,
@@ -310,8 +325,9 @@ export function getInitSql(): string[] {
 	"product_id" bigint,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "orders" (
+);
+--> statement-breakpoint
+CREATE TABLE "orders" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"order_number" varchar(50) NOT NULL,
 	"customer_id" bigint NOT NULL,
@@ -328,8 +344,9 @@ export function getInitSql(): string[] {
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "orders_order_number_unique" UNIQUE("order_number")
-);`,
-    `CREATE TABLE IF NOT EXISTS "overhead" (
+);
+--> statement-breakpoint
+CREATE TABLE "overhead" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"rate_type" varchar(50) NOT NULL,
@@ -338,8 +355,9 @@ export function getInitSql(): string[] {
 	"description" text,
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "parsed_invoices" (
+);
+--> statement-breakpoint
+CREATE TABLE "parsed_invoices" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"original_file_name" varchar(500) NOT NULL,
 	"supplier_name" varchar(255),
@@ -355,8 +373,9 @@ export function getInitSql(): string[] {
 	"status" varchar(50) NOT NULL,
 	"matched_invoice_id" bigint,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "parsed_receipt_items" (
+);
+--> statement-breakpoint
+CREATE TABLE "parsed_receipt_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"parsed_invoice_id" bigint NOT NULL,
 	"raw_description" text NOT NULL,
@@ -370,8 +389,9 @@ export function getInitSql(): string[] {
 	"vat_rate" numeric(5, 2),
 	"is_confirmed" varchar(50) NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "product_components" (
+);
+--> statement-breakpoint
+CREATE TABLE "product_components" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"product_id" bigint NOT NULL,
 	"kind" varchar(50) NOT NULL,
@@ -382,8 +402,9 @@ export function getInitSql(): string[] {
 	"notes" text,
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "products" (
+);
+--> statement-breakpoint
+CREATE TABLE "products" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"code" varchar(100) NOT NULL,
@@ -400,8 +421,9 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "products_code_unique" UNIQUE("code")
-);`,
-    `CREATE TABLE IF NOT EXISTS "purchase_order_items" (
+);
+--> statement-breakpoint
+CREATE TABLE "purchase_order_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"purchase_order_id" bigint NOT NULL,
 	"material_id" bigint NOT NULL,
@@ -412,8 +434,9 @@ export function getInitSql(): string[] {
 	"received_quantity" numeric(12, 3) DEFAULT '0' NOT NULL,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "purchase_orders" (
+);
+--> statement-breakpoint
+CREATE TABLE "purchase_orders" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"po_number" varchar(50) NOT NULL,
 	"supplier_id" bigint NOT NULL,
@@ -425,8 +448,9 @@ export function getInitSql(): string[] {
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "purchase_orders_po_number_unique" UNIQUE("po_number")
-);`,
-    `CREATE TABLE IF NOT EXISTS "quotation_items" (
+);
+--> statement-breakpoint
+CREATE TABLE "quotation_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"quotation_id" bigint NOT NULL,
 	"item_type" varchar(50) NOT NULL,
@@ -442,8 +466,9 @@ export function getInitSql(): string[] {
 	"notes" text,
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "quotations" (
+);
+--> statement-breakpoint
+CREATE TABLE "quotations" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"quote_number" varchar(50) NOT NULL,
 	"customer_id" bigint NOT NULL,
@@ -465,8 +490,9 @@ export function getInitSql(): string[] {
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "quotations_quote_number_unique" UNIQUE("quote_number")
-);`,
-    `CREATE TABLE IF NOT EXISTS "receipt_items" (
+);
+--> statement-breakpoint
+CREATE TABLE "receipt_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"receipt_id" bigint NOT NULL,
 	"material_id" bigint NOT NULL,
@@ -478,8 +504,9 @@ export function getInitSql(): string[] {
 	"vat_rate" numeric(5, 2) DEFAULT '0' NOT NULL,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "receipts" (
+);
+--> statement-breakpoint
+CREATE TABLE "receipts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"receipt_number" varchar(50) NOT NULL,
 	"supplier_id" bigint,
@@ -497,8 +524,9 @@ export function getInitSql(): string[] {
 	"created_by" bigint,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "receipts_receipt_number_unique" UNIQUE("receipt_number")
-);`,
-    `CREATE TABLE IF NOT EXISTS "services" (
+);
+--> statement-breakpoint
+CREATE TABLE "services" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"code" varchar(100) NOT NULL,
@@ -511,8 +539,9 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "services_code_unique" UNIQUE("code")
-);`,
-    `CREATE TABLE IF NOT EXISTS "stock_transfer_items" (
+);
+--> statement-breakpoint
+CREATE TABLE "stock_transfer_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"transfer_id" bigint NOT NULL,
 	"material_id" bigint NOT NULL,
@@ -520,8 +549,9 @@ export function getInitSql(): string[] {
 	"unit_cost" numeric(12, 2),
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "stock_transfers" (
+);
+--> statement-breakpoint
+CREATE TABLE "stock_transfers" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"transfer_number" varchar(50) NOT NULL,
 	"from_warehouse_id" bigint NOT NULL,
@@ -532,8 +562,9 @@ export function getInitSql(): string[] {
 	"created_by" bigint,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "stock_transfers_transfer_number_unique" UNIQUE("transfer_number")
-);`,
-    `CREATE TABLE IF NOT EXISTS "suppliers" (
+);
+--> statement-breakpoint
+CREATE TABLE "suppliers" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"edb" varchar(20),
@@ -549,8 +580,9 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "unit_conversions" (
+);
+--> statement-breakpoint
+CREATE TABLE "unit_conversions" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"from_unit_id" bigint NOT NULL,
 	"to_unit_id" bigint NOT NULL,
@@ -558,8 +590,9 @@ export function getInitSql(): string[] {
 	"material_type" varchar(50),
 	"description" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "units" (
+);
+--> statement-breakpoint
+CREATE TABLE "units" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"code" varchar(20) NOT NULL,
 	"name" varchar(100) NOT NULL,
@@ -568,8 +601,9 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "units_code_unique" UNIQUE("code")
-);`,
-    `CREATE TABLE IF NOT EXISTS "users" (
+);
+--> statement-breakpoint
+CREATE TABLE "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"union_id" varchar(255) NOT NULL,
 	"name" varchar(255),
@@ -580,8 +614,9 @@ export function getInitSql(): string[] {
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	"last_sign_in_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "users_union_id_unique" UNIQUE("union_id")
-);`,
-    `CREATE TABLE IF NOT EXISTS "warehouses" (
+);
+--> statement-breakpoint
+CREATE TABLE "warehouses" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"code" varchar(20) NOT NULL,
 	"name" varchar(255) NOT NULL,
@@ -590,8 +625,9 @@ export function getInitSql(): string[] {
 	"is_active" varchar(50) DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "warehouses_code_unique" UNIQUE("code")
-);`,
-    `CREATE TABLE IF NOT EXISTS "work_order_materials" (
+);
+--> statement-breakpoint
+CREATE TABLE "work_order_materials" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"work_order_id" bigint NOT NULL,
 	"material_id" bigint NOT NULL,
@@ -601,8 +637,9 @@ export function getInitSql(): string[] {
 	"is_actual" varchar(50) NOT NULL,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "work_order_operations" (
+);
+--> statement-breakpoint
+CREATE TABLE "work_order_operations" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"work_order_id" bigint NOT NULL,
 	"operation" varchar(50) NOT NULL,
@@ -619,8 +656,9 @@ export function getInitSql(): string[] {
 	"cost_amount" numeric(12, 2) DEFAULT '0' NOT NULL,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`,
-    `CREATE TABLE IF NOT EXISTS "work_orders" (
+);
+--> statement-breakpoint
+CREATE TABLE "work_orders" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"wo_number" varchar(50) NOT NULL,
 	"order_id" bigint,
@@ -638,14 +676,4 @@ export function getInitSql(): string[] {
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "work_orders_wo_number_unique" UNIQUE("wo_number")
-);`,
-    `INSERT INTO "warehouses" ("code","name","type","address","is_active") SELECT 'GL-MAT','Главен Магацин - Материјали','raw_materials','Скопје','active' WHERE NOT EXISTS (SELECT 1 FROM "warehouses" WHERE "code"='GL-MAT')`,
-    `INSERT INTO "warehouses" ("code","name","type","address","is_active") SELECT 'GL-PROD','Главен Магацин - Производи','finished_goods','Скопје','active' WHERE NOT EXISTS (SELECT 1 FROM "warehouses" WHERE "code"='GL-PROD')`,
-    `INSERT INTO "units" ("code","name","name_mk","category","is_active") SELECT 'kg','Килограм','Килограм','weight','active' WHERE NOT EXISTS (SELECT 1 FROM "units" WHERE "code"='kg')`,
-    `INSERT INTO "units" ("code","name","name_mk","category","is_active") SELECT 'm','Метар','Метар','length','active' WHERE NOT EXISTS (SELECT 1 FROM "units" WHERE "code"='m')`,
-    `INSERT INTO "units" ("code","name","name_mk","category","is_active") SELECT 'm2','Квадратен метар','Квадратен метар','area','active' WHERE NOT EXISTS (SELECT 1 FROM "units" WHERE "code"='m2')`,
-    `INSERT INTO "units" ("code","name","name_mk","category","is_active") SELECT 'kom','Комад','Комад','piece','active' WHERE NOT EXISTS (SELECT 1 FROM "units" WHERE "code"='kom')`,
-    `INSERT INTO "units" ("code","name","name_mk","category","is_active") SELECT 'l','Литар','Литар','volume','active' WHERE NOT EXISTS (SELECT 1 FROM "units" WHERE "code"='l')`,
-    `INSERT INTO "units" ("code","name","name_mk","category","is_active") SELECT 'h','Час','Час','time','active' WHERE NOT EXISTS (SELECT 1 FROM "units" WHERE "code"='h')`,
-  ];
-}
+);
