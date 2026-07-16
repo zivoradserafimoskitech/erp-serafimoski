@@ -37398,6 +37398,30 @@ app.get("/favicon.ico", async (c) => {
 app.get("*", async (c) => {
   const path = c.req.path;
   if (path.startsWith("/api/")) return c.notFound();
+  if (path !== "/" && !path.includes("..")) {
+    try {
+      const fs = await import("fs");
+      const p = STATIC_ROOT + path;
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        const ext = path.slice(path.lastIndexOf("."));
+        const mime = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".svg": "image/svg+xml",
+          ".ico": "image/x-icon",
+          ".webp": "image/webp",
+          ".txt": "text/plain",
+          ".json": "application/json"
+        };
+        return c.body(fs.readFileSync(p), 200, {
+          "Content-Type": mime[ext] || "application/octet-stream",
+          "Cache-Control": "public, max-age=86400"
+        });
+      }
+    } catch {
+    }
+  }
   try {
     const fs = await import("fs");
     const html = fs.readFileSync(STATIC_ROOT + "/index.html", "utf-8");

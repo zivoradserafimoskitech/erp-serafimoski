@@ -211,6 +211,25 @@ app.get("*", async (c) => {
   const path = c.req.path;
   // Don't interfere with API routes
   if (path.startsWith("/api/")) return c.notFound();
+  // Root static фајлови (logo.png и сл.): ако бараниот пат постои како фајл, сервирај го директно
+  if (path !== "/" && !path.includes("..")) {
+    try {
+      const fs = await import("fs");
+      const p = STATIC_ROOT + path;
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        const ext = path.slice(path.lastIndexOf("."));
+        const mime: Record<string, string> = {
+          ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+          ".svg": "image/svg+xml", ".ico": "image/x-icon", ".webp": "image/webp",
+          ".txt": "text/plain", ".json": "application/json",
+        };
+        return c.body(fs.readFileSync(p), 200, {
+          "Content-Type": mime[ext] || "application/octet-stream",
+          "Cache-Control": "public, max-age=86400",
+        });
+      }
+    } catch { /* падни на SPA fallback */ }
+  }
   // Serve index.html for all other routes (SPA)
   try {
     const fs = await import("fs");
