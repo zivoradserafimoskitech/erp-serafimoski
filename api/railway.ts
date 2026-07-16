@@ -150,9 +150,52 @@ app.use("/api/trpc/*", async (c) => {
 });
 
 // 4. Static files (frontend) — LAST!
-// Serve assets first (JS, CSS, etc.)
-app.use("/assets/*", serveStatic({ root: "./dist/public" }));
-app.use("/favicon.ico", serveStatic({ path: "./dist/public/favicon.ico" }));
+const STATIC_ROOT = process.cwd() + "/dist/public";
+
+// Helper: serve static files with correct content-type
+app.get("/assets/:filename{.+}", async (c) => {
+  const fs = await import("fs");
+  const path = await import("path");
+  const filename = c.req.param("filename");
+  const filePath = path.join(STATIC_ROOT, "assets", filename);
+  
+  // Security: ensure file is within static root
+  if (!filePath.startsWith(path.join(STATIC_ROOT, "assets"))) {
+    return c.notFound();
+  }
+  
+  try {
+    const content = fs.readFileSync(filePath);
+    const ext = path.extname(filePath);
+    const mimeTypes: Record<string, string> = {
+      ".js": "application/javascript",
+      ".css": "text/css",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".svg": "image/svg+xml",
+      ".ico": "image/x-icon",
+      ".woff2": "font/woff2",
+      ".woff": "font/woff",
+    };
+    return c.body(content, 200, {
+      "Content-Type": mimeTypes[ext] || "application/octet-stream",
+      "Cache-Control": "public, max-age=31536000",
+    });
+  } catch {
+    return c.notFound();
+  }
+});
+
+app.get("/favicon.ico", async (c) => {
+  const fs = await import("fs");
+  try {
+    const content = fs.readFileSync(STATIC_ROOT + "/favicon.ico");
+    return c.body(content, 200, { "Content-Type": "image/x-icon" });
+  } catch {
+    return c.notFound();
+  }
+});
 
 // SPA fallback: serve index.html for all non-API routes
 app.get("*", async (c) => {
@@ -162,7 +205,7 @@ app.get("*", async (c) => {
   // Serve index.html for all other routes (SPA)
   try {
     const fs = await import("fs");
-    const html = fs.readFileSync("./dist/public/index.html", "utf-8");
+    const html = fs.readFileSync(STATIC_ROOT + "/index.html", "utf-8");
     return c.html(html);
   } catch {
     return c.json({ error: "index.html not found" }, 500);
