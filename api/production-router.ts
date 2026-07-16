@@ -71,6 +71,10 @@ export const productionRouter = createRouter({
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("workOrder", input.woNumber).catch(() => {});
+      }
       const db = getDb();
       const { orderId, ...rest } = input;
       const insertData: any = { ...rest, orderId: orderId ?? null };

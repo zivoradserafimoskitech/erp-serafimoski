@@ -183,6 +183,10 @@ export const customersRouter = createRouter({
       })
     )
     .mutation(async ({ input }) => {
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("order", input.orderNumber).catch(() => {});
+      }
       const db = getDb();
       const { items, ...orderData } = input;
 

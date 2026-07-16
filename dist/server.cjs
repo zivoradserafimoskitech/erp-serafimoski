@@ -9307,7 +9307,9 @@ var init_counters_helper = __esm({
       invoice: "",
       creditNote: "\u041A\u041D",
       transfer: "\u0422\u0420",
-      count: "\u041F\u041F"
+      count: "\u041F\u041F",
+      order: "\u041D\u0410\u0420",
+      po: "\u041D\u041D"
     };
   }
 });
@@ -31767,6 +31769,11 @@ var productionRouter = createRouter({
     assignedTo: external_exports.string().optional(),
     notes: external_exports.string().optional()
   })).mutation(async ({ input }) => {
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("workOrder", input.woNumber).catch(() => {
+      });
+    }
     const db2 = getDb();
     const { orderId, ...rest } = input;
     const insertData = { ...rest, orderId: orderId ?? null };
@@ -32059,6 +32066,11 @@ var customersRouter = createRouter({
       ).optional()
     })
   ).mutation(async ({ input }) => {
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("order", input.orderNumber).catch(() => {
+      });
+    }
     const db2 = getDb();
     const { items, ...orderData } = input;
     const insertData = {
@@ -32245,6 +32257,11 @@ var procurementRouter = createRouter({
       notes: external_exports.string().optional()
     })).optional()
   })).mutation(async ({ input }) => {
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("po", input.poNumber).catch(() => {
+      });
+    }
     const db2 = getDb();
     const { items, ...poData } = input;
     const insertData = { ...poData };
@@ -34353,6 +34370,11 @@ var accountingRouter = createRouter({
       itemType: external_exports.enum(["product", "service", "manual"]).default("manual")
     })).optional()
   })).mutation(async ({ input }) => {
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("invoice", input.invoiceNumber).catch(() => {
+      });
+    }
     const db2 = getDb();
     const { items, ...invData } = input;
     if (items) {
@@ -34599,6 +34621,11 @@ var accountingRouter = createRouter({
       notes: external_exports.string().optional()
     })).optional()
   })).mutation(async ({ input }) => {
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("receipt", input.receiptNumber).catch(() => {
+      });
+    }
     const db2 = getDb();
     const { items, ...data } = input;
     const result = await db2.insert(receipts).values({
@@ -34684,6 +34711,11 @@ var accountingRouter = createRouter({
       notes: external_exports.string().optional()
     })).optional()
   })).mutation(async ({ input }) => {
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("deliveryNote", input.dnNumber).catch(() => {
+      });
+    }
     const db2 = getDb();
     const { items, ...data } = input;
     const result = await db2.insert(deliveryNotes).values({
@@ -34778,6 +34810,11 @@ var accountingRouter = createRouter({
       vatRate: external_exports.string().default("18")
     })).optional()
   })).mutation(async ({ input }) => {
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("creditNote", input.creditNoteNumber).catch(() => {
+      });
+    }
     const db2 = getDb();
     const orig = await db2.select().from(invoices).where(eq(invoices.id, input.originalInvoiceId));
     if (!orig[0]) throw new Error("\u041E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u043D\u0430\u0442\u0430 \u0444\u0430\u043A\u0442\u0443\u0440\u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
@@ -35434,6 +35471,10 @@ init_drizzle_orm();
 init_connection();
 init_schema2();
 var settingsRouter = createRouter({
+  nextDocNumber: publicQuery.input(external_exports.object({ kind: external_exports.enum(["quote", "workOrder", "deliveryNote", "proforma", "incomingInvoice", "receipt", "invoice", "creditNote", "transfer", "count", "order", "po"]) })).query(async ({ input }) => {
+    const { peekNextDocNumber: peekNextDocNumber2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+    return peekNextDocNumber2(input.kind);
+  }),
   // ===== COMPANY SETTINGS =====
   settingsGet: publicQuery.query(async () => {
     const db2 = getDb();

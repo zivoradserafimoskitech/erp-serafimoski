@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ export default function Production() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { data: nextWorkOrderNum } = trpc.settings.nextDocNumber.useQuery({ kind: "workOrder" }, { enabled: dialogOpen });
   const [detailOpen, setDetailOpen] = useState(false);
   const [selWO, setSelWO] = useState<number | null>(null);
 
@@ -119,6 +120,12 @@ export default function Production() {
       reference: woDetail.woNumber,
     });
   };
+
+  useEffect(() => {
+    if (dialogOpen && nextWorkOrderNum && !form.woNumber) {
+      setForm(prev => ({ ...prev, woNumber: nextWorkOrderNum }));
+    }
+  }, [dialogOpen, nextWorkOrderNum]);
 
   return (
     <div className="space-y-6">

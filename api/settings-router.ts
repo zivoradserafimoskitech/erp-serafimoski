@@ -6,6 +6,13 @@ import { getDb } from "./queries/connection";
 import { companySettings, units, unitConversions } from "@db/schema";
 
 export const settingsRouter = createRouter({
+  nextDocNumber: publicQuery
+    .input(z.object({ kind: z.enum(["quote","workOrder","deliveryNote","proforma","incomingInvoice","receipt","invoice","creditNote","transfer","count","order","po"]) }))
+    .query(async ({ input }) => {
+      const { peekNextDocNumber } = await import("./counters-helper");
+      return peekNextDocNumber(input.kind);
+    }),
+
   // ===== COMPANY SETTINGS =====
   settingsGet: publicQuery.query(async () => {
     const db = getDb();

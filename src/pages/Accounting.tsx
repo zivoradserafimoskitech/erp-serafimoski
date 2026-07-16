@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { jsPDF } from "jspdf";
+import { printInvoice } from "@/lib/invoice-print";
 import autoTable from "jspdf-autotable";
 import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
@@ -72,6 +73,7 @@ export default function Accounting() {
   const [search, setSearch] = useState("");
 
   // Data queries
+  const { data: companySettings } = trpc.settings.settingsGet.useQuery();
   const { data: outgoing } = trpc.accounting.invoiceList.useQuery({ search: search || undefined });
   const { data: incoming } = trpc.accounting.incomingInvoiceList.useQuery({ search: search || undefined });
   const { data: receiptsData } = trpc.accounting.receiptList.useQuery({ search: search || undefined });
@@ -96,7 +98,9 @@ export default function Accounting() {
   const [outDialog, setOutDialog] = useState(false);
   const [incDialog, setIncDialog] = useState(false);
   const [recDialog, setRecDialog] = useState(false);
+  const { data: nextReceiptNum } = trpc.settings.nextDocNumber.useQuery({ kind: "receipt" }, { enabled: recDialog });
   const [dnDialog, setDnDialog] = useState(false);
+  const { data: nextDeliveryNoteNum } = trpc.settings.nextDocNumber.useQuery({ kind: "deliveryNote" }, { enabled: dnDialog });
   const [reportDialog, setReportDialog] = useState(false);
 
   // Forms
@@ -226,6 +230,24 @@ export default function Accounting() {
     a.href = url; a.download = `UJP_${inv.invoiceNumber}.xml`; a.click();
     URL.revokeObjectURL(url);
   };
+
+  useEffect(() => {
+    if (outDialog && nextInvoiceNum && !outForm.invoiceNumber) {
+      setOutForm(prev => ({ ...prev, invoiceNumber: nextInvoiceNum }));
+    }
+  }, [outDialog, nextInvoiceNum]);
+
+  useEffect(() => {
+    if (recDialog && nextReceiptNum && !recForm.receiptNumber) {
+      setRecForm(prev => ({ ...prev, receiptNumber: nextReceiptNum }));
+    }
+  }, [recDialog, nextReceiptNum]);
+
+  useEffect(() => {
+    if (dnDialog && nextDeliveryNoteNum && !dnForm.dnNumber) {
+      setDnForm(prev => ({ ...prev, dnNumber: nextDeliveryNoteNum }));
+    }
+  }, [dnDialog, nextDeliveryNoteNum]);
 
   return (
     <div className="space-y-6">
@@ -794,7 +816,7 @@ export default function Accounting() {
               </div>
               <div className="flex gap-2 pt-2">
                 <Button size="sm" variant="outline" onClick={() => generateUJPXml(outDetail)}><FileText className="h-3.5 w-3.5 mr-1" />УЈП XML</Button>
-                <Button size="sm" variant="outline" onClick={() => exportPDF(`Фактура_${outDetail.invoiceNumber}`, ["Опис", "Кол", "Цена", "Вкупно"], outDetail.items?.map((i: any) => [i.description, i.quantity, i.unitPrice, i.totalPrice]) || [])}><Download className="h-3.5 w-3.5 mr-1" />PDF</Button>
+                <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings)}><Download className="h-3.5 w-3.5 mr-1" />Печати / PDF</Button>
               </div>
             </div>
           )}

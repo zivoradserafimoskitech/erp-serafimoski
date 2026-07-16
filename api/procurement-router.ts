@@ -143,6 +143,10 @@ export const procurementRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("po", input.poNumber).catch(() => {});
+      }
       const db = getDb();
       const { items, ...poData } = input;
       const insertData: any = { ...poData };

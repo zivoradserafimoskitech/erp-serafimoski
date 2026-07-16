@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,7 @@ export default function Procurement() {
   const [search, setSearch] = useState("");
   const [supplierDialog, setSupplierDialog] = useState(false);
   const [poDialog, setPoDialog] = useState(false);
+  const { data: nextPoNum } = trpc.settings.nextDocNumber.useQuery({ kind: "po" }, { enabled: poDialog });
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<number | null>(null);
 
@@ -153,6 +154,12 @@ export default function Procurement() {
   const removeItem = (idx: number) => {
     setItems(items.filter((_, i) => i !== idx));
   };
+
+  useEffect(() => {
+    if (poDialog && nextPoNum && !poForm.poNumber) {
+      setPoForm(prev => ({ ...prev, poNumber: nextPoNum }));
+    }
+  }, [poDialog, nextPoNum]);
 
   return (
     <div className="space-y-6">

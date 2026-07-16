@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,7 @@ export default function Customers() {
   const [search, setSearch] = useState("");
   const [customerDialog, setCustomerDialog] = useState(false);
   const [orderDialog, setOrderDialog] = useState(false);
+  const { data: nextOrderNum } = trpc.settings.nextDocNumber.useQuery({ kind: "order" }, { enabled: orderDialog });
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<number | null>(null);
 
@@ -163,6 +164,12 @@ export default function Customers() {
   const removeItem = (idx: number) => {
     setItems(items.filter((_, i) => i !== idx));
   };
+
+  useEffect(() => {
+    if (orderDialog && nextOrderNum && !orderForm.orderNumber) {
+      setOrderForm(prev => ({ ...prev, orderNumber: nextOrderNum }));
+    }
+  }, [orderDialog, nextOrderNum]);
 
   return (
     <div className="space-y-6">

@@ -14,6 +14,8 @@ const PREFIXES: Record<string, string> = {
   creditNote: "КН",
   transfer: "ТР",
   count: "ПП",
+  order: "НАР",
+  po: "НН",
 };
 
 export async function getNextDocNumber(kind: string, year?: number): Promise<string> {

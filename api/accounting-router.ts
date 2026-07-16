@@ -107,6 +107,10 @@ export const accountingRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("invoice", input.invoiceNumber).catch(() => {});
+      }
       const db = getDb();
       const { items, ...invData } = input;
 
@@ -388,6 +392,10 @@ export const accountingRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("receipt", input.receiptNumber).catch(() => {});
+      }
       const db = getDb();
       const { items, ...data } = input;
       const result = await db.insert(receipts).values({
@@ -487,6 +495,10 @@ export const accountingRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("deliveryNote", input.dnNumber).catch(() => {});
+      }
       const db = getDb();
       const { items, ...data } = input;
       const result = await db.insert(deliveryNotes).values({
@@ -598,6 +610,10 @@ export const accountingRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("creditNote", input.creditNoteNumber).catch(() => {});
+      }
       const db = getDb();
       const orig = await db.select().from(invoices).where(eq(invoices.id, input.originalInvoiceId));
       if (!orig[0]) throw new Error("Оригиналната фактура не постои");

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ export default function Receipts() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { data: nextReceiptNum } = trpc.settings.nextDocNumber.useQuery({ kind: "receipt" }, { enabled: dialogOpen });
   const [parsedDialogOpen, setParsedDialogOpen] = useState(false);
   const [selectedParsedId, setSelectedParsedId] = useState<number | null>(null);
   const [uploadTab, setUploadTab] = useState("manual");
@@ -305,6 +306,12 @@ export default function Receipts() {
   const handleRejectParsedItem = (itemId: number) => {
     updateItemMutation.mutate({ id: itemId, isConfirmed: "rejected" });
   };
+
+  useEffect(() => {
+    if (dialogOpen && nextReceiptNum && !form.receiptNumber) {
+      setForm(prev => ({ ...prev, receiptNumber: nextReceiptNum }));
+    }
+  }, [dialogOpen, nextReceiptNum]);
 
   return (
     <div className="space-y-4">
