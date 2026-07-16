@@ -219,6 +219,11 @@ export const quotationRouter = createRouter({
     }),
 
   // ===== QUOTATIONS =====
+  quotationNextNumber: publicQuery.query(async () => {
+    const { peekNextDocNumber } = await import("./counters-helper");
+    return peekNextDocNumber("quote");
+  }),
+
   quotationList: publicQuery
     .input(z.object({ status: z.string().optional(), search: z.string().optional() }).optional())
     .query(async ({ input }) => {
@@ -292,6 +297,10 @@ export const quotationRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("quote", input.quoteNumber).catch(() => {});
+      }
       const db = getDb();
       const { items, ...qData } = input;
       const result = await db.insert(quotations).values({

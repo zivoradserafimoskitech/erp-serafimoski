@@ -77,3 +77,35 @@ export async function getNextDocNumberTxn(
   if (kind === "invoice") return `${num}/${y}`;
   return `${prefix}-${num}/${y}`;
 }
+
+export async function peekNextDocNumber(kind: string, year?: number): Promise<string> {
+  const db = getDb();
+  const y = year ?? new Date().getFullYear();
+  const existing = await db
+    .select()
+    .from(docCounters)
+    .where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
+  const nextVal = existing.length === 0 ? 1 : existing[0].value + 1;
+  const prefix = PREFIXES[kind] ?? "";
+  const num = String(nextVal).padStart(3, "0");
+  if (kind === "invoice") return `${num}/${y}`;
+  return `${prefix}-${num}/${y}`;
+}
+
+export async function bumpDocCounter(kind: string, usedNumber: string, year?: number): Promise<void> {
+  const m = usedNumber.match(/(\d+)\s*\//);
+  if (!m) return;
+  const used = parseInt(m[1], 10);
+  if (!Number.isFinite(used)) return;
+  const db = getDb();
+  const y = year ?? new Date().getFullYear();
+  const existing = await db
+    .select()
+    .from(docCounters)
+    .where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
+  if (existing.length === 0) {
+    await db.insert(docCounters).values({ kind, year: y, value: used });
+  } else if (existing[0].value < used) {
+    await db.update(docCounters).set({ value: used, updatedAt: new Date() }).where(eq(docCounters.id, existing[0].id));
+  }
+}

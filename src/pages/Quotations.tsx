@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,7 @@ export default function Quotations() {
   const { data: productsData } = trpc.quotation.productList.useQuery({ search: search || undefined });
 
   const [qDialog, setQDialog] = useState(false);
+  const { data: nextQNum } = trpc.quotation.quotationNextNumber.useQuery(undefined, { enabled: qDialog });
   const [svcDialog, setSvcDialog] = useState(false);
   const [prodDialog, setProdDialog] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -107,6 +108,12 @@ export default function Quotations() {
   const convertQ = trpc.quotation.quotationConvert.useMutation({
     onSuccess: () => { utils.quotation.quotationList.invalidate(); setConvertDialog(false); setConvOrderNum(""); },
   });
+
+  useEffect(() => {
+    if (qDialog && nextQNum && !qForm.quoteNumber) {
+      setQForm(prev => ({ ...prev, quoteNumber: nextQNum }));
+    }
+  }, [qDialog, nextQNum]);
 
   const resetQForm = () => {
     setQForm({ quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14", paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18" });
@@ -170,7 +177,13 @@ export default function Quotations() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {tab === "quotations" && (
-            <Dialog open={qDialog} onOpenChange={setQDialog}>
+            <Dialog open={qDialog} onOpenChange={(open) => {
+              setQDialog(open);
+              if (open) {
+                const d = new Date(); d.setDate(d.getDate() + 30);
+                setQForm(prev => ({ ...prev, validUntil: prev.validUntil || d.toISOString().slice(0, 10) }));
+              }
+            }}>
               <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нова понуда</Button></DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нова понуда</DialogTitle></DialogHeader>
@@ -254,7 +267,11 @@ export default function Quotations() {
                   </div>
 
                   <div className="space-y-2"><Label>Белешки / Опис на понуда</Label><Textarea value={qForm.notes} onChange={e => setQForm({ ...qForm, notes: e.target.value })} placeholder="Технички детали, услови, напомени..." /></div>
-                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createQ.isPending || !qForm.customerId || qItems.length === 0}>{createQ.isPending ? "Зачувување..." : "Креирај понуда"}</Button>
+                  <div className="space-y-1">
+                    <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createQ.isPending || !qForm.customerId || qItems.length === 0}>{createQ.isPending ? "Зачувување..." : "Креирај понуда"}</Button>
+                    {!qForm.customerId && <p className="text-xs text-red-500 text-center">Избери клиент за да продолжиш</p>}
+                    {qForm.customerId && qItems.length === 0 && <p className="text-xs text-red-500 text-center">Додади барем една ставка (материјал, услуга или производ)</p>}
+                  </div>
                 </form>
               </DialogContent>
             </Dialog>

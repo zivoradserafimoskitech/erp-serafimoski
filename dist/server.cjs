@@ -1694,6 +1694,12 @@ var init_logger = __esm({
   }
 });
 
+// node_modules/drizzle-orm/operations.js
+var init_operations = __esm({
+  "node_modules/drizzle-orm/operations.js"() {
+  }
+});
+
 // node_modules/drizzle-orm/query-promise.js
 var QueryPromise;
 var init_query_promise = __esm({
@@ -4084,6 +4090,26 @@ var init_sql2 = __esm({
     init_expressions();
     init_functions();
     init_sql();
+  }
+});
+
+// node_modules/drizzle-orm/index.js
+var init_drizzle_orm = __esm({
+  "node_modules/drizzle-orm/index.js"() {
+    init_alias();
+    init_column_builder();
+    init_column();
+    init_entity();
+    init_errors();
+    init_logger();
+    init_operations();
+    init_query_promise();
+    init_relations();
+    init_sql2();
+    init_subquery();
+    init_table();
+    init_utils();
+    init_view_common();
   }
 });
 
@@ -9164,6 +9190,94 @@ var init_schema2 = __esm({
       rawText: text("raw_text"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
+  }
+});
+
+// api/counters-helper.ts
+var counters_helper_exports = {};
+__export(counters_helper_exports, {
+  bumpDocCounter: () => bumpDocCounter,
+  getNextDocNumber: () => getNextDocNumber,
+  getNextDocNumberTxn: () => getNextDocNumberTxn,
+  peekNextDocNumber: () => peekNextDocNumber
+});
+async function getNextDocNumber(kind, year2) {
+  const db2 = getDb();
+  const y = year2 ?? (/* @__PURE__ */ new Date()).getFullYear();
+  const existing = await db2.select().from(docCounters).where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
+  let nextVal;
+  if (existing.length === 0) {
+    await db2.insert(docCounters).values({ kind, year: y, value: 1 });
+    nextVal = 1;
+  } else {
+    nextVal = existing[0].value + 1;
+    await db2.update(docCounters).set({ value: nextVal, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
+  }
+  const prefix = PREFIXES[kind] ?? "";
+  const num = String(nextVal).padStart(3, "0");
+  if (kind === "invoice") {
+    return `${num}/${y}`;
+  }
+  return `${prefix}-${num}/${y}`;
+}
+async function getNextDocNumberTxn(db2, kind, year2) {
+  const y = year2 ?? (/* @__PURE__ */ new Date()).getFullYear();
+  const existing = await db2.select().from(docCounters).where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
+  let nextVal;
+  if (existing.length === 0) {
+    await db2.insert(docCounters).values({ kind, year: y, value: 1 });
+    nextVal = 1;
+  } else {
+    nextVal = existing[0].value + 1;
+    await db2.update(docCounters).set({ value: nextVal, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
+  }
+  const prefix = PREFIXES[kind] ?? "";
+  const num = String(nextVal).padStart(3, "0");
+  if (kind === "invoice") return `${num}/${y}`;
+  return `${prefix}-${num}/${y}`;
+}
+async function peekNextDocNumber(kind, year2) {
+  const db2 = getDb();
+  const y = year2 ?? (/* @__PURE__ */ new Date()).getFullYear();
+  const existing = await db2.select().from(docCounters).where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
+  const nextVal = existing.length === 0 ? 1 : existing[0].value + 1;
+  const prefix = PREFIXES[kind] ?? "";
+  const num = String(nextVal).padStart(3, "0");
+  if (kind === "invoice") return `${num}/${y}`;
+  return `${prefix}-${num}/${y}`;
+}
+async function bumpDocCounter(kind, usedNumber, year2) {
+  const m = usedNumber.match(/(\d+)\s*\//);
+  if (!m) return;
+  const used = parseInt(m[1], 10);
+  if (!Number.isFinite(used)) return;
+  const db2 = getDb();
+  const y = year2 ?? (/* @__PURE__ */ new Date()).getFullYear();
+  const existing = await db2.select().from(docCounters).where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
+  if (existing.length === 0) {
+    await db2.insert(docCounters).values({ kind, year: y, value: used });
+  } else if (existing[0].value < used) {
+    await db2.update(docCounters).set({ value: used, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
+  }
+}
+var PREFIXES;
+var init_counters_helper = __esm({
+  "api/counters-helper.ts"() {
+    init_drizzle_orm();
+    init_connection();
+    init_schema2();
+    PREFIXES = {
+      quote: "\u041F\u041E",
+      workOrder: "\u0420\u041D",
+      deliveryNote: "\u0418\u0421",
+      proforma: "\u041F\u0424",
+      incomingInvoice: "\u0412\u0424",
+      receipt: "\u041F\u0420",
+      invoice: "",
+      creditNote: "\u041A\u041D",
+      transfer: "\u0422\u0420",
+      count: "\u041F\u041F"
+    };
   }
 });
 
@@ -31238,6 +31352,7 @@ function date4(params) {
 config(en_default());
 
 // api/storage-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 
@@ -31555,6 +31670,7 @@ var storageRouter = createRouter({
 });
 
 // api/production-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 var productionRouter = createRouter({
@@ -31773,6 +31889,7 @@ var productionRouter = createRouter({
 });
 
 // api/customers-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 var customersRouter = createRouter({
@@ -31977,6 +32094,7 @@ var customersRouter = createRouter({
 });
 
 // api/procurement-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 var procurementRouter = createRouter({
@@ -32266,6 +32384,7 @@ var dashboardRouter = createRouter({
 });
 
 // api/accounting-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 
@@ -33774,6 +33893,7 @@ var SignJWT = class {
 // api/ujp-service.ts
 init_connection();
 init_schema2();
+init_drizzle_orm();
 var UJP_TEST_BASE = "https://efakturatest.ujp.gov.mk";
 var UJP_PROD_BASE = "https://efaktura.ujp.gov.mk";
 var API_BASE = process.env.UJP_ENV === "production" ? UJP_PROD_BASE : UJP_TEST_BASE;
@@ -34110,42 +34230,8 @@ function escapeXml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
-// api/counters-helper.ts
-init_connection();
-init_schema2();
-var PREFIXES = {
-  quote: "\u041F\u041E",
-  workOrder: "\u0420\u041D",
-  deliveryNote: "\u0418\u0421",
-  proforma: "\u041F\u0424",
-  incomingInvoice: "\u0412\u0424",
-  receipt: "\u041F\u0420",
-  invoice: "",
-  creditNote: "\u041A\u041D",
-  transfer: "\u0422\u0420",
-  count: "\u041F\u041F"
-};
-async function getNextDocNumber(kind, year2) {
-  const db2 = getDb();
-  const y = year2 ?? (/* @__PURE__ */ new Date()).getFullYear();
-  const existing = await db2.select().from(docCounters).where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
-  let nextVal;
-  if (existing.length === 0) {
-    await db2.insert(docCounters).values({ kind, year: y, value: 1 });
-    nextVal = 1;
-  } else {
-    nextVal = existing[0].value + 1;
-    await db2.update(docCounters).set({ value: nextVal, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
-  }
-  const prefix = PREFIXES[kind] ?? "";
-  const num = String(nextVal).padStart(3, "0");
-  if (kind === "invoice") {
-    return `${num}/${y}`;
-  }
-  return `${prefix}-${num}/${y}`;
-}
-
 // api/accounting-router.ts
+init_counters_helper();
 var accountingRouter = createRouter({
   // ===== OUTGOING INVOICES =====
   invoiceList: publicQuery.input(external_exports.object({ status: external_exports.string().optional(), customerId: external_exports.number().optional(), search: external_exports.string().optional(), type: external_exports.string().optional() }).optional()).query(async ({ input }) => {
@@ -34943,6 +35029,7 @@ var accountingRouter = createRouter({
 });
 
 // api/quotation-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 var quotationRouter = createRouter({
@@ -35133,6 +35220,10 @@ var quotationRouter = createRouter({
     };
   }),
   // ===== QUOTATIONS =====
+  quotationNextNumber: publicQuery.query(async () => {
+    const { peekNextDocNumber: peekNextDocNumber2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+    return peekNextDocNumber2("quote");
+  }),
   quotationList: publicQuery.input(external_exports.object({ status: external_exports.string().optional(), search: external_exports.string().optional() }).optional()).query(async ({ input }) => {
     const db2 = getDb();
     const result = await db2.select({
@@ -35205,6 +35296,11 @@ var quotationRouter = createRouter({
       sortOrder: external_exports.number().default(0)
     })).optional()
   })).mutation(async ({ input }) => {
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("quote", input.quoteNumber).catch(() => {
+      });
+    }
     const db2 = getDb();
     const { items, ...qData } = input;
     const result = await db2.insert(quotations).values({
@@ -35303,6 +35399,7 @@ var quotationRouter = createRouter({
 });
 
 // api/settings-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 var settingsRouter = createRouter({
@@ -35379,6 +35476,7 @@ var settingsRouter = createRouter({
 });
 
 // api/warehouse-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 var warehouseRouter = createRouter({
@@ -35632,6 +35730,7 @@ var warehouseRouter = createRouter({
 });
 
 // api/catalog-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 var catalogRouter = createRouter({
@@ -35914,12 +36013,14 @@ var catalogRouter = createRouter({
 });
 
 // api/ocr-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 
 // api/ocr-service.ts
 init_connection();
 init_schema2();
+init_drizzle_orm();
 var Fuse;
 var pdfParse;
 async function loadPdfParse() {
@@ -36466,12 +36567,14 @@ var ocrRouter = createRouter({
 });
 
 // api/email-router.ts
+init_drizzle_orm();
 init_connection();
 init_schema2();
 
 // api/email-service.ts
 init_connection();
 init_schema2();
+init_drizzle_orm();
 var Imap;
 var simpleParser;
 function loadImap() {
@@ -36738,6 +36841,7 @@ var emailRouter = createRouter({
 // api/test-router.ts
 init_connection();
 init_schema2();
+init_drizzle_orm();
 var testRouter = createRouter({
   fullFlow: publicQuery.input(external_exports.object({ materialQty: external_exports.number().default(100) })).mutation(async ({ input }) => {
     const db2 = getDb();
@@ -36978,6 +37082,7 @@ async function verifySessionToken(token) {
 }
 
 // api/queries/users.ts
+init_drizzle_orm();
 init_schema2();
 init_connection();
 async function findUserByUnionId(unionId) {
