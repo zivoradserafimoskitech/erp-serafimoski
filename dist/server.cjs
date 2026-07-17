@@ -37602,7 +37602,7 @@ var emailRouter = createRouter({
       const { eq: eq3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
       await db2.update(companySettings2).set(vals).where(eq3(companySettings2.id, existing[0].id));
     } else {
-      await db2.insert(companySettings2).values({ name: "Serafimoski Tech DOOEL", ...vals });
+      await db2.insert(companySettings2).values({ name: "Serafimoski Tech DOOEL", valuationMethod: "fifo", timezone: "Europe/Skopje", ...vals });
     }
     return { success: true };
   }),
