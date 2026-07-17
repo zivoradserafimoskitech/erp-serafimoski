@@ -37,7 +37,7 @@ export const emailRouter = createRouter({
         const { eq } = await import("drizzle-orm");
         await db.update(companySettings).set(vals).where(eq(companySettings.id, existing[0].id));
       } else {
-        await db.insert(companySettings).values({ name: "Serafimoski Tech DOOEL", valuationMethod: "fifo", timezone: "Europe/Skopje", ...vals } as any);
+        await db.insert(companySettings).values({ name: "Serafimoski Tech DOOEL", valuationMethod: "fifo", timezone: "Europe/Skopje", edb: "", embs: "", address: "", bankName: "", bankAccount: "", ...vals } as any);
       }
       return { success: true };
     }),
