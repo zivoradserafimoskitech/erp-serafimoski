@@ -206,6 +206,30 @@ app.get("/favicon.ico", async (c) => {
   }
 });
 
+// Seed на материјали од ценовник — идемпотентно (прескокнува постоечки кодови)
+app.get("/api/seed-materials", async (c) => {
+  try {
+    const { MATERIALS_SEED } = await import("./materials-seed");
+    const { Pool } = await import("pg");
+    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl });
+    let created = 0, skipped = 0;
+    for (const m of MATERIALS_SEED) {
+      const res = await pool.query(
+        `INSERT INTO materials (code, name, type, unit, last_purchase_price, avg_cost, is_active)
+         SELECT $1::varchar, $2::varchar, $3::varchar, $4::varchar, $5::numeric, $5::numeric, 'active'
+         WHERE NOT EXISTS (SELECT 1 FROM materials WHERE code = $1::varchar OR name = $2::varchar)`,
+        [m.code, m.name, m.type, m.unit, m.price]
+      );
+      if (res.rowCount) created++; else skipped++;
+    }
+    await pool.end();
+    return c.json({ status: "ok", created, skipped, total: MATERIALS_SEED.length });
+  } catch (e: any) {
+    return c.json({ status: "error", message: e.message }, 500);
+  }
+});
+
 // SPA fallback: serve index.html for all non-API routes
 app.get("*", async (c) => {
   const path = c.req.path;
