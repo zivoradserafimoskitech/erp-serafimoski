@@ -9,6 +9,23 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { cors } from "hono/cors";
 
 const app = new Hono();
+
+// ── Заштита со лозинка (точка 5): активна само ако APP_PASSWORD е поставена ──
+app.post("/api/auth-check", async (c) => {
+  const pw = process.env.APP_PASSWORD;
+  if (!pw) return c.json({ ok: true, gate: false });
+  const body = await c.req.json().catch(() => ({}));
+  const provided = body?.password ?? c.req.header("x-app-key") ?? "";
+  return c.json({ ok: provided === pw, gate: true });
+});
+app.use("/api/trpc/*", async (c, next) => {
+  const pw = process.env.APP_PASSWORD;
+  if (pw && c.req.header("x-app-key") !== pw) {
+    return c.json({ error: { json: { message: "Најави се повторно (погрешна лозинка)", code: -32001, data: { code: "UNAUTHORIZED", httpStatus: 401 } } } }, 401);
+  }
+  await next();
+});
+
 const port = parseInt(process.env.PORT || "3000");
 
 // 1. Health check

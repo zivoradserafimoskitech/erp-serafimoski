@@ -213,6 +213,66 @@ export const productionRouter = createRouter({
     }),
 
   // === UPDATE WO COST ===
+
+  // Точка 6: синџир нарачка → работен налог
+  orderFromChain: publicQuery
+    .input(z.object({ orderId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { orders } = await import("@db/schema");
+      const ord = await db.select().from(orders).where(eq(orders.id, input.orderId));
+      if (!ord[0]) throw new Error("Нарачката не постои");
+      const { getNextDocNumber } = await import("./counters-helper");
+      const woNumber = await getNextDocNumber("workOrder");
+      await db.insert(workOrders).values({
+        woNumber,
+        orderId: input.orderId,
+        description: `Налог за нарачка ${ord[0].orderNumber}`,
+        status: "pending",
+        priority: ord[0].priority ?? "normal",
+      });
+      return { success: true, woNumber };
+    }),
+
+  // Точка 6: синџир работен налог → фактура (ставка од описот и трошокот)
+  workOrderToInvoice: publicQuery
+    .input(z.object({ workOrderId: z.number(), marginPercent: z.number().default(30) }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { orders, invoices, documentItems } = await import("@db/schema");
+      const wo = await db.select().from(workOrders).where(eq(workOrders.id, input.workOrderId));
+      if (!wo[0]) throw new Error("Налогот не постои");
+      let customerId: number | null = null;
+      if (wo[0].orderId) {
+        const ord = await db.select().from(orders).where(eq(orders.id, wo[0].orderId));
+        customerId = ord[0]?.customerId ?? null;
+      }
+      if (!customerId) throw new Error("Налогот нема поврзана нарачка со клиент — креирај фактура рачно");
+      const { getNextDocNumber } = await import("./counters-helper");
+      const invoiceNumber = await getNextDocNumber("invoice");
+      const cost = Number(wo[0].costAmount ?? 0);
+      const price = Math.round(cost * (1 + input.marginPercent / 100) * 100) / 100;
+      const vat = Math.round(price * 0.18 * 100) / 100;
+      const today = new Date().toISOString().slice(0, 10);
+      const due = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+      const res = await db.insert(invoices).values({
+        invoiceNumber, customerId, workOrderId: input.workOrderId,
+        issueDate: today, dueDate: due, status: "draft",
+        subtotal: String(price), vatRate: "18", vatAmount: String(vat),
+        totalAmount: String(Math.round((price + vat) * 100) / 100), currency: "MKD",
+      });
+      const invId = Number((res as any)[0]?.insertId ?? 0);
+      if (invId) {
+        await db.insert(documentItems).values({
+          documentId: invId, documentType: "invoice",
+          description: wo[0].description ?? `Работен налог ${wo[0].woNumber}`,
+          quantity: "1", unit: "pcs", unitPrice: String(price), totalPrice: String(price),
+          vatRate: "18", itemType: "service", sortOrder: 0,
+        });
+      }
+      return { success: true, invoiceNumber, id: invId };
+    }),
+
   workOrderUpdateCost: publicQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {

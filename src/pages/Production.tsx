@@ -54,6 +54,7 @@ export default function Production() {
   });
   const { data: stats } = trpc.production.productionStats.useQuery();
   const { data: companySettings } = trpc.settings.settingsGet.useQuery();
+  const chainInv = trpc.production.workOrderToInvoice.useMutation({ onSuccess: (d) => { toast.success(`Креирана фактура ${d.invoiceNumber} (нацрт, +30% маржа)`); } });
   const { data: woDetail } = trpc.production.workOrderById.useQuery({ id: selWO! }, { enabled: !!selWO });
   const { data: materialsData } = trpc.storage.materialList.useQuery();
   const { data: warehousesData } = trpc.warehouse.warehouseList.useQuery();
@@ -218,7 +219,7 @@ export default function Production() {
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Детали за работен налог {woDetail?.woNumber}<Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}>Печати / PDF</Button></DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Детали за работен налог {woDetail?.woNumber}<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}>→ Фактура</Button><Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}>Печати / PDF</Button></span></DialogTitle></DialogHeader>
           {woDetail && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4 text-sm">

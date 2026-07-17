@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,6 +114,7 @@ export default function Customers() {
     },
   });
 
+  const chainWO = trpc.production.orderFromChain.useMutation({ onSuccess: (d) => { toast.success(`Креиран работен налог ${d.woNumber}`); } });
   const orderUpdate = trpc.customers.orderUpdate.useMutation({
     onSuccess: () => {
       utils.customers.orderList.invalidate();
@@ -442,6 +444,7 @@ export default function Customers() {
                           <TableCell><Badge className={pr.className}>{pr.label}</Badge></TableCell>
                           <TableCell className="font-medium">{o.totalAmount} ден.</TableCell>
                           <TableCell className="text-gray-500">{o.deliveryDate ? String(o.deliveryDate).split("T")[0] : "-"}</TableCell>
+                          <TableCell><Button size="sm" variant="outline" onClick={() => chainWO.mutate({ orderId: o.id })} disabled={chainWO.isPending}>→ Налог</Button></TableCell>
                           <TableCell>
                             <div className="flex gap-1">
                               <Button size="sm" variant="outline" onClick={() => { setSelectedOrder(o.id); setDetailOpen(true); }}>

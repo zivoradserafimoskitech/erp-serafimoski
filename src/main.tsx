@@ -5,12 +5,15 @@ import './index.css'
 import { TRPCProvider } from "@/providers/trpc"
 import App from './App.tsx'
 import { Toaster } from 'sonner'
+import { PasswordGate } from '@/components/PasswordGate'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <TRPCProvider>
+        <PasswordGate>
         <App />
+        </PasswordGate>
         <Toaster richColors position="top-right" />
       </TRPCProvider>
     </BrowserRouter>

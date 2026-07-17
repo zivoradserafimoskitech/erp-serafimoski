@@ -16,6 +16,32 @@ import {
 
 export const emailRouter = createRouter({
   // Провери дали има конфигурација
+  saveConfig: publicQuery
+    .input(z.object({
+      host: z.string().min(1),
+      port: z.number().default(993),
+      secure: z.boolean().default(true),
+      username: z.string().min(1),
+      password: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { companySettings } = await import("@db/schema");
+      const existing = await db.select().from(companySettings);
+      const vals = {
+        emailImapHost: input.host, emailImapPort: input.port,
+        emailImapSecure: input.secure ? 1 : 0,
+        emailUsername: input.username, emailPassword: input.password,
+      };
+      if (existing[0]) {
+        const { eq } = await import("drizzle-orm");
+        await db.update(companySettings).set(vals).where(eq(companySettings.id, existing[0].id));
+      } else {
+        await db.insert(companySettings).values({ name: "Serafimoski Tech DOOEL", ...vals });
+      }
+      return { success: true };
+    }),
+
   hasConfig: publicQuery.query(async () => {
     const config = await getEmailConfig();
     return {

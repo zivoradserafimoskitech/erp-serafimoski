@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { printInvoice, printDeliveryNote } from "@/lib/print-documents";
 import autoTable from "jspdf-autotable";
@@ -599,7 +600,7 @@ export default function Accounting() {
         {[
           { key: "outgoing", label: "Излезни фактури", icon: ArrowUpRight },
           { key: "incoming", label: "Влезни фактури", icon: ArrowDownLeft },
-          { key: "receipts", label: "Приемници", icon: Receipt },
+          
           { key: "delivery", label: "Испратници", icon: Truck },
           { key: "einvoice", label: "УЈП е-фактури", icon: FileText },
           { key: "email", label: "Е-маил фактури", icon: Upload },
@@ -1100,6 +1101,8 @@ function UJPEFakturaTab() {
 
   // Email invoices
   const { data: emailConfig } = trpc.email.hasConfig.useQuery();
+  const [emailForm, setEmailForm] = useState({ host: "", port: "993", username: "", password: "" });
+  const saveEmailCfg = trpc.email.saveConfig.useMutation({ onSuccess: () => { toast.success("Е-маил конфигурацијата е зачувана"); utils.email.hasConfig.invalidate(); } });
   const { data: emailInvoicesList, refetch: refetchEmail } = trpc.email.list.useQuery();
   const fetchEmailsMutation = trpc.email.fetchEmails.useMutation({
     onSuccess: (data) => {
@@ -1423,10 +1426,18 @@ function UJPEFakturaTab() {
             </CardHeader>
             <CardContent>
               {!emailConfig?.configured && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm text-amber-800">
-                    <b>Нема конфигурирано е-маил.</b> Одете во Подесувања {'->'} Фирма и внесете IMAP податоци (сервер, корисник, лозинка) за да започнете автоматско примање на фактури.
-                  </p>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 space-y-3">
+                  <p className="text-sm text-amber-800"><b>Конфигурирај е-маил</b> (IMAP) за автоматско примање на фактури од добавувачи:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="IMAP сервер (пр. imap.gmail.com)" value={emailForm.host} onChange={e => setEmailForm({...emailForm, host: e.target.value})} />
+                    <Input placeholder="Порта (993)" value={emailForm.port} onChange={e => setEmailForm({...emailForm, port: e.target.value})} />
+                    <Input placeholder="Е-маил адреса" value={emailForm.username} onChange={e => setEmailForm({...emailForm, username: e.target.value})} />
+                    <Input type="password" placeholder="Лозинка / App password" value={emailForm.password} onChange={e => setEmailForm({...emailForm, password: e.target.value})} />
+                  </div>
+                  <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={!emailForm.host || !emailForm.username || !emailForm.password || saveEmailCfg.isPending}
+                    onClick={() => saveEmailCfg.mutate({ host: emailForm.host, port: Number(emailForm.port) || 993, secure: true, username: emailForm.username, password: emailForm.password })}>
+                    Зачувај конфигурација
+                  </Button>
                 </div>
               )}
               {emailConfig?.configured && (

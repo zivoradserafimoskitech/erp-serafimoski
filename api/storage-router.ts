@@ -23,7 +23,21 @@ export const storageRouter = createRouter({
 
       const all = await query.orderBy(desc(materials.updatedAt));
 
-      let result = all;
+      // Единствена вистина за залиха: сума по магацини (material_stock);
+      // materials.currentStock е fallback за материјали без магацински записи.
+      const { materialStock } = await import("@db/schema");
+      const { sql } = await import("drizzle-orm");
+      const sums = await db
+        .select({ materialId: materialStock.materialId, total: sql<string>`SUM(${materialStock.quantity})` })
+        .from(materialStock)
+        .groupBy(materialStock.materialId);
+      const sumMap = new Map(sums.map((r: any) => [r.materialId, r.total]));
+      const withStock = all.map((m: any) => ({
+        ...m,
+        currentStock: sumMap.has(m.id) ? sumMap.get(m.id) : m.currentStock,
+      }));
+
+      let result = withStock;
       if (input?.search) {
         const s = input.search.toLowerCase();
         result = result.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));

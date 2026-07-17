@@ -8,8 +8,17 @@ let pdfParse: any;
 
 async function loadPdfParse() {
   if (!pdfParse) {
-    const mod = await import("pdf-parse");
-    pdfParse = mod.default || mod;
+    const mod: any = await import("pdf-parse");
+    if (mod.PDFParse) {
+      // pdf-parse v2: класа PDFParse со getText()
+      pdfParse = async (buffer: Buffer) => {
+        const parser = new mod.PDFParse({ data: new Uint8Array(buffer) });
+        const res = await parser.getText();
+        return { text: res.text, numpages: res.pages?.length ?? 0 };
+      };
+    } else {
+      pdfParse = mod.default || mod; // v1 fallback
+    }
   }
   return pdfParse;
 }

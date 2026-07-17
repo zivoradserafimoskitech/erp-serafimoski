@@ -38,6 +38,10 @@ const queryClient = new QueryClient({
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
+      headers() {
+        const k = window.localStorage.getItem("appKey");
+        return k ? { "x-app-key": k } : {};
+      },
       url: API_URL,
       transformer: superjson,
       fetch(input, init) {
