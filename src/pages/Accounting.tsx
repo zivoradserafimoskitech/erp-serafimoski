@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { jsPDF } from "jspdf";
-import { printInvoice } from "@/lib/invoice-print";
+import { printInvoice, printDeliveryNote } from "@/lib/print-documents";
 import autoTable from "jspdf-autotable";
 import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
@@ -744,7 +744,7 @@ export default function Accounting() {
                       <TableCell><Badge className={dnStatus[dn.status]?.cls}>{dnStatus[dn.status]?.label}</Badge></TableCell>
                       <TableCell className="text-gray-500">{dn.issueDate ? String(dn.issueDate).split("T")[0] : "-"}</TableCell>
                       <TableCell>{dn.totalItems}</TableCell>
-                      <TableCell><Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) delDN.mutate({ id: dn.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
+                      <TableCell><div className="flex gap-1"><Button size="sm" variant="outline" onClick={async () => { const full = await utils.accounting.deliveryNoteById.fetch({ id: dn.id }); printDeliveryNote(full, companySettings); }}><Download className="h-3.5 w-3.5 mr-1" />Печати</Button><Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) delDN.mutate({ id: dn.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button></div></TableCell>
                     </TableRow>
                   ))}
               </TableBody>
