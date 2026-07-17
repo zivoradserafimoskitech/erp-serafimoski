@@ -224,3 +224,54 @@ export function printDeliveryNote(dn: any, settings: any) {
   ${footer(s)}`;
   openPrint(shell(`Испратница ${dn?.dnNumber ?? ""}`, "#059669", body));
 }
+
+// ══════════════ ПОНУДА ══════════════
+export function printQuotation(q: any, settings: any) {
+  const s = settings ?? {};
+  const c = q?.customer ?? {};
+  const items: any[] = q?.items ?? [];
+  const vatRate = Number(q?.vatRate ?? s?.defaultVatRate ?? 18);
+  const rows = items.map((it, i) => `<tr>
+    <td class="c">${i + 1}</td><td>${esc(it.description)}</td><td class="c">${esc(it.unit ?? "")}</td>
+    <td class="r">${den(it.quantity)}</td><td class="r">${den(it.unitPrice)}</td>
+    <td class="r"><b>${den(it.totalPrice)}</b></td></tr>`).join("");
+
+  const body = `
+  ${header(s, "ПОНУДА", q?.quoteNumber ?? "", `
+    Датум: <b>${dt(q?.createdAt)}</b><br>
+    Важи до: <b>${dt(q?.validUntil)}</b><br>
+    Валута: ${esc(q?.currency ?? "MKD")}`)}
+  <div class="parties">
+    <div class="party"><h3>Понудувач</h3>
+      <div class="n">${esc(s?.name ?? "Serafimoski Tech DOOEL")}</div>
+      <div>${esc(s?.address ?? "")}</div>
+      <div>ЕДБ: ${esc(s?.edb ?? "—")}</div>
+      ${s?.phone ? `<div>тел: ${esc(s.phone)}</div>` : ""}
+    </div>
+    <div class="party"><h3>За клиент</h3>
+      <div class="n">${esc(c.company || c.name || "—")}</div>
+      ${c.company && c.name ? `<div>${esc(c.name)}</div>` : ""}
+      <div>${esc([c.address, c.city].filter(Boolean).join(", "))}</div>
+      ${c.phone ? `<div>тел: ${esc(c.phone)}</div>` : ""}
+    </div>
+  </div>
+  <table class="t"><thead><tr>
+    <th class="c" style="width:26px">#</th><th>Опис</th><th class="c" style="width:44px">ЕМ</th>
+    <th class="r" style="width:60px">Кол.</th><th class="r" style="width:80px">Цена (ден.)</th>
+    <th class="r" style="width:90px">Вкупно (ден.)</th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="6" class="c" style="padding:14px;color:#999">Нема ставки</td></tr>`}</tbody></table>
+  <div class="totals">
+    <div class="row"><span>Основица:</span><b>${den(q?.subtotal)} ден.</b></div>
+    <div class="row"><span>ДДВ (${vatRate}%):</span><b>${den(q?.vatAmount)} ден.</b></div>
+    <div class="row grand"><span>ВКУПНО:</span><span>${den(q?.totalAmount)} ден.</span></div>
+  </div>
+  <div class="box"><b>Услови</b><br>
+    ${q?.deliveryDays ? `Рок на испорака: <b>${esc(q.deliveryDays)} дена</b><br>` : ""}
+    ${q?.paymentTerms ? `Плаќање: <b>${esc(q.paymentTerms)}</b><br>` : ""}
+    Понудата важи до <b>${dt(q?.validUntil)}</b>. Цените се изразени во денари${vatRate ? " со пресметан ДДВ во рекапитулацијата" : ""}.
+  </div>
+  ${q?.notes ? `<div class="notes"><b>Забелешка:</b> ${esc(q.notes)}</div>` : ""}
+  <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Одобрил</div></div></div>
+  ${footer(s)}`;
+  openPrint(shell(`Понуда ${q?.quoteNumber ?? ""}`, "#7c3aed", body));
+}

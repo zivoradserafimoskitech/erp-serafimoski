@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { printQuotation } from "@/lib/print-documents";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ export default function Quotations() {
   const [selQ, setSelQ] = useState<number | null>(null);
   const [convOrderNum, setConvOrderNum] = useState("");
 
+  const { data: companySettings } = trpc.settings.settingsGet.useQuery();
   const { data: qDetail } = trpc.quotation.quotationById.useQuery({ id: selQ! }, { enabled: !!selQ });
 
   const [qForm, setQForm] = useState({
@@ -440,7 +442,7 @@ export default function Quotations() {
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Понуда {qDetail?.quoteNumber}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Понуда {qDetail?.quoteNumber}<Button size="sm" variant="outline" onClick={() => qDetail && printQuotation(qDetail, companySettings)}>Печати / PDF</Button></DialogTitle></DialogHeader>
           {qDetail && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
