@@ -219,7 +219,7 @@ export default function Production() {
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Детали за работен налог {woDetail?.woNumber}<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}>→ Фактура</Button><Button size="sm" variant="outline" onClick={() => woDetail && printRequisition(woDetail, companySettings)}>Требовање</Button><Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}>Печати / PDF</Button></span></DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Детали за работен налог {woDetail?.woNumber}{woDetail?.orderNumber && <span className="ml-2 text-sm font-normal text-gray-500">· нарачка {woDetail.orderNumber}</span>}<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}>→ Фактура</Button><Button size="sm" variant="outline" onClick={() => woDetail && printRequisition(woDetail, companySettings)}>Требовање</Button><Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}>Печати / PDF</Button></span></DialogTitle></DialogHeader>
           {woDetail && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4 text-sm">

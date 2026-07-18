@@ -32447,6 +32447,12 @@ var productionRouter = createRouter({
   workOrderById: publicQuery.input(external_exports.object({ id: external_exports.number() })).query(async ({ input }) => {
     const db2 = getDb();
     const wo = await db2.select().from(workOrders).where(eq(workOrders.id, input.id));
+    let orderNumber = null;
+    if (wo[0]?.orderId) {
+      const { orders: orders2 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
+      const o = await db2.select({ n: orders2.orderNumber }).from(orders2).where(eq(orders2.id, wo[0].orderId));
+      orderNumber = o[0]?.n ?? null;
+    }
     if (!wo[0]) return null;
     const ops = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
     const mats = await db2.select({
@@ -32462,7 +32468,7 @@ var productionRouter = createRouter({
       materialCode: materials.code,
       materialUnit: materials.unit
     }).from(workOrderMaterials).leftJoin(materials, eq(workOrderMaterials.materialId, materials.id)).where(eq(workOrderMaterials.workOrderId, input.id));
-    return { ...wo[0], operations: ops, materials: mats };
+    return { ...wo[0], orderNumber, operations: ops, materials: mats };
   }),
   workOrderCreate: publicQuery.input(external_exports.object({
     woNumber: external_exports.string().min(1),
@@ -32614,6 +32620,9 @@ var productionRouter = createRouter({
     const { orders: orders2 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
     const ord = await db2.select().from(orders2).where(eq(orders2.id, input.orderId));
     if (!ord[0]) throw new Error("\u041D\u0430\u0440\u0430\u0447\u043A\u0430\u0442\u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
+    if (ord[0].status !== "confirmed") throw new Error("\u041D\u0430\u043B\u043E\u0433 \u0441\u0435 \u043A\u0440\u0435\u0438\u0440\u0430 \u0441\u0430\u043C\u043E \u043E\u0434 \u041F\u041E\u0422\u0412\u0420\u0414\u0415\u041D\u0410 \u043D\u0430\u0440\u0430\u0447\u043A\u0430 \u2014 \u043F\u0440\u0432\u043E \u043F\u043E\u0442\u0432\u0440\u0434\u0438 \u0458\u0430 \u043D\u0430\u0440\u0430\u0447\u043A\u0430\u0442\u0430");
+    const existing = await db2.select().from(workOrders).where(eq(workOrders.orderId, input.orderId));
+    if (existing.length > 0) throw new Error(`\u0417\u0430 \u043E\u0432\u0430\u0430 \u043D\u0430\u0440\u0430\u0447\u043A\u0430 \u0432\u0435\u045C\u0435 \u043F\u043E\u0441\u0442\u043E\u0438 \u043D\u0430\u043B\u043E\u0433 ${existing[0].woNumber}`);
     const { getNextDocNumber: getNextDocNumber2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
     const woNumber = await getNextDocNumber2("workOrder");
     await db2.insert(workOrders).values({
@@ -32623,6 +32632,7 @@ var productionRouter = createRouter({
       status: "pending",
       priority: ord[0].priority ?? "normal"
     });
+    await db2.update(orders2).set({ status: "in_production" }).where(eq(orders2.id, input.orderId));
     return { success: true, woNumber };
   }),
   // Точка 6: синџир работен налог → фактура (ставка од описот и трошокот)

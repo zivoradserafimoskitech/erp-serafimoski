@@ -177,6 +177,7 @@ export function printWorkOrder(wo: any, settings: any) {
   <div class="stitle">Податоци за налогот</div>
   <div class="grid2">
     <div class="kv"><span>Опис:</span><b>${esc(wo?.description ?? "—")}</b></div>
+    <div class="kv"><span>Нарачка:</span><b>${esc(wo?.orderNumber ?? "—")}</b></div>
     <div class="kv"><span>Одговорен:</span><b>${esc(wo?.assignedTo || "—")}</b></div>
     <div class="kv"><span>Планиран почеток:</span><b>${dt(wo?.plannedStart)}</b></div>
     <div class="kv"><span>Планиран крај:</span><b>${dt(wo?.plannedEnd)}</b></div>
@@ -302,6 +303,7 @@ export function printRequisition(wo: any, settings: any) {
   const body = `
   ${header(s, "ТРЕБОВАЊЕ", trbNumber, `
     Работен налог: <b>${esc(wo?.woNumber ?? "—")}</b><br>
+    Нарачка: <b>${esc(wo?.orderNumber ?? "—")}</b><br>
     Датум: <b>${dt(new Date().toISOString())}</b><br>
     Одговорен: <b>${esc(wo?.assignedTo || "—")}</b>`)}
   <div class="box" style="margin-top:12px">

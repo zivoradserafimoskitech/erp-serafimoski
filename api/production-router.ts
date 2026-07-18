@@ -42,6 +42,12 @@ export const productionRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       const wo = await db.select().from(workOrders).where(eq(workOrders.id, input.id));
+      let orderNumber: string | null = null;
+      if (wo[0]?.orderId) {
+        const { orders } = await import("@db/schema");
+        const o = await db.select({ n: orders.orderNumber }).from(orders).where(eq(orders.id, wo[0].orderId));
+        orderNumber = o[0]?.n ?? null;
+      }
       if (!wo[0]) return null;
       const ops = await db.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
       const mats = await db
@@ -55,7 +61,7 @@ export const productionRouter = createRouter({
         .from(workOrderMaterials)
         .leftJoin(materials, eq(workOrderMaterials.materialId, materials.id))
         .where(eq(workOrderMaterials.workOrderId, input.id));
-      return { ...wo[0], operations: ops, materials: mats };
+      return { ...wo[0], orderNumber, operations: ops, materials: mats };
     }),
 
   workOrderCreate: publicQuery
@@ -222,6 +228,9 @@ export const productionRouter = createRouter({
       const { orders } = await import("@db/schema");
       const ord = await db.select().from(orders).where(eq(orders.id, input.orderId));
       if (!ord[0]) throw new Error("Нарачката не постои");
+      if (ord[0].status !== "confirmed") throw new Error("Налог се креира само од ПОТВРДЕНА нарачка — прво потврди ја нарачката");
+      const existing = await db.select().from(workOrders).where(eq(workOrders.orderId, input.orderId));
+      if (existing.length > 0) throw new Error(`За оваа нарачка веќе постои налог ${existing[0].woNumber}`);
       const { getNextDocNumber } = await import("./counters-helper");
       const woNumber = await getNextDocNumber("workOrder");
       await db.insert(workOrders).values({
@@ -231,6 +240,7 @@ export const productionRouter = createRouter({
         status: "pending",
         priority: ord[0].priority ?? "normal",
       });
+      await db.update(orders).set({ status: "in_production" }).where(eq(orders.id, input.orderId));
       return { success: true, woNumber };
     }),
 
