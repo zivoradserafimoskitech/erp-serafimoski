@@ -569,6 +569,7 @@ export default function Accounting() {
                 >
                   {reportLoading ? "Се генерира..." : <><Calculator className="h-4 w-4 mr-2" />Генерирај извештај</>}
                 </Button>
+                {report && <Button variant="outline" onClick={() => printAccountantReport(report, reportPeriod, companySettings)}>Печати извештај / PDF</Button>}
                 {reportData && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
