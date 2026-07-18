@@ -18,7 +18,7 @@ import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
   Receipt, Truck, ArrowUpRight, ArrowDownLeft, Calculator,
   Radio, RefreshCw, Send, SearchIcon, Upload, Building2, Zap,
-  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, Package,
+  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle,
 } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
@@ -639,7 +639,6 @@ export default function Accounting() {
           { key: "incoming", label: "Влезни фактури", icon: ArrowDownLeft },
           
           { key: "delivery", label: "Испратници", icon: Truck },
-          { key: "finished", label: "Готови производи", icon: Package },
           { key: "einvoice", label: "УЈП е-фактури", icon: FileText },
           { key: "email", label: "Е-маил фактури", icon: Upload },
           { key: "parsed", label: "PDF Парсирање", icon: FileUp },
@@ -784,33 +783,6 @@ export default function Accounting() {
                       <TableCell className="text-gray-500">{dn.issueDate ? String(dn.issueDate).split("T")[0] : "-"}</TableCell>
                       <TableCell>{dn.totalItems}</TableCell>
                       <TableCell><div className="flex gap-1"><Button size="sm" variant="outline" onClick={async () => { const full = await utils.accounting.deliveryNoteById.fetch({ id: dn.id }); printDeliveryNote(full, companySettings); }}><Download className="h-3.5 w-3.5 mr-1" />Печати</Button><Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) delDN.mutate({ id: dn.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button></div></TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ===== FINISHED GOODS (GL-PROD) ===== */}
-      {tab === "finished" && (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Производ</TableHead><TableHead>Код</TableHead><TableHead>Количина</TableHead><TableHead>Магацин</TableHead><TableHead>Од налог</TableHead><TableHead>Трошок/ед.</TableHead><TableHead>Ажурирано</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {!finishedGoods?.length ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема готови производи — заврши работен налог за автоматски влез во ГЛ-ПРОД</TableCell></TableRow> :
-                  (finishedGoods as any[]).map((fg) => (
-                    <TableRow key={fg.id} className={parseFloat(String(fg.quantity || "0")) <= 0 ? "opacity-50" : ""}>
-                      <TableCell className="font-medium">{fg.productName ?? `#${fg.productId}`}</TableCell>
-                      <TableCell className="font-mono text-xs text-gray-500">{fg.productCode ?? "-"}</TableCell>
-                      <TableCell className="font-semibold">{parseFloat(String(fg.quantity || "0")).toFixed(3).replace(/\.?0+$/, "")} {fg.unit ?? "ком"}</TableCell>
-                      <TableCell className="text-gray-500">{fg.warehouseName ?? fg.warehouseCode ?? "-"}</TableCell>
-                      <TableCell className="font-mono text-xs">{fg.woNumber ?? "-"}</TableCell>
-                      <TableCell className="text-gray-500">{fg.unitCost && parseFloat(String(fg.unitCost)) > 0 ? `${fg.unitCost} ден.` : "-"}</TableCell>
-                      <TableCell className="text-gray-400 text-xs">{fg.updatedAt ? String(fg.updatedAt).split("T")[0] : "-"}</TableCell>
                     </TableRow>
                   ))}
               </TableBody>
