@@ -767,6 +767,7 @@ export const finishedGoodsStock = pgTable("finished_goods_stock", {
   id: serial("id").primaryKey(),
   productId: bigint("product_id", { mode: "number", unsigned: true }).notNull(),
   warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   notes: text("notes"),

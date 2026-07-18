@@ -9,6 +9,7 @@ import {
   eInvoices, parsedInvoices,
   customers, suppliers, materials,
   finishedGoodsStock, products, services,
+  warehouses, workOrders as workOrdersTable,
 } from "@db/schema";
 import { sendInvoice, checkInvoiceStatus, lookupCompany, generateUJPXml, getActiveCertificates, storeCertificate, type UJPInvoicePayload } from "./ujp-service";
 import { logAudit } from "./audit-helper";
@@ -490,8 +491,10 @@ export const accountingRouter = createRouter({
         quantity: z.string(),
         unit: z.string().default("ком"),
         unitPrice: z.string().default("0"),
-        totalPrice: z.string(),
+        totalPrice: z.string().default("0"),
         notes: z.string().optional(),
+        productId: z.number().optional(),
+        itemType: z.enum(["product", "material", "manual"]).default("manual"),
       })).optional(),
     }))
     .mutation(async ({ input }) => {
@@ -501,6 +504,21 @@ export const accountingRouter = createRouter({
       }
       const db = getDb();
       const { items, ...data } = input;
+
+      // Валидација на залиха за готови производи ПРЕД да се креира документот
+      if (items) {
+        for (const item of items) {
+          if (item.itemType === "product" && item.productId) {
+            const stock = await db.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.productId, item.productId));
+            const totalStock = stock.reduce((sum, s) => sum + parseFloat(String(s.quantity)), 0);
+            const qty = parseFloat(item.quantity) || 0;
+            if (totalStock < qty) {
+              throw new Error(`Нема доволно залиха на готов производ „${item.description}". На залиха: ${totalStock.toFixed(3)}, потребно: ${qty.toFixed(3)}`);
+            }
+          }
+        }
+      }
+
       const result = await db.insert(deliveryNotes).values({
         ...data,
         issueDate: new Date(data.issueDate),
@@ -510,7 +528,28 @@ export const accountingRouter = createRouter({
       const insertId = Number(result[0].insertId);
       if (items && items.length > 0) {
         await db.insert(documentItems).values(items.map(i => ({ ...i, documentId: insertId, documentType: "delivery_note" as const })));
+
+        // Одземи ја залихата на готови производи од ГЛ-ПРОД (FIFO по записи)
+        for (const item of items) {
+          if (item.itemType === "product" && item.productId) {
+            const stockEntries = await db.select().from(finishedGoodsStock)
+              .where(eq(finishedGoodsStock.productId, item.productId))
+              .orderBy(finishedGoodsStock.id);
+            let remainingQty = parseFloat(item.quantity) || 0;
+            for (const entry of stockEntries) {
+              if (remainingQty <= 0) break;
+              const entryQty = parseFloat(String(entry.quantity));
+              const deduct = Math.min(entryQty, remainingQty);
+              await db.update(finishedGoodsStock)
+                .set({ quantity: (entryQty - deduct).toFixed(3), updatedAt: new Date() } as any)
+                .where(eq(finishedGoodsStock.id, entry.id));
+              remainingQty -= deduct;
+            }
+          }
+        }
       }
+
+      await logAudit({ action: "CREATE", entityType: "delivery_note", entityId: insertId, description: `Креирана испратница ${data.dnNumber}` }).catch(() => {});
       return { success: true, id: insertId };
     }),
 
@@ -518,6 +557,33 @@ export const accountingRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      // Врати ја залихата за готови производи од избришаната испратница
+      const items = await db.select().from(documentItems).where(and(eq(documentItems.documentId, input.id), eq(documentItems.documentType, "delivery_note")));
+      for (const item of items) {
+        if (item.itemType === "product" && item.productId) {
+          const qty = parseFloat(String(item.quantity)) || 0;
+          if (qty <= 0) continue;
+          const stockEntries = await db.select().from(finishedGoodsStock)
+            .where(eq(finishedGoodsStock.productId, item.productId))
+            .orderBy(finishedGoodsStock.id);
+          if (stockEntries.length > 0) {
+            const entry = stockEntries[stockEntries.length - 1];
+            await db.update(finishedGoodsStock)
+              .set({ quantity: (parseFloat(String(entry.quantity)) + qty).toFixed(3), updatedAt: new Date() } as any)
+              .where(eq(finishedGoodsStock.id, entry.id));
+          } else {
+            const allWh = await db.select().from(warehouses);
+            const fgWh = allWh.find(w => w.code === "GL-PROD") || allWh.find(w => w.type === "finished_goods");
+            if (fgWh) {
+              await db.insert(finishedGoodsStock).values({
+                productId: item.productId, warehouseId: fgWh.id,
+                quantity: qty.toFixed(3), unitCost: "0",
+                notes: `Вратено од избришана испратница`,
+              } as any);
+            }
+          }
+        }
+      }
       await db.delete(documentItems).where(and(eq(documentItems.documentId, input.id), eq(documentItems.documentType, "delivery_note")));
       await db.delete(deliveryNotes).where(eq(deliveryNotes.id, input.id));
       return { success: true };
@@ -887,11 +953,22 @@ export const accountingRouter = createRouter({
       id: finishedGoodsStock.id,
       productId: finishedGoodsStock.productId,
       warehouseId: finishedGoodsStock.warehouseId,
+      workOrderId: finishedGoodsStock.workOrderId,
       quantity: finishedGoodsStock.quantity,
       unitCost: finishedGoodsStock.unitCost,
       notes: finishedGoodsStock.notes,
       updatedAt: finishedGoodsStock.updatedAt,
-    }).from(finishedGoodsStock);
+      productName: products.name,
+      productCode: products.code,
+      unit: products.unit,
+      warehouseName: warehouses.name,
+      warehouseCode: warehouses.code,
+      woNumber: workOrdersTable.woNumber,
+    }).from(finishedGoodsStock)
+      .leftJoin(products, eq(finishedGoodsStock.productId, products.id))
+      .leftJoin(warehouses, eq(finishedGoodsStock.warehouseId, warehouses.id))
+      .leftJoin(workOrdersTable, eq(finishedGoodsStock.workOrderId, workOrdersTable.id))
+      .orderBy(desc(finishedGoodsStock.updatedAt));
   }),
 
   finishedGoodsByProduct: publicQuery
@@ -941,7 +1018,7 @@ export const accountingRouter = createRouter({
       name: products.name,
       code: products.code,
       unit: products.unit,
-      price: products.price,
+      price: products.defaultPrice,
       category: products.category,
     }).from(products).where(eq(products.isActive, "active"));
   }),
@@ -953,7 +1030,7 @@ export const accountingRouter = createRouter({
       name: services.name,
       code: services.code,
       unit: services.unit,
-      price: services.price,
+      price: services.saleRate,
       type: services.type,
     }).from(services).where(eq(services.isActive, "active"));
   }),

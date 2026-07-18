@@ -18,7 +18,7 @@ import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
   Receipt, Truck, ArrowUpRight, ArrowDownLeft, Calculator,
   Radio, RefreshCw, Send, SearchIcon, Upload, Building2, Zap,
-  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle,
+  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, Package,
 } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
@@ -86,7 +86,7 @@ export default function Accounting() {
   const delOut = trpc.accounting.invoiceDelete.useMutation({ onSuccess: () => utils.accounting.invoiceList.invalidate() });
   const delInc = trpc.accounting.incomingInvoiceDelete.useMutation({ onSuccess: () => utils.accounting.incomingInvoiceList.invalidate() });
   const delRec = trpc.accounting.receiptDelete.useMutation({ onSuccess: () => utils.accounting.receiptList.invalidate() });
-  const delDN = trpc.accounting.deliveryNoteDelete.useMutation({ onSuccess: () => utils.accounting.deliveryNoteList.invalidate() });
+  const delDN = trpc.accounting.deliveryNoteDelete.useMutation({ onSuccess: () => { utils.accounting.deliveryNoteList.invalidate(); utils.accounting.finishedGoodsList.invalidate(); } });
   const createParsed = trpc.accounting.parsedInvoiceCreate.useMutation({ onSuccess: () => utils.accounting.parsedInvoiceList.invalidate() });
 
   // Detail dialog
@@ -120,7 +120,7 @@ export default function Accounting() {
   const [incItemForm, setIncItemForm] = useState({ description: "", quantity: "1", unit: "кг", unitPrice: "", vatRate: "18" });
   const [recForm, setRecForm] = useState({ receiptNumber: "", supplierId: "", receiptDate: "", totalAmount: "0", notes: "" });
   const [dnForm, setDnForm] = useState({ dnNumber: "", customerId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" });
-  const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string }[]>([]);
+  const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string; productId?: number; itemType?: "product" | "material" | "manual" }[]>([]);
   const { data: materialsData } = trpc.storage.materialList.useQuery({});
   const [reportPeriod, setReportPeriod] = useState({ startDate: "", endDate: "" });
   const [emailSinceDays, setEmailSinceDays] = useState(7);
@@ -129,6 +129,21 @@ export default function Accounting() {
   const { data: productsForInvoice } = trpc.accounting.productListForInvoice.useQuery();
   const { data: servicesForInvoice } = trpc.accounting.serviceListForInvoice.useQuery();
   const { data: finishedGoods } = trpc.accounting.finishedGoodsList.useQuery();
+  // Агрегирана залиха по производ за пикерот во испратницата (id = productId, во името стои расположивата количина)
+  const fgAggregated = (() => {
+    if (!finishedGoods) return [];
+    const byProduct = new Map<number, { id: number; code: string; name: string; unit: string; qty: number }>();
+    for (const f of finishedGoods as any[]) {
+      if (!f.productId) continue;
+      const ex = byProduct.get(f.productId);
+      const q = parseFloat(String(f.quantity || "0"));
+      if (ex) ex.qty += q;
+      else byProduct.set(f.productId, { id: f.productId, code: f.productCode ?? "", name: f.productName ?? f.notes ?? `Производ #${f.productId}`, unit: f.unit ?? "ком", qty: q });
+    }
+    return Array.from(byProduct.values())
+      .filter(p => p.qty > 0)
+      .map(p => ({ id: p.id, code: p.code, cleanName: p.name, name: `${p.name} (залиха: ${p.qty.toFixed(3).replace(/\.?0+$/, "")} ${p.unit})`, unit: p.unit, lastPurchasePrice: p.qty }));
+  })();
   const { data: nextInvoiceNum, refetch: refetchNextNum } = trpc.accounting.nextInvoiceNumber.useQuery();
 
   const [reportData, setReportData] = useState<any>(null);
@@ -172,7 +187,7 @@ export default function Accounting() {
     onSuccess: () => { utils.accounting.receiptList.invalidate(); setRecDialog(false); setRecForm({ receiptNumber: "", supplierId: "", receiptDate: "", totalAmount: "0", notes: "" }); },
   });
   const createDN = trpc.accounting.deliveryNoteCreate.useMutation({
-    onSuccess: () => { utils.accounting.deliveryNoteList.invalidate(); setDnDialog(false); setDnForm({ dnNumber: "", customerId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" }); },
+    onSuccess: () => { utils.accounting.deliveryNoteList.invalidate(); utils.accounting.finishedGoodsList.invalidate(); setDnDialog(false); setDnForm({ dnNumber: "", customerId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" }); setDnItems([]); },
   });
 
   // PDF upload ref
@@ -533,10 +548,10 @@ export default function Accounting() {
                     <p className="text-xs font-semibold">Ставки за испорака</p>
                     <div className="grid grid-cols-2 gap-2">
                       <MaterialPicker tile={{ icon: "🔩", label: "Материјал од магацин" }} title="Избери материјал" materials={materialsData as any} value={null}
-                        onSelect={(mm: any) => setDnItems([...dnItems, { description: mm.name, quantity: "1", unit: mm.unit ?? "pcs" }])} />
+                        onSelect={(mm: any) => setDnItems([...dnItems, { description: mm.name, quantity: "1", unit: mm.unit ?? "pcs", itemType: "material" }])} />
                       <MaterialPicker tile={{ icon: "📦", label: "Готов производ" }} title="Избери готов производ" value={null}
-                        materials={finishedGoods?.map((f: any) => ({ id: f.id, code: f.code ?? "", name: f.productName ?? f.name ?? f.description, unit: f.unit ?? "pcs", lastPurchasePrice: f.quantity })) as any}
-                        onSelect={(f: any) => setDnItems([...dnItems, { description: f.name, quantity: "1", unit: f.unit ?? "pcs" }])} />
+                        materials={fgAggregated as any}
+                        onSelect={(f: any) => setDnItems([...dnItems, { description: f.cleanName ?? f.name, quantity: "1", unit: f.unit ?? "ком", productId: f.id, itemType: "product" }])} />
                     </div>
                     {dnItems.map((it, i) => (
                       <div key={i} className="grid grid-cols-[1fr_5rem_3rem_2rem] gap-2 items-center bg-white border rounded px-2 py-1">
@@ -569,7 +584,7 @@ export default function Accounting() {
                 >
                   {reportLoading ? "Се генерира..." : <><Calculator className="h-4 w-4 mr-2" />Генерирај извештај</>}
                 </Button>
-                {report && <Button variant="outline" onClick={() => printAccountantReport(report, reportPeriod, companySettings)}>Печати извештај / PDF</Button>}
+                {reportData && <Button variant="outline" onClick={() => printAccountantReport(reportData, reportPeriod, companySettings)}>Печати извештај / PDF</Button>}
                 {reportData && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -624,6 +639,7 @@ export default function Accounting() {
           { key: "incoming", label: "Влезни фактури", icon: ArrowDownLeft },
           
           { key: "delivery", label: "Испратници", icon: Truck },
+          { key: "finished", label: "Готови производи", icon: Package },
           { key: "einvoice", label: "УЈП е-фактури", icon: FileText },
           { key: "email", label: "Е-маил фактури", icon: Upload },
           { key: "parsed", label: "PDF Парсирање", icon: FileUp },
@@ -768,6 +784,33 @@ export default function Accounting() {
                       <TableCell className="text-gray-500">{dn.issueDate ? String(dn.issueDate).split("T")[0] : "-"}</TableCell>
                       <TableCell>{dn.totalItems}</TableCell>
                       <TableCell><div className="flex gap-1"><Button size="sm" variant="outline" onClick={async () => { const full = await utils.accounting.deliveryNoteById.fetch({ id: dn.id }); printDeliveryNote(full, companySettings); }}><Download className="h-3.5 w-3.5 mr-1" />Печати</Button><Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) delDN.mutate({ id: dn.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button></div></TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ===== FINISHED GOODS (GL-PROD) ===== */}
+      {tab === "finished" && (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow><TableHead>Производ</TableHead><TableHead>Код</TableHead><TableHead>Количина</TableHead><TableHead>Магацин</TableHead><TableHead>Од налог</TableHead><TableHead>Трошок/ед.</TableHead><TableHead>Ажурирано</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
+                {!finishedGoods?.length ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема готови производи — заврши работен налог за автоматски влез во ГЛ-ПРОД</TableCell></TableRow> :
+                  (finishedGoods as any[]).map((fg) => (
+                    <TableRow key={fg.id} className={parseFloat(String(fg.quantity || "0")) <= 0 ? "opacity-50" : ""}>
+                      <TableCell className="font-medium">{fg.productName ?? `#${fg.productId}`}</TableCell>
+                      <TableCell className="font-mono text-xs text-gray-500">{fg.productCode ?? "-"}</TableCell>
+                      <TableCell className="font-semibold">{parseFloat(String(fg.quantity || "0")).toFixed(3).replace(/\.?0+$/, "")} {fg.unit ?? "ком"}</TableCell>
+                      <TableCell className="text-gray-500">{fg.warehouseName ?? fg.warehouseCode ?? "-"}</TableCell>
+                      <TableCell className="font-mono text-xs">{fg.woNumber ?? "-"}</TableCell>
+                      <TableCell className="text-gray-500">{fg.unitCost && parseFloat(String(fg.unitCost)) > 0 ? `${fg.unitCost} ден.` : "-"}</TableCell>
+                      <TableCell className="text-gray-400 text-xs">{fg.updatedAt ? String(fg.updatedAt).split("T")[0] : "-"}</TableCell>
                     </TableRow>
                   ))}
               </TableBody>

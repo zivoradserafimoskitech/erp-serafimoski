@@ -9422,6 +9422,7 @@ var init_schema2 = __esm({
       id: serial("id").primaryKey(),
       productId: bigint4("product_id", { mode: "number", unsigned: true }).notNull(),
       warehouseId: bigint4("warehouse_id", { mode: "number", unsigned: true }).notNull(),
+      workOrderId: bigint4("work_order_id", { mode: "number", unsigned: true }),
       quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
       unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull().default("0"),
       notes: text("notes"),
@@ -9714,6 +9715,7 @@ function getInitSql() {
 	"id" serial PRIMARY KEY NOT NULL,
 	"product_id" bigint NOT NULL,
 	"warehouse_id" bigint NOT NULL,
+	"work_order_id" bigint,
 	"quantity" numeric(12, 3) DEFAULT '0' NOT NULL,
 	"unit_cost" numeric(12, 2) DEFAULT '0' NOT NULL,
 	"notes" text,
@@ -10338,6 +10340,7 @@ function getInitSql() {
     `ALTER TABLE "finished_goods_stock" ADD COLUMN IF NOT EXISTS "id" serial PRIMARY KEY`,
     `ALTER TABLE "finished_goods_stock" ADD COLUMN IF NOT EXISTS "product_id" bigint`,
     `ALTER TABLE "finished_goods_stock" ADD COLUMN IF NOT EXISTS "warehouse_id" bigint`,
+    `ALTER TABLE "finished_goods_stock" ADD COLUMN IF NOT EXISTS "work_order_id" bigint`,
     `ALTER TABLE "finished_goods_stock" ADD COLUMN IF NOT EXISTS "quantity" numeric(12, 3) DEFAULT '0'`,
     `ALTER TABLE "finished_goods_stock" ADD COLUMN IF NOT EXISTS "unit_cost" numeric(12, 2) DEFAULT '0'`,
     `ALTER TABLE "finished_goods_stock" ADD COLUMN IF NOT EXISTS "notes" text`,
@@ -32510,10 +32513,12 @@ var productionRouter = createRouter({
     actualStart: external_exports.string().optional(),
     actualEnd: external_exports.string().optional(),
     assignedTo: external_exports.string().optional(),
-    notes: external_exports.string().optional()
+    notes: external_exports.string().optional(),
+    producedQty: external_exports.string().optional(),
+    producedUnit: external_exports.string().optional()
   })).mutation(async ({ input }) => {
     const db2 = getDb();
-    const { id, ...data } = input;
+    const { id, producedQty, producedUnit, ...data } = input;
     const updateData = { ...data };
     if (data.plannedStart) updateData.plannedStart = new Date(data.plannedStart);
     if (data.plannedEnd) updateData.plannedEnd = new Date(data.plannedEnd);
@@ -32521,8 +32526,60 @@ var productionRouter = createRouter({
     if (data.actualEnd) updateData.actualEnd = new Date(data.actualEnd);
     if (data.status === "in_progress" && !data.actualStart) updateData.actualStart = /* @__PURE__ */ new Date();
     if (data.status === "completed" && !data.actualEnd) updateData.actualEnd = /* @__PURE__ */ new Date();
+    let finishedGoodsRegistered = false;
+    if (data.status === "completed") {
+      const existing = await db2.select().from(workOrders).where(eq(workOrders.id, id));
+      const wo = existing[0];
+      if (wo && wo.status !== "completed") {
+        const already = await db2.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.workOrderId, id));
+        if (already.length === 0) {
+          const allWh = await db2.select().from(warehouses);
+          let fgWh = allWh.find((w) => w.code === "GL-PROD") || allWh.find((w) => w.type === "finished_goods");
+          if (!fgWh) {
+            const created = await db2.insert(warehouses).values({
+              code: "GL-PROD",
+              name: "\u0413\u043B\u0430\u0432\u0435\u043D \u041C\u0430\u0433\u0430\u0446\u0438\u043D - \u041F\u0440\u043E\u0438\u0437\u0432\u043E\u0434\u0438",
+              type: "finished_goods",
+              isActive: "active"
+            });
+            const newId = Number(created[0].insertId);
+            const re = await db2.select().from(warehouses).where(eq(warehouses.id, newId));
+            fgWh = re[0];
+          }
+          const prodCode = `\u041F\u0420\u041E-${wo.woNumber}`.slice(0, 100);
+          const existingProd = await db2.select().from(products).where(eq(products.code, prodCode));
+          let productId;
+          if (existingProd[0]) {
+            productId = existingProd[0].id;
+          } else {
+            const insertedProd = await db2.insert(products).values({
+              name: (wo.description || `\u041F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 \u043E\u0434 \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}`).slice(0, 255),
+              code: prodCode,
+              category: "\u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434\u0441\u0442\u0432\u043E",
+              unit: producedUnit || "\u043A\u043E\u043C",
+              basis: "piece",
+              isActive: "active"
+            });
+            productId = Number(insertedProd[0].insertId);
+          }
+          const qty = parseFloat(producedQty || "1") || 1;
+          const cost = parseFloat(String(wo.costAmount || "0")) || 0;
+          const unitCost = qty > 0 && cost > 0 ? (cost / qty).toFixed(2) : "0";
+          await db2.insert(finishedGoodsStock).values({
+            productId,
+            warehouseId: fgWh.id,
+            workOrderId: id,
+            quantity: qty.toFixed(3),
+            unitCost,
+            notes: `\u041F\u0440\u043E\u0438\u0437\u0432\u0435\u0434\u0435\u043D\u043E \u043F\u043E \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}`
+          });
+          finishedGoodsRegistered = true;
+          await logAudit({ action: "CREATE", entityType: "finished_goods", entityId: id, description: `\u0417\u0430\u0432\u0435\u0434\u0435\u043D\u0438 ${qty} ${producedUnit || "\u043A\u043E\u043C"} \u0433\u043E\u0442\u043E\u0432 \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 \u0432\u043E \u0413\u041B-\u041F\u0420\u041E\u0414 \u043E\u0434 \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}` });
+        }
+      }
+    }
     await db2.update(workOrders).set(updateData).where(eq(workOrders.id, id));
-    return { success: true };
+    return { success: true, finishedGoodsRegistered };
   }),
   workOrderDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
     const db2 = getDb();
@@ -35491,8 +35548,10 @@ var accountingRouter = createRouter({
       quantity: external_exports.string(),
       unit: external_exports.string().default("\u043A\u043E\u043C"),
       unitPrice: external_exports.string().default("0"),
-      totalPrice: external_exports.string(),
-      notes: external_exports.string().optional()
+      totalPrice: external_exports.string().default("0"),
+      notes: external_exports.string().optional(),
+      productId: external_exports.number().optional(),
+      itemType: external_exports.enum(["product", "material", "manual"]).default("manual")
     })).optional()
   })).mutation(async ({ input }) => {
     {
@@ -35502,6 +35561,18 @@ var accountingRouter = createRouter({
     }
     const db2 = getDb();
     const { items, ...data } = input;
+    if (items) {
+      for (const item of items) {
+        if (item.itemType === "product" && item.productId) {
+          const stock = await db2.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.productId, item.productId));
+          const totalStock = stock.reduce((sum2, s) => sum2 + parseFloat(String(s.quantity)), 0);
+          const qty = parseFloat(item.quantity) || 0;
+          if (totalStock < qty) {
+            throw new Error(`\u041D\u0435\u043C\u0430 \u0434\u043E\u0432\u043E\u043B\u043D\u043E \u0437\u0430\u043B\u0438\u0445\u0430 \u043D\u0430 \u0433\u043E\u0442\u043E\u0432 \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 \u201E${item.description}". \u041D\u0430 \u0437\u0430\u043B\u0438\u0445\u0430: ${totalStock.toFixed(3)}, \u043F\u043E\u0442\u0440\u0435\u0431\u043D\u043E: ${qty.toFixed(3)}`);
+          }
+        }
+      }
+    }
     const result = await db2.insert(deliveryNotes).values({
       ...data,
       issueDate: new Date(data.issueDate),
@@ -35511,11 +35582,50 @@ var accountingRouter = createRouter({
     const insertId = Number(result[0].insertId);
     if (items && items.length > 0) {
       await db2.insert(documentItems).values(items.map((i) => ({ ...i, documentId: insertId, documentType: "delivery_note" })));
+      for (const item of items) {
+        if (item.itemType === "product" && item.productId) {
+          const stockEntries = await db2.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.productId, item.productId)).orderBy(finishedGoodsStock.id);
+          let remainingQty = parseFloat(item.quantity) || 0;
+          for (const entry of stockEntries) {
+            if (remainingQty <= 0) break;
+            const entryQty = parseFloat(String(entry.quantity));
+            const deduct = Math.min(entryQty, remainingQty);
+            await db2.update(finishedGoodsStock).set({ quantity: (entryQty - deduct).toFixed(3), updatedAt: /* @__PURE__ */ new Date() }).where(eq(finishedGoodsStock.id, entry.id));
+            remainingQty -= deduct;
+          }
+        }
+      }
     }
+    await logAudit({ action: "CREATE", entityType: "delivery_note", entityId: insertId, description: `\u041A\u0440\u0435\u0438\u0440\u0430\u043D\u0430 \u0438\u0441\u043F\u0440\u0430\u0442\u043D\u0438\u0446\u0430 ${data.dnNumber}` }).catch(() => {
+    });
     return { success: true, id: insertId };
   }),
   deliveryNoteDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
     const db2 = getDb();
+    const items = await db2.select().from(documentItems).where(and(eq(documentItems.documentId, input.id), eq(documentItems.documentType, "delivery_note")));
+    for (const item of items) {
+      if (item.itemType === "product" && item.productId) {
+        const qty = parseFloat(String(item.quantity)) || 0;
+        if (qty <= 0) continue;
+        const stockEntries = await db2.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.productId, item.productId)).orderBy(finishedGoodsStock.id);
+        if (stockEntries.length > 0) {
+          const entry = stockEntries[stockEntries.length - 1];
+          await db2.update(finishedGoodsStock).set({ quantity: (parseFloat(String(entry.quantity)) + qty).toFixed(3), updatedAt: /* @__PURE__ */ new Date() }).where(eq(finishedGoodsStock.id, entry.id));
+        } else {
+          const allWh = await db2.select().from(warehouses);
+          const fgWh = allWh.find((w) => w.code === "GL-PROD") || allWh.find((w) => w.type === "finished_goods");
+          if (fgWh) {
+            await db2.insert(finishedGoodsStock).values({
+              productId: item.productId,
+              warehouseId: fgWh.id,
+              quantity: qty.toFixed(3),
+              unitCost: "0",
+              notes: `\u0412\u0440\u0430\u0442\u0435\u043D\u043E \u043E\u0434 \u0438\u0437\u0431\u0440\u0438\u0448\u0430\u043D\u0430 \u0438\u0441\u043F\u0440\u0430\u0442\u043D\u0438\u0446\u0430`
+            });
+          }
+        }
+      }
+    }
     await db2.delete(documentItems).where(and(eq(documentItems.documentId, input.id), eq(documentItems.documentType, "delivery_note")));
     await db2.delete(deliveryNotes).where(eq(deliveryNotes.id, input.id));
     return { success: true };
@@ -35832,11 +35942,18 @@ var accountingRouter = createRouter({
       id: finishedGoodsStock.id,
       productId: finishedGoodsStock.productId,
       warehouseId: finishedGoodsStock.warehouseId,
+      workOrderId: finishedGoodsStock.workOrderId,
       quantity: finishedGoodsStock.quantity,
       unitCost: finishedGoodsStock.unitCost,
       notes: finishedGoodsStock.notes,
-      updatedAt: finishedGoodsStock.updatedAt
-    }).from(finishedGoodsStock);
+      updatedAt: finishedGoodsStock.updatedAt,
+      productName: products.name,
+      productCode: products.code,
+      unit: products.unit,
+      warehouseName: warehouses.name,
+      warehouseCode: warehouses.code,
+      woNumber: workOrders.woNumber
+    }).from(finishedGoodsStock).leftJoin(products, eq(finishedGoodsStock.productId, products.id)).leftJoin(warehouses, eq(finishedGoodsStock.warehouseId, warehouses.id)).leftJoin(workOrders, eq(finishedGoodsStock.workOrderId, workOrders.id)).orderBy(desc(finishedGoodsStock.updatedAt));
   }),
   finishedGoodsByProduct: publicQuery.input(external_exports.object({ productId: external_exports.number() })).query(async ({ input }) => {
     const db2 = getDb();
@@ -35875,7 +35992,7 @@ var accountingRouter = createRouter({
       name: products.name,
       code: products.code,
       unit: products.unit,
-      price: products.price,
+      price: products.defaultPrice,
       category: products.category
     }).from(products).where(eq(products.isActive, "active"));
   }),
@@ -35886,7 +36003,7 @@ var accountingRouter = createRouter({
       name: services.name,
       code: services.code,
       unit: services.unit,
-      price: services.price,
+      price: services.saleRate,
       type: services.type
     }).from(services).where(eq(services.isActive, "active"));
   })

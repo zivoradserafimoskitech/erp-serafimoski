@@ -44,6 +44,8 @@ export default function Production() {
   const { data: nextWorkOrderNum } = trpc.settings.nextDocNumber.useQuery({ kind: "workOrder" }, { enabled: dialogOpen });
   const [detailOpen, setDetailOpen] = useState(false);
   const [selWO, setSelWO] = useState<number | null>(null);
+  const [completeWO, setCompleteWO] = useState<{ id: number; woNumber: string } | null>(null);
+  const [completeForm, setCompleteForm] = useState({ producedQty: "1", producedUnit: "ком" });
 
   const [form, setForm] = useState({ woNumber: "", description: "", priority: "normal", plannedStart: "", plannedEnd: "", assignedTo: "", notes: "" });
   const [opForm, setOpForm] = useState({ operation: "cutting_laser" as keyof typeof opList, sequence: 1, description: "", estimatedTime: "", operator: "" });
@@ -63,7 +65,11 @@ export default function Production() {
     onSuccess: () => { utils.production.workOrderList.invalidate(); utils.production.productionStats.invalidate(); setDialogOpen(false); setForm({ woNumber: "", description: "", priority: "normal", plannedStart: "", plannedEnd: "", assignedTo: "", notes: "" }); },
   });
   const updateMut = trpc.production.workOrderUpdate.useMutation({
-    onSuccess: () => { utils.production.workOrderList.invalidate(); utils.production.productionStats.invalidate(); utils.production.workOrderById.invalidate(); },
+    onSuccess: (data: any) => {
+      utils.production.workOrderList.invalidate(); utils.production.productionStats.invalidate(); utils.production.workOrderById.invalidate(); utils.accounting.finishedGoodsList.invalidate();
+      if (data?.finishedGoodsRegistered) toast.success("Налогот е завршен — готовиот производ е заведен во магацинот ГЛ-ПРОД 📦");
+    },
+    onError: (e) => toast.error(e.message),
   });
   const deleteMut = trpc.production.workOrderDelete.useMutation({
     onSuccess: () => { utils.production.workOrderList.invalidate(); utils.production.productionStats.invalidate(); },
@@ -201,7 +207,7 @@ export default function Production() {
                         <TableCell className="text-gray-500">{parseFloat(wo.costAmount ?? "0").toFixed(2)} ден</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Select value={wo.status} onValueChange={(v) => updateMut.mutate({ id: wo.id, status: v as any })}>
+                            <Select value={wo.status} onValueChange={(v) => { if (v === "completed" && wo.status !== "completed") { setCompleteForm({ producedQty: "1", producedUnit: "ком" }); setCompleteWO({ id: wo.id, woNumber: wo.woNumber }); } else { updateMut.mutate({ id: wo.id, status: v as any }); } }}>
                               <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
                               <SelectContent>{Object.entries(statusCfg).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>
                             </Select>
@@ -216,6 +222,27 @@ export default function Production() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Дијалог за завршување на налог — произведена количина */}
+      <Dialog open={!!completeWO} onOpenChange={(o) => { if (!o) setCompleteWO(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Заврши налог {completeWO?.woNumber}</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-500">Произведеното автоматски влегува во магацинот за готови производи (ГЛ-ПРОД).</p>
+          <div className="grid grid-cols-[1fr_6rem] gap-3">
+            <div className="space-y-2"><Label>Произведена количина *</Label><Input type="number" step="0.001" min="0.001" value={completeForm.producedQty} onChange={(e) => setCompleteForm({ ...completeForm, producedQty: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Единица</Label>
+              <Select value={completeForm.producedUnit} onValueChange={(v) => setCompleteForm({ ...completeForm, producedUnit: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="ком">ком</SelectItem><SelectItem value="kg">кг</SelectItem><SelectItem value="m">м</SelectItem><SelectItem value="m2">м²</SelectItem></SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={updateMut.isPending || !parseFloat(completeForm.producedQty)}
+            onClick={() => { if (!completeWO) return; updateMut.mutate({ id: completeWO.id, status: "completed", producedQty: completeForm.producedQty, producedUnit: completeForm.producedUnit } as any); setCompleteWO(null); }}>
+            {updateMut.isPending ? "Се зачувува..." : "Заврши и заведи во ГЛ-ПРОД"}
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">

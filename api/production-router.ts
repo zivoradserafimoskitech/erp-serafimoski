@@ -3,7 +3,7 @@ import { eq, desc } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { workOrders, workOrderOperations, workOrderMaterials, orders, materials } from "@db/schema";
+import { workOrders, workOrderOperations, workOrderMaterials, orders, materials, warehouses, products, finishedGoodsStock } from "@db/schema";
 import { logAudit } from "./audit-helper";
 
 export const productionRouter = createRouter({
@@ -106,10 +106,12 @@ export const productionRouter = createRouter({
       actualEnd: z.string().optional(),
       assignedTo: z.string().optional(),
       notes: z.string().optional(),
+      producedQty: z.string().optional(),
+      producedUnit: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const { id, ...data } = input;
+      const { id, producedQty, producedUnit, ...data } = input;
       const updateData: any = { ...data };
       if (data.plannedStart) updateData.plannedStart = new Date(data.plannedStart);
       if (data.plannedEnd) updateData.plannedEnd = new Date(data.plannedEnd);
@@ -119,8 +121,65 @@ export const productionRouter = createRouter({
       if (data.status === "in_progress" && !data.actualStart) updateData.actualStart = new Date();
       if (data.status === "completed" && !data.actualEnd) updateData.actualEnd = new Date();
 
+      // При премин во „Завршен" — автоматски влез во магацинот за готови производи (ГЛ-ПРОД)
+      let finishedGoodsRegistered = false;
+      if (data.status === "completed") {
+        const existing = await db.select().from(workOrders).where(eq(workOrders.id, id));
+        const wo = existing[0];
+        if (wo && wo.status !== "completed") {
+          // Дупликат-заштита: провери дали веќе има запис за овој налог
+          const already = await db.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.workOrderId, id));
+          if (already.length === 0) {
+            // Најди го магацинот за готови производи
+            const allWh = await db.select().from(warehouses);
+            let fgWh = allWh.find(w => w.code === "GL-PROD") || allWh.find(w => w.type === "finished_goods");
+            if (!fgWh) {
+              const created = await db.insert(warehouses).values({
+                code: "GL-PROD", name: "Главен Магацин - Производи", type: "finished_goods", isActive: "active",
+              } as any);
+              const newId = Number(created[0].insertId);
+              const re = await db.select().from(warehouses).where(eq(warehouses.id, newId));
+              fgWh = re[0];
+            }
+
+            // Најди или создај производ поврзан со налогот
+            const prodCode = `ПРО-${wo.woNumber}`.slice(0, 100);
+            const existingProd = await db.select().from(products).where(eq(products.code, prodCode));
+            let productId: number;
+            if (existingProd[0]) {
+              productId = existingProd[0].id;
+            } else {
+              const insertedProd = await db.insert(products).values({
+                name: (wo.description || `Производ од налог ${wo.woNumber}`).slice(0, 255),
+                code: prodCode,
+                category: "производство",
+                unit: producedUnit || "ком",
+                basis: "piece",
+                isActive: "active",
+              } as any);
+              productId = Number(insertedProd[0].insertId);
+            }
+
+            const qty = parseFloat(producedQty || "1") || 1;
+            const cost = parseFloat(String(wo.costAmount || "0")) || 0;
+            const unitCost = qty > 0 && cost > 0 ? (cost / qty).toFixed(2) : "0";
+
+            await db.insert(finishedGoodsStock).values({
+              productId,
+              warehouseId: fgWh!.id,
+              workOrderId: id,
+              quantity: qty.toFixed(3),
+              unitCost,
+              notes: `Произведено по налог ${wo.woNumber}`,
+            } as any);
+            finishedGoodsRegistered = true;
+            await logAudit({ action: "CREATE", entityType: "finished_goods", entityId: id, description: `Заведени ${qty} ${producedUnit || "ком"} готов производ во ГЛ-ПРОД од налог ${wo.woNumber}` });
+          }
+        }
+      }
+
       await db.update(workOrders).set(updateData).where(eq(workOrders.id, id));
-      return { success: true };
+      return { success: true, finishedGoodsRegistered };
     }),
 
   workOrderDelete: publicQuery
