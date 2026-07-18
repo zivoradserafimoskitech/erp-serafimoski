@@ -21,7 +21,7 @@ function shell(title: string, accent: string, body: string) {
   @page { size: A4; margin: 0; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid var(--accent); padding-bottom: 11px; }
   .co { display: flex; gap: 12px; align-items: center; }
-  .co img { height: 44px; max-width: 210px; object-fit: contain; }
+  .co img { max-height: 46px; max-width: 280px; object-fit: contain; object-position: left; }
   .co h1 { font-size: 17px; color: var(--accent); letter-spacing: .3px; }
   .co .sub { font-size: 9.5px; color: #555; line-height: 1.55; margin-top: 2px; }
   .doc { text-align: right; }
@@ -62,7 +62,7 @@ function shell(title: string, accent: string, body: string) {
 }
 
 function header(s: any, docTitle: string, docNum: string, metaHtml: string) {
-  const logo = s?.logoUrl || "/logo.png";
+  const logo = "/logo.png?v=2";
   return `<div class="head">
     <div class="co">
       <img src="${esc(logo)}" alt="" onerror="this.style.display='none'">
@@ -245,7 +245,7 @@ export function printQuotation(q: any, settings: any) {
   const c = q?.customer ?? {};
   const items: any[] = q?.items ?? [];
   const vatRate = Number(q?.vatRate ?? s?.defaultVatRate ?? 18);
-  const logo = s?.logoUrl || "/logo.png";
+  const logo = "/logo.png?v=2";
   const rows = items.map((it, i) => `<tr>
     <td class="c dim">${String(i + 1).padStart(2, "0")}</td><td class="desc">${esc(it.description)}</td><td class="c dim">${esc(it.unit ?? "")}</td>
     <td class="r">${den(it.quantity)}</td><td class="r">${den(it.unitPrice)}</td>
