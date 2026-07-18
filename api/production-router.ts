@@ -178,7 +178,7 @@ export const productionRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db.insert(workOrderOperations).values(input as any);
+      await db.insert(workOrderOperations).values({ status: "pending", ...(input as any) });
       return { success: true };
     }),
 

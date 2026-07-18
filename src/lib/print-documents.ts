@@ -16,12 +16,12 @@ function shell(title: string, accent: string, body: string) {
 <html lang="mk"><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  :root { --accent: ${accent}; --dark: #1f2937; }
+  :root { --accent: ${accent}; --dark: #16112b; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 13mm 12mm; }
   @page { size: A4; margin: 0; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid var(--accent); padding-bottom: 11px; }
   .co { display: flex; gap: 12px; align-items: center; }
-  .co img { height: 52px; max-width: 150px; object-fit: contain; }
+  .co img { height: 44px; max-width: 210px; object-fit: contain; }
   .co h1 { font-size: 17px; color: var(--accent); letter-spacing: .3px; }
   .co .sub { font-size: 9.5px; color: #555; line-height: 1.55; margin-top: 2px; }
   .doc { text-align: right; }
@@ -104,6 +104,7 @@ function openPrint(html: string) {
 
 // ══════════════ ФАКТУРА ══════════════
 export function printInvoice(inv: any, settings: any) {
+  const docTitle = String(inv?.invoiceType ?? "").includes("proforma") ? "ПРО-ФАКТУРА" : "ФАКТУРА";
   const c = inv?.customer ?? {};
   const s = settings ?? {};
   const items: any[] = inv?.items ?? [];
@@ -115,7 +116,7 @@ export function printInvoice(inv: any, settings: any) {
       <td class="r"><b>${den(it.totalPrice)}</b></td></tr>`).join("");
 
   const body = `
-  ${header(s, "ФАКТУРА", "бр. " + (inv?.invoiceNumber ?? ""), `
+  ${header(s, docTitle, "бр. " + (inv?.invoiceNumber ?? ""), `
     Датум на издавање: <b>${dt(inv?.issueDate)}</b><br>
     Рок за плаќање: <b>${dt(inv?.dueDate)}</b><br>
     Валута: ${esc(inv?.currency ?? "MKD")}`)}
@@ -151,7 +152,7 @@ export function printInvoice(inv: any, settings: any) {
   ${inv?.notes ? `<div class="notes"><b>Забелешка:</b> ${esc(inv.notes)}</div>` : ""}
   <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Одобрил</div></div><div class="sig"><div class="line">Примил</div></div></div>
   ${footer(s)}`;
-  openPrint(shell(`Фактура ${inv?.invoiceNumber ?? ""}`, "#d97706", body));
+  openPrint(shell(`${docTitle} ${inv?.invoiceNumber ?? ""}`, "#3a72b8", body));
 }
 
 // ══════════════ РАБОТЕН НАЛОГ ══════════════
@@ -197,7 +198,7 @@ export function printWorkOrder(wo: any, settings: any) {
   ${wo?.notes ? `<div class="notes"><b>Забелешка:</b> ${esc(wo.notes)}</div>` : ""}
   <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Работник</div></div><div class="sig"><div class="line">Контролирал</div></div></div>
   ${footer(s)}`;
-  openPrint(shell(`Работен налог ${wo?.woNumber ?? ""}`, "#2563eb", body));
+  openPrint(shell(`Работен налог ${wo?.woNumber ?? ""}`, "#3a72b8", body));
 }
 
 // ══════════════ ИСПРАТНИЦА ══════════════
@@ -235,7 +236,7 @@ export function printDeliveryNote(dn: any, settings: any) {
   <div class="box">Стоката е испорачана комплетна и неоштетена. Примачот со потпис ја потврдува испораката.${dn?.notes ? "<br><b>Забелешка:</b> " + esc(dn.notes) : ""}</div>
   <div class="sigs"><div class="sig"><div class="line">Издал</div></div><div class="sig"><div class="line">Превезол</div></div><div class="sig"><div class="line">Примил (потпис и печат)</div></div></div>
   ${footer(s)}`;
-  openPrint(shell(`Испратница ${dn?.dnNumber ?? ""}`, "#059669", body));
+  openPrint(shell(`Испратница ${dn?.dnNumber ?? ""}`, "#3a72b8", body));
 }
 
 // ══════════════ ПОНУДА ══════════════
@@ -286,7 +287,7 @@ export function printQuotation(q: any, settings: any) {
   ${q?.notes ? `<div class="notes"><b>Забелешка:</b> ${esc(q.notes)}</div>` : ""}
   <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Одобрил</div></div></div>
   ${footer(s)}`;
-  openPrint(shell(`Понуда ${q?.quoteNumber ?? ""}`, "#7c3aed", body));
+  openPrint(shell(`Понуда ${q?.quoteNumber ?? ""}`, "#3a72b8", body));
 }
 
 // ══════════════ ТРЕБОВАЊЕ (врзано со работен налог) ══════════════
@@ -318,5 +319,39 @@ export function printRequisition(wo: any, settings: any) {
   </tr></thead><tbody>${rows || `<tr><td colspan="7" class="c" style="padding:12px;color:#999">Нема материјали на налогот — додај ги прво во деталите</td></tr>`}</tbody></table>
   <div class="sigs"><div class="sig"><div class="line">Побарал</div></div><div class="sig"><div class="line">Одобрил</div></div><div class="sig"><div class="line">Издал (магационер)</div></div><div class="sig"><div class="line">Примил</div></div></div>
   ${footer(s)}`;
-  openPrint(shell(`Требовање ${trbNumber}`, "#0d9488", body));
+  openPrint(shell(`Требовање ${trbNumber}`, "#3a72b8", body));
+}
+
+// ══════════════ ПРИЕМНИЦА ══════════════
+export function printReceipt(rc: any, settings: any) {
+  const s = settings ?? {};
+  const sup = rc?.supplier ?? {};
+  const items: any[] = rc?.items ?? [];
+  const rows = items.map((it: any, i: number) => `<tr>
+    <td class="c">${i + 1}</td><td>${esc(it.materialName ?? it.description ?? "—")}</td>
+    <td class="c">${esc(it.unit ?? "")}</td><td class="r">${den(it.quantity)}</td>
+    <td class="r">${den(it.unitPrice)}</td><td class="r"><b>${den(it.totalPrice)}</b></td></tr>`).join("");
+  const body = `
+  ${header(s, "ПРИЕМНИЦА", rc?.receiptNumber ?? "", `
+    Датум: <b>${dt(rc?.receiptDate ?? rc?.createdAt)}</b><br>
+    Документ од добавувач: <b>${esc(rc?.supplierDocNumber || "—")}</b>`)}
+  <div class="parties">
+    <div class="party"><h3>Примач</h3>
+      <div class="n">${esc(s?.name ?? "Serafimoski Tech DOOEL")}</div>
+      <div>${esc(s?.address ?? "")}</div><div>ЕДБ: ${esc(s?.edb ?? "—")}</div>
+    </div>
+    <div class="party"><h3>Добавувач</h3>
+      <div class="n">${esc(sup.name ?? rc?.supplierName ?? "—")}</div>
+      <div>${esc([sup.address, sup.city].filter(Boolean).join(", "))}</div>
+      ${sup.phone ? `<div>тел: ${esc(sup.phone)}</div>` : ""}
+    </div>
+  </div>
+  <table class="t"><thead><tr>
+    <th class="c" style="width:26px">#</th><th>Материјал</th><th class="c" style="width:42px">ЕМ</th>
+    <th class="r" style="width:70px">Кол.</th><th class="r" style="width:80px">Цена</th><th class="r" style="width:88px">Вкупно</th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="6" class="c" style="padding:12px;color:#999">Нема ставки</td></tr>`}</tbody></table>
+  <div class="totals"><div class="row grand"><span>ВКУПНО:</span><span>${den(rc?.totalAmount)} ден.</span></div></div>
+  <div class="sigs"><div class="sig"><div class="line">Примил (магационер)</div></div><div class="sig"><div class="line">Контролирал</div></div><div class="sig"><div class="line">Испорачал</div></div></div>
+  ${footer(s)}`;
+  openPrint(shell(`Приемница ${rc?.receiptNumber ?? ""}`, "#3a72b8", body));
 }

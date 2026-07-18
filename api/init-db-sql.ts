@@ -1199,5 +1199,6 @@ export function getInitSql(): string[] {
     `ALTER TABLE "work_order_operations" ALTER COLUMN "status" SET DEFAULT 'pending'`,
     `ALTER TABLE "work_orders" ALTER COLUMN "status" SET DEFAULT 'pending'`,
     `ALTER TABLE "work_orders" ALTER COLUMN "priority" SET DEFAULT 'normal'`,
+    `ALTER TABLE "work_orders" ADD COLUMN IF NOT EXISTS "quotation_id" bigint`,
   ];
 }

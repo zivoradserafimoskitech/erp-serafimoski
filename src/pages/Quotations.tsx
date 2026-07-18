@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -65,6 +66,11 @@ export default function Quotations() {
   const { data: productsData } = trpc.quotation.productList.useQuery({ search: search || undefined });
 
   const [qDialog, setQDialog] = useState(false);
+  const [customDialog, setCustomDialog] = useState(false);
+  const [customForm, setCustomForm] = useState({ name: "", unit: "pcs", quantity: "1", salePrice: "" });
+  const [estMats, setEstMats] = useState<{ materialId: number; name: string; quantity: string; price: number }[]>([]);
+  const [estSvcs, setEstSvcs] = useState<{ serviceId: number; name: string; quantity: string; rate: number }[]>([]);
+  const estCost = estMats.reduce((a, m) => a + Number(m.quantity || 0) * m.price, 0) + estSvcs.reduce((a, s) => a + Number(s.quantity || 0) * s.rate, 0);
   const { data: nextQNum } = trpc.quotation.quotationNextNumber.useQuery(undefined, { enabled: qDialog });
   const [svcDialog, setSvcDialog] = useState(false);
   const [prodDialog, setProdDialog] = useState(false);
@@ -74,6 +80,7 @@ export default function Quotations() {
   const [convOrderNum, setConvOrderNum] = useState("");
 
   const { data: companySettings } = trpc.settings.settingsGet.useQuery();
+  const quoToWO = trpc.quotation.quotationToWorkOrder.useMutation({ onSuccess: (d) => toast.success(`Креиран налог ${d.woNumber} (${d.materialsCopied} материјали од естимација)`) });
   const { data: qDetail } = trpc.quotation.quotationById.useQuery({ id: selQ! }, { enabled: !!selQ });
 
   const [qForm, setQForm] = useState({
@@ -240,6 +247,7 @@ export default function Quotations() {
                         </Select>
                       </div>
                     </div>
+                    <Button type="button" size="sm" variant="outline" className="w-full border-dashed" onClick={() => { setCustomForm({ name: "", unit: "pcs", quantity: "1", salePrice: "" }); setEstMats([]); setEstSvcs([]); setCustomDialog(true); }}>+ Custom производ (со интерна естимација)</Button>
 
                     {/* Items table */}
                     {qItems.length > 0 && (
@@ -276,6 +284,46 @@ export default function Quotations() {
                     {qForm.customerId && qItems.length === 0 && <p className="text-xs text-red-500 text-center">Додади барем една ставка (материјал, услуга или производ)</p>}
                   </div>
                 </form>
+                <Dialog open={customDialog} onOpenChange={setCustomDialog}>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader><DialogTitle>Custom производ</DialogTitle></DialogHeader>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-[1fr_5rem_5rem_7rem] gap-2">
+                        <div className="space-y-1"><Label className="text-xs">Назив *</Label><Input value={customForm.name} onChange={e => setCustomForm({ ...customForm, name: e.target.value })} /></div>
+                        <div className="space-y-1"><Label className="text-xs">ЕМ</Label><Input value={customForm.unit} onChange={e => setCustomForm({ ...customForm, unit: e.target.value })} /></div>
+                        <div className="space-y-1"><Label className="text-xs">Кол.</Label><Input type="number" value={customForm.quantity} onChange={e => setCustomForm({ ...customForm, quantity: e.target.value })} /></div>
+                        <div className="space-y-1"><Label className="text-xs">Прод. цена/ЕМ</Label><Input type="number" value={customForm.salePrice} onChange={e => setCustomForm({ ...customForm, salePrice: e.target.value })} /></div>
+                      </div>
+                      <div className="border rounded-lg p-3 bg-blue-50/40 space-y-2">
+                        <p className="text-xs font-semibold text-blue-800">Интерна естимација — само за тебе, не влегува во понудата</p>
+                        <div className="grid grid-cols-[1fr_6rem_auto] gap-2 items-end">
+                          <MaterialPicker materials={materialsData as any} value={null} placeholder="+ материјал во естимација…"
+                            onSelect={(m: any) => setEstMats([...estMats, { materialId: m.id, name: m.name, quantity: "1", price: Number(m.lastPurchasePrice ?? m.avgCost ?? 0) }])} />
+                          <Select onValueChange={v => { const s = servicesData?.find(x => x.id.toString() === v); if (s) setEstSvcs([...estSvcs, { serviceId: s.id, name: s.name, quantity: "1", rate: Number(s.costRate ?? s.saleRate ?? 0) }]); }}>
+                            <SelectTrigger className="text-xs"><SelectValue placeholder="+ услуга" /></SelectTrigger>
+                            <SelectContent>{servicesData?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <span className="text-xs text-gray-500 pb-2">трошок: <b>{estCost.toLocaleString("mk-MK")}</b> ден</span>
+                        </div>
+                        {[...estMats.map((m, i) => ({ kind: "m" as const, i, name: m.name, qty: m.quantity, rate: m.price })), ...estSvcs.map((s, i) => ({ kind: "s" as const, i, name: s.name, qty: s.quantity, rate: s.rate }))].map((row, idx) => (
+                          <div key={idx} className="grid grid-cols-[1fr_5rem_6rem_2rem] gap-2 items-center bg-white border rounded px-2 py-1">
+                            <span className="text-xs truncate">{row.kind === "m" ? "🔩" : "⚙️"} {row.name}</span>
+                            <Input className="h-7 text-xs" type="number" step="0.001" value={row.qty} onChange={e => row.kind === "m" ? setEstMats(estMats.map((m, j) => j === row.i ? { ...m, quantity: e.target.value } : m)) : setEstSvcs(estSvcs.map((s, j) => j === row.i ? { ...s, quantity: e.target.value } : s))} />
+                            <span className="text-xs text-right">{(Number(row.qty || 0) * row.rate).toLocaleString("mk-MK")} ден</span>
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => row.kind === "m" ? setEstMats(estMats.filter((_, j) => j !== row.i)) : setEstSvcs(estSvcs.filter((_, j) => j !== row.i))}>×</Button>
+                          </div>
+                        ))}
+                        {customForm.quantity && estCost > 0 && <p className="text-xs text-gray-600">Трошок по ЕМ: <b>{(estCost / Math.max(Number(customForm.quantity), 1)).toFixed(2)}</b> ден {customForm.salePrice && <>· маржа: <b>{(((Number(customForm.salePrice) * Number(customForm.quantity)) - estCost) / Math.max(estCost, 1) * 100).toFixed(0)}%</b></>}</p>}
+                      </div>
+                      <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={!customForm.name || !customForm.salePrice}
+                        onClick={() => {
+                          const notes = JSON.stringify({ materials: estMats.map(m => ({ materialId: m.materialId, quantity: Number(m.quantity) * Number(customForm.quantity || 1) })), services: estSvcs.map(s => ({ serviceId: s.serviceId, quantity: s.quantity })) });
+                          setQItems([...qItems, { itemType: "product", referenceId: null, description: customForm.name, quantity: customForm.quantity, unit: customForm.unit, unitPrice: customForm.salePrice, totalPrice: String(Number(customForm.salePrice) * Number(customForm.quantity || 1)), notes, sortOrder: qItems.length }]);
+                          setCustomDialog(false);
+                        }}>Додади во понуда</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </DialogContent>
             </Dialog>
           )}
@@ -449,7 +497,7 @@ export default function Quotations() {
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Понуда {qDetail?.quoteNumber}<Button size="sm" variant="outline" onClick={() => qDetail && printQuotation(qDetail, companySettings)}>Печати / PDF</Button></DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Понуда {qDetail?.quoteNumber}<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => qDetail && quoToWO.mutate({ quotationId: qDetail.id })} disabled={quoToWO.isPending}>→ Налог</Button><Button size="sm" variant="outline" onClick={() => qDetail && printQuotation(qDetail, companySettings)}>Печати / PDF</Button></span></DialogTitle></DialogHeader>
           {qDetail && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">

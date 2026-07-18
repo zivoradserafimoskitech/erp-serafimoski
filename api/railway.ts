@@ -223,6 +223,41 @@ app.get("/favicon.ico", async (c) => {
   }
 });
 
+// Seed на стандардни услуги — идемпотентно
+app.get("/api/seed-services", async (c) => {
+  try {
+    const { Pool } = await import("pg");
+    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl });
+    const seed = [
+      { code: "ЛС-01", name: "Ласерско сечење", type: "laser_cutting", unit: "m_cut", saleRate: "60", costRate: "30" },
+      { code: "ПС-01", name: "Плазма сечење", type: "plasma_cutting", unit: "m_cut", saleRate: "50", costRate: "25" },
+      { code: "ВТ-01", name: "Виткање", type: "bending", unit: "bend", saleRate: "40", costRate: "20" },
+      { code: "МИГ-01", name: "МИГ заварување", type: "mig_welding", unit: "hour", saleRate: "900", costRate: "450" },
+      { code: "ТИГ-01", name: "ТИГ заварување", type: "tig_welding", unit: "hour", saleRate: "1100", costRate: "550" },
+      { code: "БР-01", name: "Брусење", type: "grinding", unit: "hour", saleRate: "700", costRate: "350" },
+      { code: "ДП-01", name: "Дупчење", type: "drilling", unit: "hour", saleRate: "700", costRate: "350" },
+      { code: "ЕФ-01", name: "Електростатско фарбање", type: "electrostatic_paint", unit: "m2", saleRate: "350", costRate: "180" },
+      { code: "МФ-01", name: "Мокро фарбање", type: "wet_paint", unit: "m2", saleRate: "300", costRate: "150" },
+      { code: "ЦНЦ-01", name: "ЦНЦ обработка", type: "cnc_machining", unit: "hour", saleRate: "1500", costRate: "750" },
+      { code: "МН-01", name: "Монтажа", type: "installation", unit: "hour", saleRate: "800", costRate: "400" },
+      { code: "ТП-01", name: "Транспорт", type: "transport", unit: "job", saleRate: "2000", costRate: "1200" }
+    ];
+    let created = 0, skipped = 0;
+    for (const s of seed) {
+      const res = await pool.query(
+        `INSERT INTO services (code, name, type, unit, sale_rate, cost_rate, is_active)
+         SELECT $1::varchar, $2::varchar, $3::varchar, $4::varchar, $5::numeric, $6::numeric, 'active'
+         WHERE NOT EXISTS (SELECT 1 FROM services WHERE code = $1::varchar OR name = $2::varchar)`,
+        [s.code, s.name, s.type, s.unit, s.saleRate, s.costRate]
+      );
+      if (res.rowCount) created++; else skipped++;
+    }
+    await pool.end();
+    return c.json({ status: "ok", created, skipped });
+  } catch (e: any) { return c.json({ status: "error", message: e.message }, 500); }
+});
+
 // Seed на материјали од ценовник — идемпотентно (прескокнува постоечки кодови)
 app.get("/api/seed-materials", async (c) => {
   try {

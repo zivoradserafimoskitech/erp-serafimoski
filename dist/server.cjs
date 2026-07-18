@@ -9110,6 +9110,7 @@ var init_schema2 = __esm({
       id: serial("id").primaryKey(),
       woNumber: varchar("wo_number", { length: 50 }).notNull().unique(),
       orderId: bigint4("order_id", { mode: "number", unsigned: true }),
+      quotationId: bigint4("quotation_id", { mode: "number", unsigned: true }),
       description: varchar("description", { length: 500 }).notNull(),
       status: varchar("status", { length: 50 }).notNull().default("pending"),
       priority: varchar("priority", { length: 50 }).notNull().default("normal"),
@@ -10768,7 +10769,8 @@ function getInitSql() {
     `ALTER TABLE "stock_transfers" ALTER COLUMN "status" SET DEFAULT 'pending'`,
     `ALTER TABLE "work_order_operations" ALTER COLUMN "status" SET DEFAULT 'pending'`,
     `ALTER TABLE "work_orders" ALTER COLUMN "status" SET DEFAULT 'pending'`,
-    `ALTER TABLE "work_orders" ALTER COLUMN "priority" SET DEFAULT 'normal'`
+    `ALTER TABLE "work_orders" ALTER COLUMN "priority" SET DEFAULT 'normal'`,
+    `ALTER TABLE "work_orders" ADD COLUMN IF NOT EXISTS "quotation_id" bigint`
   ];
 }
 var init_init_db_sql = __esm({
@@ -32573,7 +32575,7 @@ var productionRouter = createRouter({
     operator: external_exports.string().optional()
   })).mutation(async ({ input }) => {
     const db2 = getDb();
-    await db2.insert(workOrderOperations).values(input);
+    await db2.insert(workOrderOperations).values({ status: "pending", ...input });
     return { success: true };
   }),
   operationUpdate: publicQuery.input(external_exports.object({
@@ -36070,6 +36072,44 @@ var quotationRouter = createRouter({
     };
   }),
   // ===== QUOTATIONS =====
+  // Конверзија: прифатена понуда → работен налог (материјалите од ставки + естимации → wo_materials)
+  quotationToWorkOrder: publicQuery.input(external_exports.object({ quotationId: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const { workOrders: workOrders2, workOrderMaterials: workOrderMaterials2 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
+    const quo = await db2.select().from(quotations).where(eq(quotations.id, input.quotationId));
+    if (!quo[0]) throw new Error("\u041F\u043E\u043D\u0443\u0434\u0430\u0442\u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
+    const existing = await db2.select().from(workOrders2).where(eq(workOrders2.quotationId, input.quotationId)).catch(() => []);
+    if (existing.length > 0) throw new Error(`\u0417\u0430 \u043E\u0432\u0430\u0430 \u043F\u043E\u043D\u0443\u0434\u0430 \u0432\u0435\u045C\u0435 \u043F\u043E\u0441\u0442\u043E\u0438 \u043D\u0430\u043B\u043E\u0433 ${existing[0].woNumber}`);
+    const items = await db2.select().from(quotationItems).where(eq(quotationItems.quotationId, input.quotationId));
+    const { getNextDocNumber: getNextDocNumber2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+    const woNumber = await getNextDocNumber2("workOrder");
+    const res = await db2.insert(workOrders2).values({
+      woNumber,
+      quotationId: input.quotationId,
+      description: `\u041D\u0430\u043B\u043E\u0433 \u0437\u0430 \u043F\u043E\u043D\u0443\u0434\u0430 ${quo[0].quoteNumber}`,
+      status: "pending",
+      priority: "normal"
+    });
+    const woId = Number(res[0]?.insertId ?? 0);
+    let mats = 0;
+    for (const it of items) {
+      if (it.itemType === "material" && it.referenceId) {
+        await db2.insert(workOrderMaterials2).values({ workOrderId: woId, materialId: it.referenceId, quantity: it.quantity, isActual: 0 });
+        mats++;
+      }
+      if (it.itemType === "product" && it.notes) {
+        try {
+          const est = JSON.parse(it.notes);
+          for (const em of est?.materials ?? []) {
+            await db2.insert(workOrderMaterials2).values({ workOrderId: woId, materialId: em.materialId, quantity: String(em.quantity), isActual: 0 });
+            mats++;
+          }
+        } catch {
+        }
+      }
+    }
+    return { success: true, woNumber, materialsCopied: mats };
+  }),
   quotationNextNumber: publicQuery.query(async () => {
     const { peekNextDocNumber: peekNextDocNumber2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
     return peekNextDocNumber2("quote");
@@ -36133,7 +36173,7 @@ var quotationRouter = createRouter({
     notes: external_exports.string().optional(),
     items: external_exports.array(external_exports.object({
       itemType: external_exports.enum(["material", "service", "product"]),
-      referenceId: external_exports.number().optional(),
+      referenceId: external_exports.number().nullable().optional(),
       description: external_exports.string().min(1),
       quantity: external_exports.string(),
       unit: external_exports.string(),
@@ -38089,6 +38129,42 @@ app.get("/favicon.ico", async (c) => {
     return c.body(content, 200, { "Content-Type": "image/x-icon" });
   } catch {
     return c.notFound();
+  }
+});
+app.get("/api/seed-services", async (c) => {
+  try {
+    const { Pool: Pool4 } = await import("pg");
+    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
+    const pool3 = new Pool4({ connectionString: process.env.DATABASE_URL, ssl });
+    const seed = [
+      { code: "\u041B\u0421-01", name: "\u041B\u0430\u0441\u0435\u0440\u0441\u043A\u043E \u0441\u0435\u0447\u0435\u045A\u0435", type: "laser_cutting", unit: "m_cut", saleRate: "60", costRate: "30" },
+      { code: "\u041F\u0421-01", name: "\u041F\u043B\u0430\u0437\u043C\u0430 \u0441\u0435\u0447\u0435\u045A\u0435", type: "plasma_cutting", unit: "m_cut", saleRate: "50", costRate: "25" },
+      { code: "\u0412\u0422-01", name: "\u0412\u0438\u0442\u043A\u0430\u045A\u0435", type: "bending", unit: "bend", saleRate: "40", costRate: "20" },
+      { code: "\u041C\u0418\u0413-01", name: "\u041C\u0418\u0413 \u0437\u0430\u0432\u0430\u0440\u0443\u0432\u0430\u045A\u0435", type: "mig_welding", unit: "hour", saleRate: "900", costRate: "450" },
+      { code: "\u0422\u0418\u0413-01", name: "\u0422\u0418\u0413 \u0437\u0430\u0432\u0430\u0440\u0443\u0432\u0430\u045A\u0435", type: "tig_welding", unit: "hour", saleRate: "1100", costRate: "550" },
+      { code: "\u0411\u0420-01", name: "\u0411\u0440\u0443\u0441\u0435\u045A\u0435", type: "grinding", unit: "hour", saleRate: "700", costRate: "350" },
+      { code: "\u0414\u041F-01", name: "\u0414\u0443\u043F\u0447\u0435\u045A\u0435", type: "drilling", unit: "hour", saleRate: "700", costRate: "350" },
+      { code: "\u0415\u0424-01", name: "\u0415\u043B\u0435\u043A\u0442\u0440\u043E\u0441\u0442\u0430\u0442\u0441\u043A\u043E \u0444\u0430\u0440\u0431\u0430\u045A\u0435", type: "electrostatic_paint", unit: "m2", saleRate: "350", costRate: "180" },
+      { code: "\u041C\u0424-01", name: "\u041C\u043E\u043A\u0440\u043E \u0444\u0430\u0440\u0431\u0430\u045A\u0435", type: "wet_paint", unit: "m2", saleRate: "300", costRate: "150" },
+      { code: "\u0426\u041D\u0426-01", name: "\u0426\u041D\u0426 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u043A\u0430", type: "cnc_machining", unit: "hour", saleRate: "1500", costRate: "750" },
+      { code: "\u041C\u041D-01", name: "\u041C\u043E\u043D\u0442\u0430\u0436\u0430", type: "installation", unit: "hour", saleRate: "800", costRate: "400" },
+      { code: "\u0422\u041F-01", name: "\u0422\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442", type: "transport", unit: "job", saleRate: "2000", costRate: "1200" }
+    ];
+    let created = 0, skipped = 0;
+    for (const s of seed) {
+      const res = await pool3.query(
+        `INSERT INTO services (code, name, type, unit, sale_rate, cost_rate, is_active)
+         SELECT $1::varchar, $2::varchar, $3::varchar, $4::varchar, $5::numeric, $6::numeric, 'active'
+         WHERE NOT EXISTS (SELECT 1 FROM services WHERE code = $1::varchar OR name = $2::varchar)`,
+        [s.code, s.name, s.type, s.unit, s.saleRate, s.costRate]
+      );
+      if (res.rowCount) created++;
+      else skipped++;
+    }
+    await pool3.end();
+    return c.json({ status: "ok", created, skipped });
+  } catch (e) {
+    return c.json({ status: "error", message: e.message }, 500);
   }
 });
 app.get("/api/seed-materials", async (c) => {

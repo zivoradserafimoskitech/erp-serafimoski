@@ -219,6 +219,47 @@ export const quotationRouter = createRouter({
     }),
 
   // ===== QUOTATIONS =====
+
+  // Конверзија: прифатена понуда → работен налог (материјалите од ставки + естимации → wo_materials)
+  quotationToWorkOrder: publicQuery
+    .input(z.object({ quotationId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { workOrders, workOrderMaterials } = await import("@db/schema");
+      const quo = await db.select().from(quotations).where(eq(quotations.id, input.quotationId));
+      if (!quo[0]) throw new Error("Понудата не постои");
+      const existing = await db.select().from(workOrders).where(eq(workOrders.quotationId, input.quotationId)).catch(() => [] as any[]);
+      if (existing.length > 0) throw new Error(`За оваа понуда веќе постои налог ${existing[0].woNumber}`);
+      const items = await db.select().from(quotationItems).where(eq(quotationItems.quotationId, input.quotationId));
+      const { getNextDocNumber } = await import("./counters-helper");
+      const woNumber = await getNextDocNumber("workOrder");
+      const res = await db.insert(workOrders).values({
+        woNumber, quotationId: input.quotationId,
+        description: `Налог за понуда ${quo[0].quoteNumber}`,
+        status: "pending", priority: "normal",
+      } as any);
+      const woId = Number((res as any)[0]?.insertId ?? 0);
+      let mats = 0;
+      for (const it of items) {
+        // директни материјални ставки
+        if (it.itemType === "material" && it.referenceId) {
+          await db.insert(workOrderMaterials).values({ workOrderId: woId, materialId: it.referenceId, quantity: it.quantity, isActual: 0 } as any);
+          mats++;
+        }
+        // custom производ со интерна естимација (JSON во notes)
+        if (it.itemType === "product" && it.notes) {
+          try {
+            const est = JSON.parse(it.notes);
+            for (const em of est?.materials ?? []) {
+              await db.insert(workOrderMaterials).values({ workOrderId: woId, materialId: em.materialId, quantity: String(em.quantity), isActual: 0 } as any);
+              mats++;
+            }
+          } catch { /* не е JSON — прескокни */ }
+        }
+      }
+      return { success: true, woNumber, materialsCopied: mats };
+    }),
+
   quotationNextNumber: publicQuery.query(async () => {
     const { peekNextDocNumber } = await import("./counters-helper");
     return peekNextDocNumber("quote");
@@ -283,7 +324,7 @@ export const quotationRouter = createRouter({
       notes: z.string().optional(),
       items: z.array(z.object({
         itemType: z.enum(["material", "service", "product"]),
-        referenceId: z.number().optional(),
+        referenceId: z.number().nullable().optional(),
         description: z.string().min(1),
         quantity: z.string(),
         unit: z.string(),

@@ -367,6 +367,7 @@ export const workOrders = pgTable("work_orders", {
   id: serial("id").primaryKey(),
   woNumber: varchar("wo_number", { length: 50 }).notNull().unique(),
   orderId: bigint("order_id", { mode: "number", unsigned: true }),
+  quotationId: bigint("quotation_id", { mode: "number", unsigned: true }),
   description: varchar("description", { length: 500 }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   priority: varchar("priority", { length: 50 }).notNull().default("normal"),
