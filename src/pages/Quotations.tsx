@@ -231,35 +231,21 @@ export default function Quotations() {
                   {/* Add items section */}
                   <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
                     <h4 className="font-semibold text-sm">Додади ставки во понуда</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      {/* Materials */}
-                      <div className="space-y-1">
-                        <Label className="text-xs text-gray-500">Материјали</Label>
-                        <MaterialPicker materials={materialsData as any} value={null} placeholder="Избери материјал…"
-                          onSelect={(m: any) => addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0"))} />
-                      </div>
-                      {/* Services */}
-                      <div className="space-y-1">
-                        <Label className="text-xs text-gray-500">Услуги</Label>
-                        <Select onValueChange={v => { const s = servicesData?.find(x => x.id.toString() === v); if (s) addItem("service", s.id, s.name, svcUnits[s.unit] || s.unit, s.saleRate); }}>
-                          <SelectTrigger className="text-xs"><SelectValue placeholder="Избери услуга" /></SelectTrigger>
-                          <SelectContent className="max-h-60">
-                            {servicesData?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name} ({svcTypes[s.type]}) - {s.saleRate} ден/{svcUnits[s.unit]}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {/* Products with BOM estimator */}
-                      <div className="space-y-1">
-                        <Label className="text-xs text-gray-500">Производи (со естиматор)</Label>
-                        <Select onValueChange={v => { const p = productsData?.find(x => x.id.toString() === v); if (p) { setEstProduct(p.id); setEstForm({ area: "", perimeter: "", length: "", quantity: "1" }); setEstDialog(true); } }}>
-                          <SelectTrigger className="text-xs"><SelectValue placeholder="Избери производ за естимација" /></SelectTrigger>
-                          <SelectContent className="max-h-60">
-                            {productsData?.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.name} ({prodCats[p.category]}) - {p.defaultPrice} ден/{prodUnits[p.unit]}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <MaterialPicker tile={{ icon: "🔩", label: "Материјал" }} title="Избери материјал" materials={materialsData as any} value={null}
+                        onSelect={(m: any) => addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0"))} />
+                      <MaterialPicker tile={{ icon: "⚙️", label: "Услуга" }} title="Избери услуга" value={null}
+                        materials={servicesData?.map(sv => ({ id: sv.id, code: sv.code, name: sv.name, unit: svcUnits[sv.unit] || sv.unit, lastPurchasePrice: sv.saleRate })) as any}
+                        onSelect={(sv: any) => addItem("service", sv.id, sv.name, sv.unit, String(sv.lastPurchasePrice ?? "0"))} />
+                      <MaterialPicker tile={{ icon: "📦", label: "Производ (каталог)" }} title="Избери производ — ќе се отвори естиматор" value={null}
+                        materials={productsData?.map(p => ({ id: p.id, code: p.code, name: p.name, unit: prodUnits[p.unit] || p.unit, lastPurchasePrice: p.defaultPrice })) as any}
+                        onSelect={(p: any) => { setEstProduct(p.id); setEstForm({ area: "", perimeter: "", length: "", quantity: "1" }); setEstDialog(true); }} />
+                      <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300"
+                        onClick={() => { setCustomForm({ name: "", unit: "pcs", quantity: "1", salePrice: "" }); setEstMats([]); setEstSvcs([]); setCustomDialog(true); }}>
+                        <span className="text-lg leading-none">✏️</span>
+                        <span className="text-xs font-medium">Custom производ</span>
+                      </Button>
                     </div>
-                    <Button type="button" size="sm" variant="outline" className="w-full border-dashed" onClick={() => { setCustomForm({ name: "", unit: "pcs", quantity: "1", salePrice: "" }); setEstMats([]); setEstSvcs([]); setCustomDialog(true); }}>+ Custom производ (со интерна естимација)</Button>
 
                     {/* Items table */}
                     {qItems.length > 0 && (
