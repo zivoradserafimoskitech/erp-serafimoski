@@ -10,11 +10,15 @@ export function MaterialPicker({
   value,
   onSelect,
   placeholder = "Избери материјал…",
+  title = "Избери материјал",
+  tile,
 }: {
   materials: Mat[] | undefined;
   value?: string | number | null;
   onSelect: (m: Mat) => void;
   placeholder?: string;
+  title?: string;
+  tile?: { icon: string; label: string };
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -35,6 +39,13 @@ export function MaterialPicker({
 
   return (
     <>
+      {tile ? (
+        <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300"
+          onClick={() => { setQ(""); setOpen(true); }}>
+          <span className="text-lg leading-none">{tile.icon}</span>
+          <span className="text-xs font-medium">{tile.label}</span>
+        </Button>
+      ) : (
       <Button
         type="button"
         variant="outline"
@@ -50,13 +61,14 @@ export function MaterialPicker({
           <span className="text-gray-400">{placeholder}</span>
         )}
       </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
-          <DialogHeader><DialogTitle>Избери материјал</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
           <Input
             autoFocus
-            placeholder="Барај по име или код… (пр. рифел, C409, винкла 40)"
+            placeholder="Барај по име или код…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
