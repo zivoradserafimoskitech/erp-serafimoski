@@ -485,35 +485,47 @@ export default function Receipts() {
                         </Button>
                       )}
                     </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      <Select value={itemForm.materialId} onValueChange={v => setItemForm({ ...itemForm, materialId: v })}>
-                        <SelectTrigger className="text-xs"><SelectValue placeholder="Материјал" /></SelectTrigger>
-                        <SelectContent>{materialsData?.map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Input type="number" placeholder="Количина" className="text-xs" value={itemForm.quantity} onChange={e => setItemForm({ ...itemForm, quantity: e.target.value })} />
-                      <Input type="number" placeholder="Цена" className="text-xs" value={itemForm.unitPrice} onChange={e => setItemForm({ ...itemForm, unitPrice: e.target.value })} />
-                      <Button type="button" variant="outline" size="sm" onClick={addItem}>Додади</Button>
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_6rem_7rem_auto] gap-2 items-end">
+                      <div className="space-y-1 min-w-0">
+                        <Label className="text-[11px] text-gray-500">Материјал</Label>
+                        <Select value={itemForm.materialId} onValueChange={v => {
+                          const m = materialsData?.find(x => x.id.toString() === v);
+                          setItemForm({ ...itemForm, materialId: v, unitPrice: itemForm.unitPrice && itemForm.unitPrice !== "0" ? itemForm.unitPrice : String(m?.lastPurchasePrice ?? m?.avgCost ?? "") });
+                        }}>
+                          <SelectTrigger className="text-xs w-full"><SelectValue placeholder="Избери материјал…" /></SelectTrigger>
+                          <SelectContent className="max-h-64">{materialsData?.map(m => <SelectItem key={m.id} value={m.id.toString()}><span className="font-mono text-[10px] text-gray-400 mr-1">{m.code}</span>{m.name} <span className="text-gray-400">({m.unit})</span></SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-gray-500">Количина</Label>
+                        <Input type="number" step="0.001" className="text-xs" value={itemForm.quantity} onChange={e => setItemForm({ ...itemForm, quantity: e.target.value })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-gray-500">Цена (ден.)</Label>
+                        <Input type="number" step="0.01" className="text-xs" value={itemForm.unitPrice} onChange={e => setItemForm({ ...itemForm, unitPrice: e.target.value })} />
+                      </div>
+                      <Button type="button" variant="outline" size="sm" className="h-9" onClick={addItem}>+ Додади</Button>
                     </div>
                     {items.length > 0 && (
-                      <Table>
-                        <TableHeader><TableRow><TableHead className="text-xs">Материјал</TableHead><TableHead className="text-xs">Кол.</TableHead><TableHead className="text-xs">Цена</TableHead><TableHead className="text-xs">Вкупно</TableHead><TableHead className="text-xs w-8"></TableHead></TableRow></TableHeader>
-                        <TableBody>{items.map((it, idx) => {
+                      <div className="space-y-1.5">
+                        <div className="hidden md:grid md:grid-cols-[1fr_6rem_6rem_6.5rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
+                          <span>Материјал</span><span>Кол.</span><span>Цена</span><span className="text-right">Вкупно</span><span></span>
+                        </div>
+                        {items.map((it, idx) => {
                           const m = materialsData?.find(x => x.id.toString() === it.materialId);
                           return (
-                            <TableRow key={idx}>
-                              <TableCell className="text-xs">{m?.name}</TableCell>
-                              <TableCell className="text-xs">{it.quantity} {it.unit}</TableCell>
-                              <TableCell className="text-xs">{it.unitPrice}</TableCell>
-                              <TableCell className="text-xs font-medium">{it.totalPrice}</TableCell>
-                              <TableCell>
-                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => removeItem(idx)}>
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
+                            <div key={idx} className="grid grid-cols-[1fr_6rem_6rem_6.5rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
+                              <span className="text-xs truncate"><span className="font-mono text-[10px] text-gray-400 mr-1">{m?.code}</span>{m?.name}</span>
+                              <span className="text-xs">{it.quantity} {it.unit}</span>
+                              <span className="text-xs">{Number(it.unitPrice).toLocaleString("mk-MK")}</span>
+                              <span className="text-xs font-medium text-right whitespace-nowrap">{Number(it.totalPrice).toLocaleString("mk-MK")}</span>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(idx)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
                           );
-                        })}</TableBody>
-                      </Table>
+                        })}
+                      </div>
                     )}
                   </div>
                   <div className="space-y-1"><Label>Белешки</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
