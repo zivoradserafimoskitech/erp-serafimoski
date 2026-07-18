@@ -193,7 +193,7 @@ export default function Quotations() {
                   {/* Basic info */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-2"><Label>Број на понуда *</Label><Input value={qForm.quoteNumber} onChange={e => setQForm({ ...qForm, quoteNumber: e.target.value })} required placeholder="ПОН-2026-001" /></div>
-                    <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label>Важи до</Label><Input type="date" value={qForm.validUntil} onChange={e => setQForm({ ...qForm, validUntil: e.target.value })} /></div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
@@ -205,11 +205,11 @@ export default function Quotations() {
                   {/* Add items section */}
                   <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
                     <h4 className="font-semibold text-sm">Додади ставки во понуда</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       {/* Materials */}
                       <div className="space-y-1">
                         <Label className="text-xs text-gray-500">Материјали</Label>
-                        <Select onValueChange={v => { const m = materialsData?.find(x => x.id.toString() === v); if (m) addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, "0"); }}>
+                        <Select onValueChange={v => { const m = materialsData?.find(x => x.id.toString() === v); if (m) addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0")); }}>
                           <SelectTrigger className="text-xs"><SelectValue placeholder="Избери материјал" /></SelectTrigger>
                           <SelectContent className="max-h-60">
                             {materialsData?.map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name} ({matTypes[m.type]}) - {m.currentStock} {matUnits[m.unit]}</SelectItem>)}
@@ -241,24 +241,22 @@ export default function Quotations() {
                     {/* Items table */}
                     {qItems.length > 0 && (
                       <div className="space-y-2">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="text-xs"><TableHead>Тип</TableHead><TableHead>Опис</TableHead><TableHead>Кол</TableHead><TableHead>Ед</TableHead><TableHead>Цена</TableHead><TableHead>Вкупно</TableHead><TableHead></TableHead></TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {qItems.map((item, idx) => (
-                              <TableRow key={idx}>
-                                <TableCell className="text-xs"><Badge variant="outline">{item.itemType === "material" ? "Мат" : item.itemType === "service" ? "Усл" : "Прд"}</Badge></TableCell>
-                                <TableCell><Input className="h-7 text-xs" value={item.description} onChange={e => updateItem(idx, "description", e.target.value)} /></TableCell>
-                                <TableCell><Input className="h-7 text-xs w-16" type="number" step="0.001" value={item.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></TableCell>
-                                <TableCell className="text-xs text-gray-500">{item.unit}</TableCell>
-                                <TableCell><Input className="h-7 text-xs w-20" type="number" step="0.01" value={item.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} /></TableCell>
-                                <TableCell className="font-medium text-xs">{item.totalPrice}</TableCell>
-                                <TableCell><Button size="sm" variant="ghost" className="h-6 text-red-500" onClick={() => removeItem(idx)}>×</Button></TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                        <div className="hidden md:grid md:grid-cols-[3rem_1fr_5.5rem_3rem_6.5rem_6rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
+                          <span>Тип</span><span>Опис</span><span>Кол.</span><span>ЕМ</span><span>Цена</span><span className="text-right">Вкупно</span><span></span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {qItems.map((item, idx) => (
+                            <div key={idx} className="grid grid-cols-[3rem_1fr_5.5rem_3rem_6.5rem_6rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
+                              <Badge variant="outline" className="justify-center text-[10px]">{item.itemType === "material" ? "Мат" : item.itemType === "service" ? "Усл" : "Прд"}</Badge>
+                              <Input className="h-8 text-xs min-w-0" value={item.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                              <Input className="h-8 text-xs" type="number" step="0.001" value={item.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
+                              <span className="text-xs text-gray-500 text-center">{item.unit}</span>
+                              <Input className="h-8 text-xs" type="number" step="0.01" value={item.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                              <span className="font-medium text-xs text-right whitespace-nowrap">{Number(item.totalPrice).toLocaleString("mk-MK")}</span>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(idx)}>×</Button>
+                            </div>
+                          ))}
+                        </div>
                         <div className="flex justify-end gap-4 text-sm">
                           <span className="text-gray-500">Нето: <b>{calcTotals().subtotal}</b> {qForm.currency}</span>
                           <span className="text-gray-500">ДДВ ({qForm.vatRate}%): <b>{calcTotals().vatAmount}</b></span>
