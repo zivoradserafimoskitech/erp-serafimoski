@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -123,7 +123,6 @@ export default function Accounting() {
   const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string; productId?: number; itemType?: "product" | "material" | "manual" }[]>([]);
   const { data: materialsData } = trpc.storage.materialList.useQuery({});
   const [reportPeriod, setReportPeriod] = useState({ startDate: "", endDate: "" });
-  const [emailSinceDays, setEmailSinceDays] = useState(7);
 
   // Products & services for invoicing
   const { data: productsForInvoice } = trpc.accounting.productListForInvoice.useQuery();
@@ -794,6 +793,9 @@ export default function Accounting() {
       {/* ===== UJP E-INVOICES ===== */}
       {tab === "einvoice" && <UJPEFakturaTab />}
 
+      {/* ===== EMAIL INVOICES ===== */}
+      {tab === "email" && <EmailInvoicesTab />}
+
       {/* ===== PDF PARSING ===== */}
       {tab === "parsed" && (
         <div className="space-y-6">
@@ -1136,31 +1138,6 @@ function UJPEFakturaTab() {
   // Active certificates for signing
   const { data: certificates } = trpc.accounting.certificateList.useQuery();
 
-  // Email invoices
-  const { data: emailConfig } = trpc.email.hasConfig.useQuery();
-  const [emailForm, setEmailForm] = useState({ host: "", port: "993", username: "", password: "" });
-  const saveEmailCfg = trpc.email.saveConfig.useMutation({ onSuccess: () => { toast.success("Е-маил конфигурацијата е зачувана"); utils.email.hasConfig.invalidate(); } });
-  const { data: emailInvoicesList, refetch: refetchEmail } = trpc.email.list.useQuery();
-  const fetchEmailsMutation = trpc.email.fetchEmails.useMutation({
-    onSuccess: (data) => {
-      refetchEmail();
-      alert(data.message);
-    },
-    onError: (e) => alert(e.message),
-  });
-  const matchSupplierMutation = trpc.email.matchSupplier.useMutation({
-    onSuccess: () => refetchEmail(),
-  });
-  const approveEmailMutation = trpc.email.approve.useMutation({
-    onSuccess: () => refetchEmail(),
-  });
-  const rejectEmailMutation = trpc.email.reject.useMutation({
-    onSuccess: () => refetchEmail(),
-  });
-  const deleteEmailMutation = trpc.email.delete.useMutation({
-    onSuccess: () => refetchEmail(),
-  });
-
   // Send form
   const [sendForm, setSendForm] = useState({
     sellerEdb: "", sellerName: "", sellerAddress: "", sellerCity: "", sellerVatNumber: "",
@@ -1425,8 +1402,52 @@ function UJPEFakturaTab() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== EMAIL INVOICES ===== */}
-      {tab === "email" && (
+      {/* XML Dialog */}
+      <Dialog open={xmlDialog} onOpenChange={setXmlDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>УЈП XML Фактура</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <Textarea value={xmlContent} readOnly className="font-mono text-xs h-96" />
+            <Button onClick={handleDownloadXml} className="w-full bg-amber-500 hover:bg-amber-600">
+              <Download className="h-4 w-4 mr-2" />Превземи XML
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ===== EMAIL INVOICES TAB (издвоено од UJPEFakturaTab каде беше недостапно) =====
+function EmailInvoicesTab() {
+  const utils = trpc.useUtils();
+  const [emailSinceDays, setEmailSinceDays] = useState(7);
+  // Email invoices
+  const { data: emailConfig } = trpc.email.hasConfig.useQuery();
+  const [emailForm, setEmailForm] = useState({ host: "", port: "993", username: "", password: "" });
+  const saveEmailCfg = trpc.email.saveConfig.useMutation({ onSuccess: () => { toast.success("Е-маил конфигурацијата е зачувана"); utils.email.hasConfig.invalidate(); } });
+  const { data: emailInvoicesList, refetch: refetchEmail } = trpc.email.list.useQuery();
+  const fetchEmailsMutation = trpc.email.fetchEmails.useMutation({
+    onSuccess: (data) => {
+      refetchEmail();
+      alert(data.message);
+    },
+    onError: (e) => alert(e.message),
+  });
+  const matchSupplierMutation = trpc.email.matchSupplier.useMutation({
+    onSuccess: () => refetchEmail(),
+  });
+  const approveEmailMutation = trpc.email.approve.useMutation({
+    onSuccess: () => refetchEmail(),
+  });
+  const rejectEmailMutation = trpc.email.reject.useMutation({
+    onSuccess: () => refetchEmail(),
+  });
+  const deleteEmailMutation = trpc.email.delete.useMutation({
+    onSuccess: () => refetchEmail(),
+  });
+
+  return (
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
@@ -1586,20 +1607,6 @@ function UJPEFakturaTab() {
             </CardContent>
           </Card>
         </div>
-      )}
-
-      {/* XML Dialog */}
-      <Dialog open={xmlDialog} onOpenChange={setXmlDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>УЈП XML Фактура</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <Textarea value={xmlContent} readOnly className="font-mono text-xs h-96" />
-            <Button onClick={handleDownloadXml} className="w-full bg-amber-500 hover:bg-amber-600">
-              <Download className="h-4 w-4 mr-2" />Превземи XML
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+      
   );
 }
