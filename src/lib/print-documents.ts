@@ -239,30 +239,100 @@ export function printDeliveryNote(dn: any, settings: any) {
   openPrint(shell(`Испратница ${dn?.dnNumber ?? ""}`, "#3a72b8", body));
 }
 
-// ══════════════ ПОНУДА ══════════════
+// ══════════════ ПОНУДА (премиум шаблон — челик + килибар) ══════════════
 export function printQuotation(q: any, settings: any) {
   const s = settings ?? {};
   const c = q?.customer ?? {};
   const items: any[] = q?.items ?? [];
   const vatRate = Number(q?.vatRate ?? s?.defaultVatRate ?? 18);
+  const logo = s?.logoUrl || "/logo.png";
   const rows = items.map((it, i) => `<tr>
-    <td class="c">${i + 1}</td><td>${esc(it.description)}</td><td class="c">${esc(it.unit ?? "")}</td>
+    <td class="c dim">${String(i + 1).padStart(2, "0")}</td><td class="desc">${esc(it.description)}</td><td class="c dim">${esc(it.unit ?? "")}</td>
     <td class="r">${den(it.quantity)}</td><td class="r">${den(it.unitPrice)}</td>
     <td class="r"><b>${den(it.totalPrice)}</b></td></tr>`).join("");
 
-  const body = `
-  ${header(s, "ПОНУДА", q?.quoteNumber ?? "", `
-    Датум: <b>${dt(q?.createdAt)}</b><br>
-    Важи до: <b>${dt(q?.validUntil)}</b><br>
-    Валута: ${esc(q?.currency ?? "MKD")}`)}
+  const html = `<!doctype html>
+<html lang="mk"><head><meta charset="utf-8"><title>Понуда ${esc(q?.quoteNumber ?? "")}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { --steel: #1B2733; --steel-mid: #43546A; --steel-line: #D8DCE1; --amber: #DE7514; --amber-soft: #FBF3E9; --paper: #F5F3EF; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #232A32; padding: 12mm 13mm; font-variant-numeric: tabular-nums; }
+  @page { size: A4; margin: 0; }
+  .lbl { font-size: 8px; text-transform: uppercase; letter-spacing: 2px; color: var(--steel-mid); font-weight: 700; }
+
+  /* Заглавие: лого лево, челичен таг со засечен агол десно */
+  .head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .head img { height: 52px; max-width: 250px; object-fit: contain; }
+  .head .co-sub { font-size: 9px; color: var(--steel-mid); line-height: 1.6; margin-top: 6px; }
+  .tag { background: var(--steel); color: #fff; padding: 13px 18px 12px 22px; min-width: 62mm; clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px)); position: relative; }
+  .tag::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--amber); }
+  .tag h2 { font-size: 19px; letter-spacing: 5px; font-weight: 800; }
+  .tag .num { font-size: 14px; font-weight: 700; color: #F5A353; margin-top: 2px; letter-spacing: 1px; }
+  .tag .meta { font-size: 9.5px; color: #B9C2CD; margin-top: 8px; line-height: 1.7; }
+  .tag .meta b { color: #fff; font-weight: 600; }
+
+  /* Челична линија со килибарен сегмент */
+  .rule { height: 2px; background: var(--steel-line); margin: 12px 0 14px; position: relative; }
+  .rule::before { content: ""; position: absolute; left: 0; top: 0; height: 2px; width: 58mm; background: var(--amber); }
+
+  .parties { display: flex; gap: 12px; }
+  .party { flex: 1; border: 1px solid var(--steel-line); background: #FDFDFC; padding: 10px 14px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%); }
+  .party .n { font-weight: 700; font-size: 12.5px; color: var(--steel); margin: 4px 0 2px; }
+  .party div { line-height: 1.6; color: #45505B; }
+
+  table.t { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  table.t th { font-size: 8px; text-transform: uppercase; letter-spacing: 1.6px; color: var(--steel-mid); text-align: left; padding: 0 9px 6px; border-bottom: 2px solid var(--steel); }
+  table.t td { padding: 7px 9px; border-bottom: 1px solid #ECEEF1; }
+  table.t tr:last-child td { border-bottom: 2px solid var(--steel-line); }
+  .c { text-align: center; } .r { text-align: right; white-space: nowrap; }
+  th.c { text-align: center; } th.r { text-align: right; }
+  .dim { color: #97A0AA; font-size: 10px; }
+  .desc { font-weight: 500; color: var(--steel); }
+
+  /* Вкупно: челична плоча */
+  .sum-wrap { display: flex; justify-content: flex-end; margin-top: 12px; }
+  .sum { width: 70mm; }
+  .sum .row { display: flex; justify-content: space-between; padding: 4px 12px; color: #45505B; }
+  .sum .grand { margin-top: 6px; background: var(--steel); color: #fff; font-weight: 800; font-size: 14px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: baseline; clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px)); border-top: 3px solid var(--amber); }
+  .sum .grand small { font-size: 9px; letter-spacing: 2px; color: #B9C2CD; font-weight: 700; }
+
+  .terms { margin-top: 16px; background: var(--amber-soft); border-left: 3px solid var(--amber); padding: 10px 14px; font-size: 10.5px; line-height: 1.75; }
+  .terms .lbl { color: var(--amber); margin-bottom: 3px; display: block; }
+  .terms b { color: var(--steel); }
+  .notes { margin-top: 10px; font-size: 10px; color: #5A646E; line-height: 1.6; }
+
+  .sigs { display: flex; justify-content: space-between; margin-top: 40px; gap: 26px; }
+  .sig { flex: 1; text-align: center; }
+  .sig .line { border-top: 1px solid var(--steel-mid); margin-top: 34px; padding-top: 5px; font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--steel-mid); }
+
+  .foot { margin-top: 18px; background: var(--steel); color: #B9C2CD; font-size: 8.5px; text-align: center; padding: 7px 10px; letter-spacing: .6px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  .foot b { color: #fff; }
+  @media print { body { padding: 11mm 12mm; } }
+</style></head><body>
+  <div class="head">
+    <div>
+      <img src="${esc(logo)}" alt="" onerror="this.style.display='none'">
+      <div class="co-sub">
+        ${esc(s?.address ?? "")}${s?.address ? "<br>" : ""}
+        ЕДБ: ${esc(s?.edb ?? "—")} · ЕМБС: ${esc(s?.embs ?? "—")}${s?.phone ? " · тел: " + esc(s.phone) : ""}${s?.email ? "<br>" + esc(s.email) : ""}
+      </div>
+    </div>
+    <div class="tag">
+      <h2>ПОНУДА</h2>
+      <div class="num">${esc(q?.quoteNumber ?? "")}</div>
+      <div class="meta">Датум: <b>${dt(q?.createdAt)}</b><br>Важи до: <b>${dt(q?.validUntil)}</b> · Валута: <b>${esc(q?.currency ?? "MKD")}</b></div>
+    </div>
+  </div>
+  <div class="rule"></div>
   <div class="parties">
-    <div class="party"><h3>Понудувач</h3>
+    <div class="party"><span class="lbl">Понудувач</span>
       <div class="n">${esc(s?.name ?? "Serafimoski Tech DOOEL")}</div>
       <div>${esc(s?.address ?? "")}</div>
       <div>ЕДБ: ${esc(s?.edb ?? "—")}</div>
       ${s?.phone ? `<div>тел: ${esc(s.phone)}</div>` : ""}
     </div>
-    <div class="party"><h3>За клиент</h3>
+    <div class="party"><span class="lbl">За клиент</span>
       <div class="n">${esc(c.company || c.name || "—")}</div>
       ${c.company && c.name ? `<div>${esc(c.name)}</div>` : ""}
       <div>${esc([c.address, c.city].filter(Boolean).join(", "))}</div>
@@ -270,24 +340,26 @@ export function printQuotation(q: any, settings: any) {
     </div>
   </div>
   <table class="t"><thead><tr>
-    <th class="c" style="width:26px">#</th><th>Опис</th><th class="c" style="width:44px">ЕМ</th>
-    <th class="r" style="width:60px">Кол.</th><th class="r" style="width:80px">Цена (ден.)</th>
-    <th class="r" style="width:90px">Вкупно (ден.)</th>
-  </tr></thead><tbody>${rows || `<tr><td colspan="6" class="c" style="padding:14px;color:#999">Нема ставки</td></tr>`}</tbody></table>
-  <div class="totals">
+    <th class="c" style="width:28px">#</th><th>Опис</th><th class="c" style="width:44px">ЕМ</th>
+    <th class="r" style="width:62px">Кол.</th><th class="r" style="width:82px">Цена (ден.)</th>
+    <th class="r" style="width:92px">Вкупно (ден.)</th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="6" class="c" style="padding:16px;color:#999">Нема ставки</td></tr>`}</tbody></table>
+  <div class="sum-wrap"><div class="sum">
     <div class="row"><span>Основица:</span><b>${den(q?.subtotal)} ден.</b></div>
     <div class="row"><span>ДДВ (${vatRate}%):</span><b>${den(q?.vatAmount)} ден.</b></div>
-    <div class="row grand"><span>ВКУПНО:</span><span>${den(q?.totalAmount)} ден.</span></div>
-  </div>
-  <div class="box"><b>Услови</b><br>
+    <div class="grand"><small>ВКУПНО</small><span>${den(q?.totalAmount)} ден.</span></div>
+  </div></div>
+  <div class="terms"><span class="lbl">Услови</span>
     ${q?.deliveryDays ? `Рок на испорака: <b>${esc(q.deliveryDays)} дена</b><br>` : ""}
     ${q?.paymentTerms ? `Плаќање: <b>${esc(q.paymentTerms)}</b><br>` : ""}
     Понудата важи до <b>${dt(q?.validUntil)}</b>. Цените се изразени во денари${vatRate ? " со пресметан ДДВ во рекапитулацијата" : ""}.
   </div>
   ${q?.notes ? `<div class="notes"><b>Забелешка:</b> ${esc(q.notes)}</div>` : ""}
   <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Одобрил</div></div></div>
-  ${footer(s)}`;
-  openPrint(shell(`Понуда ${q?.quoteNumber ?? ""}`, "#3a72b8", body));
+  <div class="foot"><b>${esc(s?.name ?? "Serafimoski Tech DOOEL")}</b> · ${esc(s?.address ?? "")} · ЕДБ ${esc(s?.edb ?? "")} · Генерирано од Metal ERP</div>
+<script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+  openPrint(html);
 }
 
 // ══════════════ ТРЕБОВАЊЕ (врзано со работен налог) ══════════════
