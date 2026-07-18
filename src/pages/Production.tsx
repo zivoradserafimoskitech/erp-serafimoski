@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { printWorkOrder } from "@/lib/print-documents";
+import { printWorkOrder, printRequisition } from "@/lib/print-documents";
 import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft } from "lucide-react";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
@@ -219,7 +219,7 @@ export default function Production() {
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Детали за работен налог {woDetail?.woNumber}<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}>→ Фактура</Button><Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}>Печати / PDF</Button></span></DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Детали за работен налог {woDetail?.woNumber}<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}>→ Фактура</Button><Button size="sm" variant="outline" onClick={() => woDetail && printRequisition(woDetail, companySettings)}>Требовање</Button><Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}>Печати / PDF</Button></span></DialogTitle></DialogHeader>
           {woDetail && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4 text-sm">

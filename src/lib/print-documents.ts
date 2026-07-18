@@ -84,10 +84,22 @@ function footer(s: any) {
 }
 
 function openPrint(html: string) {
-  const w = window.open("", "_blank", "width=920,height=1120");
-  if (!w) { alert("Дозволи pop-up прозорци за печатење."); return; }
-  w.document.write(html);
-  w.document.close();
+  // Скриен iframe во истата страница — popup blocker-ите не можат да го блокираат
+  const old = document.getElementById("__print_frame");
+  if (old) old.remove();
+  const frame = document.createElement("iframe");
+  frame.id = "__print_frame";
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument!;
+  doc.open();
+  doc.write(html.replace("window.onload = () => setTimeout(() => window.print(), 300);", ""));
+  doc.close();
+  const doPrint = () => {
+    try { frame.contentWindow!.focus(); frame.contentWindow!.print(); } catch { /* ignore */ }
+  };
+  if (doc.readyState === "complete") setTimeout(doPrint, 350);
+  else frame.onload = () => setTimeout(doPrint, 350);
 }
 
 // ══════════════ ФАКТУРА ══════════════
@@ -274,4 +286,35 @@ export function printQuotation(q: any, settings: any) {
   <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Одобрил</div></div></div>
   ${footer(s)}`;
   openPrint(shell(`Понуда ${q?.quoteNumber ?? ""}`, "#7c3aed", body));
+}
+
+// ══════════════ ТРЕБОВАЊЕ (врзано со работен налог) ══════════════
+export function printRequisition(wo: any, settings: any) {
+  const s = settings ?? {};
+  const mats: any[] = wo?.materials ?? [];
+  const trbNumber = String(wo?.woNumber ?? "").replace(/^РН/, "ТРБ") || "ТРБ";
+  const rows = mats.map((m, i) => `<tr>
+    <td class="c">${i + 1}</td><td>${esc(m.materialCode ?? "")}</td><td>${esc(m.materialName ?? "—")}</td>
+    <td class="c">${esc(m.materialUnit ?? "")}</td><td class="r"><b>${den(m.quantity)}</b></td>
+    <td class="c" style="width:70px;border-bottom:1px solid #ccc"></td>
+    <td style="width:90px"></td></tr>`).join("");
+
+  const body = `
+  ${header(s, "ТРЕБОВАЊЕ", trbNumber, `
+    Работен налог: <b>${esc(wo?.woNumber ?? "—")}</b><br>
+    Датум: <b>${dt(new Date().toISOString())}</b><br>
+    Одговорен: <b>${esc(wo?.assignedTo || "—")}</b>`)}
+  <div class="box" style="margin-top:12px">
+    <b>Опис на налогот:</b> ${esc(wo?.description ?? "—")}<br>
+    Со ова требовање се бара издавање на долунаведените материјали од магацин за потребите на работен налог <b>${esc(wo?.woNumber ?? "")}</b>.
+  </div>
+  <div class="stitle">Материјали за издавање</div>
+  <table class="t"><thead><tr>
+    <th class="c" style="width:26px">#</th><th style="width:64px">Код</th><th>Материјал</th>
+    <th class="c" style="width:40px">ЕМ</th><th class="r" style="width:72px">Побарано</th>
+    <th class="c" style="width:70px">Издадено</th><th style="width:90px">Забелешка</th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="7" class="c" style="padding:12px;color:#999">Нема материјали на налогот — додај ги прво во деталите</td></tr>`}</tbody></table>
+  <div class="sigs"><div class="sig"><div class="line">Побарал</div></div><div class="sig"><div class="line">Одобрил</div></div><div class="sig"><div class="line">Издал (магационер)</div></div><div class="sig"><div class="line">Примил</div></div></div>
+  ${footer(s)}`;
+  openPrint(shell(`Требовање ${trbNumber}`, "#0d9488", body));
 }
