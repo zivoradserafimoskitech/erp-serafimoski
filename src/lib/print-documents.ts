@@ -255,7 +255,7 @@ export function printQuotation(q: any, settings: any) {
 <html lang="mk"><head><meta charset="utf-8"><title>Понуда ${esc(q?.quoteNumber ?? "")}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  :root { --steel: #2C5187; --steel-mid: #4A5568; --steel-line: #D8DCE1; --amber: #3D71B8; --amber-soft: #EEF4FB; --paper: #F5F3EF; }
+  :root { --steel: #6188AF; --steel-mid: #4A5568; --steel-line: #D8DCE1; --amber: #3D71B8; --amber-soft: #EEF4FB; --paper: #F5F3EF; }
   html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #232A32; padding: 12mm 13mm; font-variant-numeric: tabular-nums; }
   @page { size: A4; margin: 0; }
@@ -266,10 +266,10 @@ export function printQuotation(q: any, settings: any) {
   .head img { max-width: 310px; max-height: 52px; object-fit: contain; object-position: left; }
   .head .co-sub { font-size: 9px; color: var(--steel-mid); line-height: 1.6; margin-top: 6px; }
   .tag { background: var(--steel); color: #fff; padding: 13px 18px 12px 22px; min-width: 62mm; clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px)); position: relative; }
-  .tag::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #7FB0E8; }
+  .tag::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #C9DDF2; }
   .tag h2 { font-size: 19px; letter-spacing: 5px; font-weight: 800; }
-  .tag .num { font-size: 14px; font-weight: 700; color: #8FB6E4; margin-top: 2px; letter-spacing: 1px; }
-  .tag .meta { font-size: 9.5px; color: #B9C2CD; margin-top: 8px; line-height: 1.7; }
+  .tag .num { font-size: 14px; font-weight: 700; color: #EAF2FA; margin-top: 2px; letter-spacing: 1px; }
+  .tag .meta { font-size: 9.5px; color: #DDE9F4; margin-top: 8px; line-height: 1.7; }
   .tag .meta b { color: #fff; font-weight: 600; }
 
   /* Челична линија со килибарен сегмент */
@@ -294,8 +294,8 @@ export function printQuotation(q: any, settings: any) {
   .sum-wrap { display: flex; justify-content: flex-end; margin-top: 12px; }
   .sum { width: 70mm; }
   .sum .row { display: flex; justify-content: space-between; padding: 4px 12px; color: #45505B; }
-  .sum .grand { margin-top: 6px; background: var(--steel); color: #fff; font-weight: 800; font-size: 14px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: baseline; clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px)); border-top: 3px solid #7FB0E8; }
-  .sum .grand small { font-size: 9px; letter-spacing: 2px; color: #B9C2CD; font-weight: 700; }
+  .sum .grand { margin-top: 6px; background: var(--steel); color: #fff; font-weight: 800; font-size: 14px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: baseline; clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px)); border-top: 3px solid #C9DDF2; }
+  .sum .grand small { font-size: 9px; letter-spacing: 2px; color: #E3EDF7; font-weight: 700; }
 
   .terms { margin-top: 16px; background: var(--amber-soft); border-left: 3px solid var(--amber); padding: 10px 14px; font-size: 10.5px; line-height: 1.75; }
   .terms .lbl { color: var(--amber); margin-bottom: 3px; display: block; }
@@ -306,7 +306,7 @@ export function printQuotation(q: any, settings: any) {
   .sig { flex: 1; text-align: center; }
   .sig .line { border-top: 1px solid var(--steel-mid); margin-top: 34px; padding-top: 5px; font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--steel-mid); }
 
-  .foot { margin-top: 18px; background: var(--steel); color: #B9C2CD; font-size: 8.5px; text-align: center; padding: 7px 10px; letter-spacing: .6px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  .foot { margin-top: 18px; background: var(--steel); color: #E3EDF7; font-size: 8.5px; text-align: center; padding: 7px 10px; letter-spacing: .6px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
   .foot b { color: #fff; }
   @media print { body { padding: 11mm 12mm; } }
 </style></head><body>
