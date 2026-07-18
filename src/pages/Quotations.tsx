@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MaterialPicker } from "@/components/MaterialPicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -215,12 +216,8 @@ export default function Quotations() {
                       {/* Materials */}
                       <div className="space-y-1">
                         <Label className="text-xs text-gray-500">Материјали</Label>
-                        <Select onValueChange={v => { const m = materialsData?.find(x => x.id.toString() === v); if (m) addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0")); }}>
-                          <SelectTrigger className="text-xs"><SelectValue placeholder="Избери материјал" /></SelectTrigger>
-                          <SelectContent className="max-h-60">
-                            {materialsData?.map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name} ({matTypes[m.type]}) - {m.currentStock} {matUnits[m.unit]}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <MaterialPicker materials={materialsData as any} value={null} placeholder="Избери материјал…"
+                          onSelect={(m: any) => addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0"))} />
                       </div>
                       {/* Services */}
                       <div className="space-y-1">

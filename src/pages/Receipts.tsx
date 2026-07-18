@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MaterialPicker } from "@/components/MaterialPicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -488,13 +489,8 @@ export default function Receipts() {
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_6rem_7rem_auto] gap-2 items-end">
                       <div className="space-y-1 min-w-0">
                         <Label className="text-[11px] text-gray-500">Материјал</Label>
-                        <Select value={itemForm.materialId} onValueChange={v => {
-                          const m = materialsData?.find(x => x.id.toString() === v);
-                          setItemForm({ ...itemForm, materialId: v, unitPrice: itemForm.unitPrice && itemForm.unitPrice !== "0" ? itemForm.unitPrice : String(m?.lastPurchasePrice ?? m?.avgCost ?? "") });
-                        }}>
-                          <SelectTrigger className="text-xs w-full"><SelectValue placeholder="Избери материјал…" /></SelectTrigger>
-                          <SelectContent className="max-h-64">{materialsData?.map(m => <SelectItem key={m.id} value={m.id.toString()}><span className="font-mono text-[10px] text-gray-400 mr-1">{m.code}</span>{m.name} <span className="text-gray-400">({m.unit})</span></SelectItem>)}</SelectContent>
-                        </Select>
+                        <MaterialPicker materials={materialsData as any} value={itemForm.materialId}
+                          onSelect={(m) => setItemForm({ ...itemForm, materialId: String(m.id), unitPrice: itemForm.unitPrice && itemForm.unitPrice !== "0" ? itemForm.unitPrice : String(m.lastPurchasePrice ?? m.avgCost ?? "") })} />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[11px] text-gray-500">Количина</Label>
