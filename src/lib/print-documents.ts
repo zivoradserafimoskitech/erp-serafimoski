@@ -255,7 +255,7 @@ export function printQuotation(q: any, settings: any) {
 <html lang="mk"><head><meta charset="utf-8"><title>Понуда ${esc(q?.quoteNumber ?? "")}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  :root { --steel: #1B2733; --steel-mid: #43546A; --steel-line: #D8DCE1; --amber: #DE7514; --amber-soft: #FBF3E9; --paper: #F5F3EF; }
+  :root { --steel: #1F1830; --steel-mid: #4A5568; --steel-line: #D8DCE1; --amber: #3D71B8; --amber-soft: #EEF4FB; --paper: #F5F3EF; }
   html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #232A32; padding: 12mm 13mm; font-variant-numeric: tabular-nums; }
   @page { size: A4; margin: 0; }
@@ -263,12 +263,12 @@ export function printQuotation(q: any, settings: any) {
 
   /* Заглавие: лого лево, челичен таг со засечен агол десно */
   .head { display: flex; justify-content: space-between; align-items: flex-start; }
-  .head img { height: 52px; max-width: 250px; object-fit: contain; }
+  .head img { max-width: 310px; max-height: 52px; object-fit: contain; object-position: left; }
   .head .co-sub { font-size: 9px; color: var(--steel-mid); line-height: 1.6; margin-top: 6px; }
   .tag { background: var(--steel); color: #fff; padding: 13px 18px 12px 22px; min-width: 62mm; clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px)); position: relative; }
   .tag::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--amber); }
   .tag h2 { font-size: 19px; letter-spacing: 5px; font-weight: 800; }
-  .tag .num { font-size: 14px; font-weight: 700; color: #F5A353; margin-top: 2px; letter-spacing: 1px; }
+  .tag .num { font-size: 14px; font-weight: 700; color: #8FB6E4; margin-top: 2px; letter-spacing: 1px; }
   .tag .meta { font-size: 9.5px; color: #B9C2CD; margin-top: 8px; line-height: 1.7; }
   .tag .meta b { color: #fff; font-weight: 600; }
 
