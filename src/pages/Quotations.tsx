@@ -22,6 +22,12 @@ const qStatus: Record<string, { label: string; cls: string }> = {
   converted: { label: "Конвертирана", cls: "bg-purple-100 text-purple-700" },
 };
 
+const svcCodes: Record<string, string> = {
+  laser_cutting: "ЛС", plasma_cutting: "ПС", bending: "ВТ", mig_welding: "МИГ",
+  tig_welding: "ТИГ", grinding: "БР", drilling: "ДП", electrostatic_paint: "ЕФ",
+  wet_paint: "МФ", galvanizing: "ПЦ", cnc_machining: "ЦНЦ", labor: "ТР",
+  design: "ДЗ", transport: "ТП", installation: "МН", other: "ДР",
+};
 const svcTypes: Record<string, string> = {
   laser_cutting: "Ласерско сечење", plasma_cutting: "Плазма сечење", bending: "Виткање",
   mig_welding: "MIG заварување", tig_welding: "TIG заварување", grinding: "Брусење",
@@ -288,7 +294,13 @@ export default function Quotations() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Тип</Label>
-                      <Select value={svcForm.type} onValueChange={v => setSvcForm({ ...svcForm, type: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(svcTypes).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
+                      <Select value={svcForm.type} onValueChange={v => {
+                        const auto = !svcForm.name || svcForm.name === svcTypes[svcForm.type];
+                        const autoCode = !svcForm.code || svcForm.code.startsWith(svcCodes[svcForm.type] ?? "");
+                        setSvcForm({ ...svcForm, type: v as any,
+                          name: auto ? svcTypes[v] : svcForm.name,
+                          code: autoCode ? `${svcCodes[v] ?? "УС"}-${String((servicesData?.length ?? 0) + 1).padStart(2, "0")}` : svcForm.code });
+                      }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(svcTypes).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
                     </div>
                     <div className="space-y-2"><Label>Единица</Label>
                       <Select value={svcForm.unit} onValueChange={v => setSvcForm({ ...svcForm, unit: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(svcUnits).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
