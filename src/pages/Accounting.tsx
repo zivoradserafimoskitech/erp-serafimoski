@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { MaterialPicker } from "@/components/MaterialPicker";
 import { jsPDF } from "jspdf";
-import { printInvoice, printDeliveryNote } from "@/lib/print-documents";
+import { printInvoice, printDeliveryNote, printAccountantReport } from "@/lib/print-documents";
 import autoTable from "jspdf-autotable";
 import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
@@ -119,6 +120,8 @@ export default function Accounting() {
   const [incItemForm, setIncItemForm] = useState({ description: "", quantity: "1", unit: "кг", unitPrice: "", vatRate: "18" });
   const [recForm, setRecForm] = useState({ receiptNumber: "", supplierId: "", receiptDate: "", totalAmount: "0", notes: "" });
   const [dnForm, setDnForm] = useState({ dnNumber: "", customerId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" });
+  const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string }[]>([]);
+  const { data: materialsData } = trpc.storage.materialList.useQuery({});
   const [reportPeriod, setReportPeriod] = useState({ startDate: "", endDate: "" });
   const [emailSinceDays, setEmailSinceDays] = useState(7);
 
@@ -517,7 +520,7 @@ export default function Accounting() {
               <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нов испратник</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нов испратник</DialogTitle></DialogHeader>
-                <form onSubmit={(e) => { e.preventDefault(); createDN.mutate({ ...dnForm, customerId: parseInt(dnForm.customerId), issueDate: dnForm.issueDate, deliveryDate: dnForm.deliveryDate || undefined } as any); }} className="space-y-3">
+                <form onSubmit={(e) => { e.preventDefault(); createDN.mutate({ ...dnForm, customerId: parseInt(dnForm.customerId), issueDate: dnForm.issueDate, deliveryDate: dnForm.deliveryDate || undefined, items: dnItems } as any); }} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Број *</Label><Input value={dnForm.dnNumber} onChange={(e) => setDnForm({ ...dnForm, dnNumber: e.target.value })} required /></div>
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={dnForm.customerId} onValueChange={(v) => setDnForm({ ...dnForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
@@ -525,6 +528,24 @@ export default function Accounting() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Датум на издавање *</Label><Input type="date" value={dnForm.issueDate} onChange={(e) => setDnForm({ ...dnForm, issueDate: e.target.value })} required /></div>
                     <div className="space-y-2"><Label>Датум на испорака</Label><Input type="date" value={dnForm.deliveryDate} onChange={(e) => setDnForm({ ...dnForm, deliveryDate: e.target.value })} /></div>
+                  </div>
+                  <div className="border rounded-lg p-3 space-y-2 bg-gray-50">
+                    <p className="text-xs font-semibold">Ставки за испорака</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <MaterialPicker tile={{ icon: "🔩", label: "Материјал од магацин" }} title="Избери материјал" materials={materialsData as any} value={null}
+                        onSelect={(mm: any) => setDnItems([...dnItems, { description: mm.name, quantity: "1", unit: mm.unit ?? "pcs" }])} />
+                      <MaterialPicker tile={{ icon: "📦", label: "Готов производ" }} title="Избери готов производ" value={null}
+                        materials={finishedGoods?.map((f: any) => ({ id: f.id, code: f.code ?? "", name: f.productName ?? f.name ?? f.description, unit: f.unit ?? "pcs", lastPurchasePrice: f.quantity })) as any}
+                        onSelect={(f: any) => setDnItems([...dnItems, { description: f.name, quantity: "1", unit: f.unit ?? "pcs" }])} />
+                    </div>
+                    {dnItems.map((it, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_5rem_3rem_2rem] gap-2 items-center bg-white border rounded px-2 py-1">
+                        <span className="text-xs truncate">{it.description}</span>
+                        <Input className="h-7 text-xs" type="number" step="0.001" value={it.quantity} onChange={e => setDnItems(dnItems.map((x, j) => j === i ? { ...x, quantity: e.target.value } : x))} />
+                        <span className="text-xs text-gray-500">{it.unit}</span>
+                        <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => setDnItems(dnItems.filter((_, j) => j !== i))}>×</Button>
+                      </div>
+                    ))}
                   </div>
                   <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createDN.isPending}>{createDN.isPending ? "Зачувување..." : "Креирај испратник"}</Button>
                 </form>

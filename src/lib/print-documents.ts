@@ -355,3 +355,35 @@ export function printReceipt(rc: any, settings: any) {
   ${footer(s)}`;
   openPrint(shell(`Приемница ${rc?.receiptNumber ?? ""}`, "#3a72b8", body));
 }
+
+// ══════════════ ИЗВЕШТАЈ ЗА СМЕТКОВОДИТЕЛ ══════════════
+export function printAccountantReport(rep: any, period: { startDate: string; endDate: string }, settings: any) {
+  const s = settings ?? {};
+  const sec = (title: string, heads: string[], rows: string) => `
+    <div class="stitle">${title}</div>
+    <table class="t"><thead><tr>${heads.map(h => `<th${h.startsWith(">") ? ' class=\"r\"' : ""}>${h.replace(/^>/, "")}</th>`).join("")}</tr></thead>
+    <tbody>${rows || `<tr><td colspan="${heads.length}" class="c" style="padding:8px;color:#999">Нема записи</td></tr>`}</tbody></table>`;
+  const out = (rep?.outgoing ?? []).map((i: any) => `<tr><td>${esc(i.invoiceNumber)}</td><td>${dt(i.issueDate)}</td><td class="r">${den(i.subtotal)}</td><td class="r">${den(i.vatAmount)}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
+  const inc = (rep?.incoming ?? []).map((i: any) => `<tr><td>${esc(i.invoiceNumber ?? i.documentNumber ?? "")}</td><td>${dt(i.receivedDate)}</td><td>${esc(i.supplierName ?? "")}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
+  const rc = (rep?.receiptsList ?? []).map((r: any) => `<tr><td>${esc(r.receiptNumber)}</td><td>${dt(r.receiptDate ?? r.createdAt)}</td><td class="r"><b>${den(r.totalAmount)}</b></td></tr>`).join("");
+  const dnr = (rep?.deliveryNotesList ?? []).map((x: any) => `<tr><td>${esc(x.dnNumber)}</td><td>${dt(x.issueDate)}</td><td>${esc(STATUS_MK[x.status] ?? x.status ?? "")}</td></tr>`).join("");
+  const wo = (rep?.workOrders ?? []).map((w: any) => `<tr><td>${esc(w.woNumber)}</td><td>${dt(w.createdAt)}</td><td>${esc(w.description ?? "")}</td><td>${esc(STATUS_MK[w.status] ?? w.status ?? "")}</td><td class="r">${den(w.costAmount)}</td></tr>`).join("");
+  const vatBalance = Number(rep?.totalOutgoingVat ?? 0) - Number(rep?.totalIncomingVat ?? 0);
+  const body = `
+  ${header(s, "ИЗВЕШТАЈ", "за сметководител", `Период: <b>${dt(period.startDate)} — ${dt(period.endDate)}</b>`)}
+  ${sec("Излезни фактури", ["Број", "Датум", ">Основица", ">ДДВ", ">Вкупно"], out)}
+  ${sec("Влезни фактури", ["Број", "Датум", "Добавувач", ">Вкупно"], inc)}
+  ${sec("Приемници", ["Број", "Датум", ">Вкупно"], rc)}
+  ${sec("Испратници", ["Број", "Датум", "Статус"], dnr)}
+  ${sec("Работни налози (со требовања)", ["Број", "Датум", "Опис", "Статус", ">Трошок"], wo)}
+  <div class="totals" style="width:80mm">
+    <div class="row"><span>Излезни — основица:</span><b>${den(rep?.totalOutgoingBase)} ден.</b></div>
+    <div class="row"><span>Излезни — ДДВ:</span><b>${den(rep?.totalOutgoingVat)} ден.</b></div>
+    <div class="row"><span>Влезни — вкупно:</span><b>${den(rep?.totalIncoming)} ден.</b></div>
+    <div class="row"><span>Влезни — ДДВ:</span><b>${den(rep?.totalIncomingVat)} ден.</b></div>
+    <div class="row grand"><span>ДДВ салдо:</span><span>${den(vatBalance)} ден.</span></div>
+  </div>
+  <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Сметководител</div></div></div>
+  ${footer(s)}`;
+  openPrint(shell("Извештај за сметководител", "#3a72b8", body));
+}

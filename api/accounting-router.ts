@@ -562,7 +562,14 @@ export const accountingRouter = createRouter({
         vatGroups[rate].vat += parseFloat(inv.vatAmount);
       }
 
+      const { workOrders, receipts: rcT, deliveryNotes: dnT } = await import("@db/schema");
+      const inRange = (d: any) => { const x = d ? new Date(d) : null; return x && x >= start && x <= end; };
+      const allWO = (await db.select().from(workOrders)).filter((w: any) => inRange(w.createdAt));
+      const allRc = (await db.select().from(rcT)).filter((r: any) => inRange(r.receiptDate ?? r.createdAt));
+      const allDn = (await db.select().from(dnT)).filter((d: any) => inRange(d.issueDate ?? d.createdAt));
       return {
+        workOrders: allWO, receiptsList: allRc, deliveryNotesList: allDn,
+        totalReceipts: allRc.reduce((a: number, r: any) => a + Number(r.totalAmount ?? 0), 0),
         period: { start: input.startDate, end: input.endDate },
         outgoing: {
           count: filteredOutgoing.length,
