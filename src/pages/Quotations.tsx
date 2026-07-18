@@ -131,6 +131,18 @@ export default function Quotations() {
     }
   }, [qDialog, nextQNum]);
 
+  useEffect(() => {
+    if (svcDialog && !svcForm.name) {
+      setSvcForm(f => ({ ...f, name: svcTypes[f.type], code: `${svcCodes[f.type] ?? "УС"}-${String((servicesData?.length ?? 0) + 1).padStart(2, "0")}` }));
+    }
+  }, [svcDialog]);
+
+  useEffect(() => {
+    if (prodDialog && !prodForm.code) {
+      setProdForm(f => ({ ...f, code: `ПРД-${String((productsData?.length ?? 0) + 1).padStart(2, "0")}` }));
+    }
+  }, [prodDialog]);
+
   const resetQForm = () => {
     setQForm({ quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14", paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18" });
     setQItems([]);
@@ -363,10 +375,10 @@ export default function Quotations() {
             <Dialog open={prodDialog} onOpenChange={setProdDialog}>
               <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нов производ</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Нов производ</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>Нов производ</DialogTitle><p className="text-xs text-gray-500">Производ = готов артикал што го изработуваш и продаваш (панел, ограда, порта...). Услугите се внесуваат одделно.</p></DialogHeader>
                 <form onSubmit={e => { e.preventDefault(); createProd.mutate(prodForm as any); }} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2"><Label>Назив *</Label><Input value={prodForm.name} onChange={e => setProdForm({ ...prodForm, name: e.target.value })} required /></div>
+                    <div className="space-y-2"><Label>Назив *</Label><Input value={prodForm.name} onChange={e => setProdForm({ ...prodForm, name: e.target.value })} placeholder="пр. Декоративен панел ДС-1, Ограда О-3, Порта П-2" required /></div>
                     <div className="space-y-2"><Label>Код *</Label><Input value={prodForm.code} onChange={e => setProdForm({ ...prodForm, code: e.target.value })} required /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
