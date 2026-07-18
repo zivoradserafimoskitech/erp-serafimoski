@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { printWorkOrder, printRequisition } from "@/lib/print-documents";
-import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft } from "lucide-react";
+import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList } from "lucide-react";
+import { MaterialPicker } from "@/components/MaterialPicker";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
   pending: { label: "На чекање", cls: "bg-gray-100 text-gray-700" },
@@ -245,17 +246,48 @@ export default function Production() {
       </Dialog>
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Детали за работен налог {woDetail?.woNumber}{woDetail?.orderNumber && <span className="ml-2 text-sm font-normal text-gray-500">· нарачка {woDetail.orderNumber}</span>}<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}>→ Фактура</Button><Button size="sm" variant="outline" onClick={() => woDetail && printRequisition(woDetail, companySettings)}>Требовање</Button><Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}>Печати / PDF</Button></span></DialogTitle></DialogHeader>
+        <DialogContent className="max-w-5xl w-[96vw] max-h-[92vh] overflow-y-auto overflow-x-hidden p-0">
+          {/* Заглавие */}
+          <div className="sticky top-0 z-10 bg-white border-b px-6 pt-5 pb-4 space-y-3">
+            <DialogHeader className="p-0 space-y-1">
+              <DialogTitle className="text-xl">
+                Работен налог <span className="font-mono text-amber-600">{woDetail?.woNumber}</span>
+              </DialogTitle>
+              <p className="text-sm text-gray-500">
+                {woDetail?.description}
+                {woDetail?.orderNumber && <span className="ml-2 text-gray-400">· од нарачка {woDetail.orderNumber}</span>}
+              </p>
+            </DialogHeader>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}><FileText className="h-3.5 w-3.5 mr-1.5" />Кон фактура</Button>
+              <Button size="sm" variant="outline" onClick={() => woDetail && printRequisition(woDetail, companySettings)}><ClipboardList className="h-3.5 w-3.5 mr-1.5" />Требовање</Button>
+              <Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}><Printer className="h-3.5 w-3.5 mr-1.5" />Печати / PDF</Button>
+            </div>
+          </div>
           {woDetail && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div><span className="text-gray-500">Опис:</span> {woDetail.description}</div>
-                <div><span className="text-gray-500">Статус:</span> <Badge className={statusCfg[woDetail.status]?.cls}>{statusCfg[woDetail.status]?.label}</Badge></div>
-                <div><span className="text-gray-500">Приоритет:</span> <Badge className={priorityCfg[woDetail.priority]?.cls}>{priorityCfg[woDetail.priority]?.label}</Badge></div>
-                <div><span className="text-gray-500">Доделено на:</span> {woDetail.assignedTo || "-"}</div>
-                <div><span className="text-gray-500">Цена на налог:</span> <span className="font-semibold">{parseFloat(woDetail.costAmount ?? "0").toFixed(2)} ден</span></div>
-                <div><span className="text-gray-500">Планиран почеток:</span> {woDetail.plannedStart ? String(woDetail.plannedStart).split("T")[0] : "-"}</div>
+            <div className="space-y-5 px-6 pb-6">
+              {/* Инфо мрежа */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Статус</p>
+                  <Badge className={statusCfg[woDetail.status]?.cls}>{statusCfg[woDetail.status]?.label}</Badge>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Приоритет</p>
+                  <Badge className={priorityCfg[woDetail.priority]?.cls}>{priorityCfg[woDetail.priority]?.label}</Badge>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Доделено на</p>
+                  <p className="text-sm font-medium truncate">{woDetail.assignedTo || "—"}</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-600 font-semibold mb-1">Цена на налог</p>
+                  <p className="text-sm font-bold text-amber-700">{parseFloat(woDetail.costAmount ?? "0").toFixed(2)} ден</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Планиран почеток</p>
+                  <p className="text-sm font-medium">{woDetail.plannedStart ? String(woDetail.plannedStart).split("T")[0] : "—"}</p>
+                </div>
               </div>
 
               <Tabs defaultValue="operations">
@@ -268,7 +300,7 @@ export default function Production() {
                   {!woDetail.operations || woDetail.operations.length === 0 ? (<p className="text-gray-400 text-sm">Нема операции</p>) : (
                     <div className="space-y-2">
                       {woDetail.operations.map((op: any) => (
-                        <div key={op.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                        <div key={op.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-2.5 bg-gray-50 rounded-lg">
                           <span className="text-xs font-mono bg-gray-200 px-1.5 py-0.5 rounded">{op.sequence}</span>
                           <div className="flex-1">
                             <span className="font-medium text-sm">{opList[op.operation] || op.operation}</span>
@@ -304,7 +336,7 @@ export default function Production() {
                   {(!woDetail.materials || woDetail.materials.length === 0) ? (<p className="text-gray-400 text-sm">Нема материјали</p>) : (
                     <div className="space-y-2">
                       {woDetail.materials.map((wm: any) => (
-                        <div key={wm.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                        <div key={wm.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-2.5 bg-gray-50 rounded-lg">
                           <Package className="h-4 w-4 text-amber-600" />
                           <div className="flex-1">
                             <span className="font-medium text-sm">{wm.materialName || wm.materialCode}</span>
@@ -325,15 +357,14 @@ export default function Production() {
                       ))}
                     </div>
                   )}
-                  <form onSubmit={handleMatSubmit} className="mt-4 p-3 bg-amber-50 rounded-lg space-y-3">
+                  <form onSubmit={handleMatSubmit} className="mt-4 p-4 bg-amber-50 rounded-lg space-y-3">
                     <h5 className="text-sm font-medium text-amber-800">Додади материјал</h5>
-                    <div className="grid grid-cols-3 gap-3">
-                      <Select value={matForm.materialId} onValueChange={(v) => setMatForm({ ...matForm, materialId: v })}>
-                        <SelectTrigger><SelectValue placeholder="Материјал" /></SelectTrigger>
-                        <SelectContent>{materialsData?.map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name} ({m.currentStock} {m.unit})</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Input type="number" placeholder="Количина" value={matForm.quantity} onChange={(e) => setMatForm({ ...matForm, quantity: e.target.value })} />
-                      <Button type="submit" size="sm" variant="outline" disabled={matCreateMut.isPending}>Додади</Button>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_8rem_auto] gap-3">
+                      <MaterialPicker materials={materialsData as any} value={matForm.materialId || null}
+                        placeholder="Пребарај материјал…" title="Избери материјал"
+                        onSelect={(m: any) => setMatForm({ ...matForm, materialId: String(m.id) })} />
+                      <Input type="number" step="0.001" placeholder="Количина" value={matForm.quantity} onChange={(e) => setMatForm({ ...matForm, quantity: e.target.value })} />
+                      <Button type="submit" size="sm" variant="outline" disabled={matCreateMut.isPending || !matForm.materialId || !matForm.quantity}>Додади</Button>
                     </div>
                   </form>
                   <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => costUpdateMut.mutate({ id: selWO! })} disabled={costUpdateMut.isPending}>
