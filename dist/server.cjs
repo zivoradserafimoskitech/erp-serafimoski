@@ -32090,6 +32090,33 @@ config(en_default());
 // api/storage-router.ts
 init_drizzle_orm();
 init_connection();
+
+// api/wo-cost-helper.ts
+init_drizzle_orm();
+init_connection();
+init_schema2();
+async function recalcWorkOrderCost(workOrderId) {
+  const db2 = getDb();
+  const ops = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, workOrderId));
+  const mats = await db2.select().from(workOrderMaterials).where(eq(workOrderMaterials.workOrderId, workOrderId));
+  let opCost = 0;
+  for (const o of ops) {
+    const rate = parseFloat(String(o.costRate ?? "0")) || 0;
+    const hours = parseFloat(String(o.actualTime ?? "")) || parseFloat(String(o.estimatedTime ?? "")) || 0;
+    const amount = rate * hours;
+    opCost += amount;
+    const stored = parseFloat(String(o.costAmount ?? "0")) || 0;
+    if (Math.abs(stored - amount) > 5e-3) {
+      await db2.update(workOrderOperations).set({ costAmount: amount.toFixed(2) }).where(eq(workOrderOperations.id, o.id));
+    }
+  }
+  const matCost = mats.reduce((s, m) => s + (parseFloat(String(m.totalCost ?? "0")) || 0), 0);
+  const total = opCost + matCost;
+  await db2.update(workOrders).set({ costAmount: total.toFixed(2) }).where(eq(workOrders.id, workOrderId));
+  return total.toFixed(2);
+}
+
+// api/storage-router.ts
 init_schema2();
 
 // api/audit-helper.ts
@@ -32338,6 +32365,10 @@ var storageRouter = createRouter({
       notes: `\u0418\u0441\u043F\u043E\u0440\u0430\u043A\u0430 \u0437\u0430 ${sourceDocType} #${sourceDocId}`,
       createdBy: userId ?? null
     });
+    if (sourceDocType === "work_order" && sourceDocId) {
+      await recalcWorkOrderCost(sourceDocId).catch(() => {
+      });
+    }
     return { success: true, unitCost, totalCost: (qty * parseFloat(unitCost)).toFixed(2) };
   }),
   // === INVENTORY TRANSACTIONS ===
@@ -32546,24 +32577,32 @@ var productionRouter = createRouter({
             const re = await db2.select().from(warehouses).where(eq(warehouses.id, newId));
             fgWh = re[0];
           }
-          const prodCode = `\u041F\u0420\u041E-${wo.woNumber}`.slice(0, 100);
-          const existingProd = await db2.select().from(products).where(eq(products.code, prodCode));
-          let productId;
-          if (existingProd[0]) {
-            productId = existingProd[0].id;
-          } else {
-            const insertedProd = await db2.insert(products).values({
-              name: (wo.description || `\u041F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 \u043E\u0434 \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}`).slice(0, 255),
-              code: prodCode,
-              category: "\u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434\u0441\u0442\u0432\u043E",
-              unit: producedUnit || "\u043A\u043E\u043C",
-              basis: "piece",
-              isActive: "active"
-            });
-            productId = Number(insertedProd[0].insertId);
+          let productId = null;
+          if (wo.orderId) {
+            const oItems = await db2.select().from(orderItems).where(eq(orderItems.orderId, wo.orderId));
+            const withProduct = oItems.filter((oi) => oi.productId);
+            if (withProduct.length === 1) productId = Number(withProduct[0].productId);
           }
+          if (!productId) {
+            const prodCode = `\u041F\u0420\u041E-${wo.woNumber}`.slice(0, 100);
+            const existingProd = await db2.select().from(products).where(eq(products.code, prodCode));
+            if (existingProd[0]) {
+              productId = existingProd[0].id;
+            } else {
+              const insertedProd = await db2.insert(products).values({
+                name: (wo.description || `\u041F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 \u043E\u0434 \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}`).slice(0, 255),
+                code: prodCode,
+                category: "\u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434\u0441\u0442\u0432\u043E",
+                unit: producedUnit || "\u043A\u043E\u043C",
+                basis: "piece",
+                isActive: "active"
+              });
+              productId = Number(insertedProd[0].insertId);
+            }
+          }
+          const freshCost = await recalcWorkOrderCost(id).catch(() => String(wo.costAmount ?? "0"));
           const qty = parseFloat(producedQty || "1") || 1;
-          const cost = parseFloat(String(wo.costAmount || "0")) || 0;
+          const cost = parseFloat(String(freshCost || "0")) || 0;
           const unitCost = qty > 0 && cost > 0 ? (cost / qty).toFixed(2) : "0";
           await db2.insert(finishedGoodsStock).values({
             productId,
@@ -32575,6 +32614,9 @@ var productionRouter = createRouter({
           });
           finishedGoodsRegistered = true;
           await logAudit({ action: "CREATE", entityType: "finished_goods", entityId: id, description: `\u0417\u0430\u0432\u0435\u0434\u0435\u043D\u0438 ${qty} ${producedUnit || "\u043A\u043E\u043C"} \u0433\u043E\u0442\u043E\u0432 \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 \u0432\u043E \u0413\u041B-\u041F\u0420\u041E\u0414 \u043E\u0434 \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}` });
+        }
+        if (wo.orderId) {
+          await db2.update(orders).set({ status: "ready" }).where(eq(orders.id, wo.orderId));
         }
       }
     }
@@ -32600,11 +32642,16 @@ var productionRouter = createRouter({
   })).mutation(async ({ input }) => {
     const db2 = getDb();
     await db2.insert(workOrderMaterials).values(input);
+    await recalcWorkOrderCost(input.workOrderId).catch(() => {
+    });
     return { success: true };
   }),
   woMaterialDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
     const db2 = getDb();
+    const wm = await db2.select().from(workOrderMaterials).where(eq(workOrderMaterials.id, input.id));
     await db2.delete(workOrderMaterials).where(eq(workOrderMaterials.id, input.id));
+    if (wm[0]) await recalcWorkOrderCost(wm[0].workOrderId).catch(() => {
+    });
     return { success: true };
   }),
   // === WORK ORDER OPERATIONS ===
@@ -32633,6 +32680,8 @@ var productionRouter = createRouter({
   })).mutation(async ({ input }) => {
     const db2 = getDb();
     await db2.insert(workOrderOperations).values({ status: "pending", ...input });
+    await recalcWorkOrderCost(input.workOrderId).catch(() => {
+    });
     return { success: true };
   }),
   operationUpdate: publicQuery.input(external_exports.object({
@@ -32665,11 +32714,17 @@ var productionRouter = createRouter({
     const db2 = getDb();
     const { id, ...data } = input;
     await db2.update(workOrderOperations).set(data).where(eq(workOrderOperations.id, id));
+    const op = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.id, id));
+    if (op[0]) await recalcWorkOrderCost(op[0].workOrderId).catch(() => {
+    });
     return { success: true };
   }),
   operationDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
     const db2 = getDb();
+    const op = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.id, input.id));
     await db2.delete(workOrderOperations).where(eq(workOrderOperations.id, input.id));
+    if (op[0]) await recalcWorkOrderCost(op[0].workOrderId).catch(() => {
+    });
     return { success: true };
   }),
   // === UPDATE WO COST ===
@@ -32695,6 +32750,56 @@ var productionRouter = createRouter({
     return { success: true, woNumber };
   }),
   // Точка 6: синџир работен налог → фактура (ставка од описот и трошокот)
+  // Синџир: завршен налог → испратница со готовиот производ
+  workOrderToDeliveryNote: publicQuery.input(external_exports.object({ workOrderId: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const woRes = await db2.select().from(workOrders).where(eq(workOrders.id, input.workOrderId));
+    const wo = woRes[0];
+    if (!wo) throw new Error("\u041D\u0430\u043B\u043E\u0433\u043E\u0442 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
+    if (wo.status !== "completed") throw new Error("\u0418\u0441\u043F\u0440\u0430\u0442\u043D\u0438\u0446\u0430 \u0441\u0435 \u043A\u0440\u0435\u0438\u0440\u0430 \u0441\u0430\u043C\u043E \u043E\u0434 \u0417\u0410\u0412\u0420\u0428\u0415\u041D \u043D\u0430\u043B\u043E\u0433 \u2014 \u043F\u0440\u0432\u043E \u0437\u0430\u0432\u0440\u0448\u0438 \u0433\u043E");
+    if (!wo.orderId) throw new Error("\u041D\u0430\u043B\u043E\u0433\u043E\u0442 \u043D\u0435\u043C\u0430 \u043F\u043E\u0432\u0440\u0437\u0430\u043D\u0430 \u043D\u0430\u0440\u0430\u0447\u043A\u0430 \u2014 \u043D\u0435 \u0437\u043D\u0430\u043C \u043A\u043E\u0458 \u0435 \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0442. \u041A\u0440\u0435\u0438\u0440\u0430\u0458 \u0458\u0430 \u0438\u0441\u043F\u0440\u0430\u0442\u043D\u0438\u0446\u0430\u0442\u0430 \u0440\u0430\u0447\u043D\u043E \u043E\u0434 \u0421\u043C\u0435\u0442\u043A\u043E\u0432\u043E\u0434\u0441\u0442\u0432\u043E \u2192 \u0418\u0441\u043F\u0440\u0430\u0442\u043D\u0438\u0446\u0438");
+    const ordRes = await db2.select().from(orders).where(eq(orders.id, wo.orderId));
+    if (!ordRes[0]) throw new Error("\u041D\u0430\u0440\u0430\u0447\u043A\u0430\u0442\u0430 \u043D\u0430 \u043D\u0430\u043B\u043E\u0433\u043E\u0442 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
+    const customerId = ordRes[0].customerId;
+    const fgRows = (await db2.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.workOrderId, input.workOrderId))).filter((f) => (parseFloat(String(f.quantity ?? "0")) || 0) > 0);
+    if (fgRows.length === 0) throw new Error("\u041D\u0435\u043C\u0430 \u0437\u0430\u043B\u0438\u0445\u0430 \u043D\u0430 \u0433\u043E\u0442\u043E\u0432 \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 \u043E\u0434 \u043E\u0432\u043E\u0458 \u043D\u0430\u043B\u043E\u0433 \u2014 \u0438\u043B\u0438 \u043D\u0435 \u0435 \u0437\u0430\u0432\u0435\u0434\u0435\u043D\u0430, \u0438\u043B\u0438 \u0432\u0435\u045C\u0435 \u0435 \u0438\u0441\u043F\u043E\u0440\u0430\u0447\u0430\u043D\u0430");
+    const { getNextDocNumber: getNextDocNumber2, bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+    const dnNumber = await getNextDocNumber2("deliveryNote");
+    await bumpDocCounter2("deliveryNote", dnNumber).catch(() => {
+    });
+    const today = /* @__PURE__ */ new Date();
+    const dnRes = await db2.insert(deliveryNotes).values({
+      dnNumber,
+      customerId,
+      orderId: wo.orderId,
+      status: "issued",
+      issueDate: today,
+      totalItems: fgRows.length,
+      notes: `\u041E\u0434 \u0440\u0430\u0431\u043E\u0442\u0435\u043D \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}`
+    });
+    const dnId = Number(dnRes[0].insertId);
+    for (const fg of fgRows) {
+      const prod = (await db2.select().from(products).where(eq(products.id, fg.productId)))[0];
+      const qty = parseFloat(String(fg.quantity)) || 0;
+      await db2.insert(documentItems).values({
+        documentId: dnId,
+        documentType: "delivery_note",
+        description: prod?.name ?? `\u041F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 #${fg.productId}`,
+        quantity: qty.toFixed(3),
+        unit: prod?.unit ?? "\u043A\u043E\u043C",
+        unitPrice: "0",
+        totalPrice: "0",
+        vatRate: "0",
+        productId: fg.productId,
+        itemType: "product"
+      });
+      await db2.update(finishedGoodsStock).set({ quantity: "0.000", updatedAt: /* @__PURE__ */ new Date() }).where(eq(finishedGoodsStock.id, fg.id));
+    }
+    await db2.update(orders).set({ status: "delivered" }).where(eq(orders.id, wo.orderId));
+    await logAudit({ action: "CREATE", entityType: "delivery_note", entityId: dnId, description: `\u041A\u0440\u0435\u0438\u0440\u0430\u043D\u0430 \u0438\u0441\u043F\u0440\u0430\u0442\u043D\u0438\u0446\u0430 ${dnNumber} \u043E\u0434 \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}` }).catch(() => {
+    });
+    return { success: true, id: dnId, dnNumber };
+  }),
   workOrderToInvoice: publicQuery.input(external_exports.object({ workOrderId: external_exports.number(), marginPercent: external_exports.number().default(30) })).mutation(async ({ input }) => {
     const db2 = getDb();
     const { orders: orders2, invoices: invoices2, documentItems: documentItems2 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
@@ -38145,8 +38250,8 @@ app.get("/api/debug-db", async (c) => {
     const db2 = getDb3();
     const t1 = await db2.execute("SELECT 1 as test");
     const t2 = await db2.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
-    const { customers: customers2 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
-    const t3 = await db2.insert(customers2).values({
+    const { customers: customers3 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
+    const t3 = await db2.insert(customers3).values({
       name: "DEBUG \u043A\u043B\u0438\u0435\u043D\u0442",
       company: "DEBUG",
       email: "debug@test.mk",

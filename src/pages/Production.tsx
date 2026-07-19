@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { printWorkOrder, printRequisition } from "@/lib/print-documents";
-import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList } from "lucide-react";
+import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck } from "lucide-react";
 import { MaterialPicker } from "@/components/MaterialPicker";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
@@ -49,7 +49,7 @@ export default function Production() {
   const [completeForm, setCompleteForm] = useState({ producedQty: "1", producedUnit: "ком" });
 
   const [form, setForm] = useState({ woNumber: "", description: "", priority: "normal", plannedStart: "", plannedEnd: "", assignedTo: "", notes: "" });
-  const [opForm, setOpForm] = useState({ operation: "cutting_laser" as keyof typeof opList, sequence: 1, description: "", estimatedTime: "", operator: "" });
+  const [opForm, setOpForm] = useState({ operation: "cutting_laser" as keyof typeof opList, sequence: 1, description: "", estimatedTime: "", operator: "", costRate: "" });
   const [matForm, setMatForm] = useState({ materialId: "", quantity: "", notes: "" });
 
   const { data: workOrders, isLoading } = trpc.production.workOrderList.useQuery({
@@ -58,6 +58,13 @@ export default function Production() {
   const { data: stats } = trpc.production.productionStats.useQuery();
   const { data: companySettings } = trpc.settings.settingsGet.useQuery();
   const chainInv = trpc.production.workOrderToInvoice.useMutation({ onSuccess: (d) => { toast.success(`Креирана фактура ${d.invoiceNumber} (нацрт, +30% маржа)`); } });
+  const chainDN = trpc.production.workOrderToDeliveryNote.useMutation({
+    onSuccess: (d: any) => {
+      toast.success(`Креирана испратница ${d.dnNumber} — готовиот производ е испорачан од ГЛ-ПРОД`);
+      utils.accounting.deliveryNoteList.invalidate(); utils.accounting.finishedGoodsList.invalidate(); utils.production.workOrderList.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const { data: woDetail } = trpc.production.workOrderById.useQuery({ id: selWO! }, { enabled: !!selWO });
   const { data: materialsData } = trpc.storage.materialList.useQuery();
   const { data: warehousesData } = trpc.warehouse.warehouseList.useQuery();
@@ -105,8 +112,8 @@ export default function Production() {
   const handleOpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selWO) return;
-    opCreateMut.mutate({ ...opForm, workOrderId: selWO } as any);
-    setOpForm({ operation: "cutting_laser", sequence: (woDetail?.operations?.length || 0) + 1, description: "", estimatedTime: "", operator: "" });
+    opCreateMut.mutate({ ...opForm, costRate: opForm.costRate || "0", workOrderId: selWO } as any);
+    setOpForm({ operation: "cutting_laser", sequence: (woDetail?.operations?.length || 0) + 1, description: "", estimatedTime: "", operator: "", costRate: opForm.costRate });
   };
 
   const handleMatSubmit = (e: React.FormEvent) => {
@@ -123,11 +130,15 @@ export default function Production() {
   };
 
   const handleIssue = (woMaterial: any) => {
-    if (!woDetail?.warehouseId) { toast.error("Изберете магацин за налогот"); return; }
+    // Материјалите се издаваат од магацинот за материјали (ГЛ-МАТ)
+    const matWh = warehousesData?.find((w: any) => w.code === "GL-MAT")
+      || warehousesData?.find((w: any) => w.type === "materials")
+      || warehousesData?.[0];
+    if (!matWh) { toast.error("Нема магацин за материјали — провери во Магацини"); return; }
     issueMut.mutate({
-      materialId: woMaterial.materialId, warehouseId: woDetail.warehouseId,
+      materialId: woMaterial.materialId, warehouseId: matWh.id,
       quantity: woMaterial.quantity, sourceDocType: "work_order", sourceDocId: selWO!,
-      reference: woDetail.woNumber,
+      reference: woDetail?.woNumber,
     });
   };
 
@@ -260,6 +271,9 @@ export default function Production() {
             </DialogHeader>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}><FileText className="h-3.5 w-3.5 mr-1.5" />Кон фактура</Button>
+              {woDetail?.status === "completed" && (
+                <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50" onClick={() => woDetail && chainDN.mutate({ workOrderId: woDetail.id })} disabled={chainDN.isPending}><Truck className="h-3.5 w-3.5 mr-1.5" />Кон испратница</Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => woDetail && printRequisition(woDetail, companySettings)}><ClipboardList className="h-3.5 w-3.5 mr-1.5" />Требовање</Button>
               <Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}><Printer className="h-3.5 w-3.5 mr-1.5" />Печати / PDF</Button>
             </div>
@@ -302,10 +316,20 @@ export default function Production() {
                       {woDetail.operations.map((op: any) => (
                         <div key={op.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-2.5 bg-gray-50 rounded-lg">
                           <span className="text-xs font-mono bg-gray-200 px-1.5 py-0.5 rounded">{op.sequence}</span>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-[140px]">
                             <span className="font-medium text-sm">{opList[op.operation] || op.operation}</span>
                             {op.description && <span className="text-gray-400 text-xs ml-2">{op.description}</span>}
-                            {op.estimatedTime && <span className="text-blue-500 text-xs ml-2">{op.estimatedTime}ч</span>}
+                            {op.estimatedTime && <span className="text-blue-500 text-xs ml-2">план {parseFloat(op.estimatedTime)}ч</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Input type="number" step="0.25" className="h-7 w-20 text-xs" placeholder="реално ч."
+                              defaultValue={op.actualTime ? parseFloat(op.actualTime) : ""}
+                              onBlur={(e) => { const v = e.target.value; if (v !== String(op.actualTime ?? "")) opUpdateMut.mutate({ id: op.id, actualTime: v || "0" } as any); }} />
+                            <span className="text-gray-400">ч ×</span>
+                            <Input type="number" step="10" className="h-7 w-24 text-xs" placeholder="ден/час"
+                              defaultValue={op.costRate && parseFloat(op.costRate) > 0 ? parseFloat(op.costRate) : ""}
+                              onBlur={(e) => { const v = e.target.value; if (v !== String(op.costRate ?? "")) opUpdateMut.mutate({ id: op.id, costRate: v || "0" } as any); }} />
+                            <span className="font-semibold text-amber-700 whitespace-nowrap">= {parseFloat(op.costAmount ?? "0").toFixed(0)} ден</span>
                           </div>
                           <Select value={op.status} onValueChange={(v) => opUpdateMut.mutate({ id: op.id, status: v as any })}>
                             <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
@@ -326,7 +350,8 @@ export default function Production() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <Input placeholder="Опис" value={opForm.description} onChange={(e) => setOpForm({ ...opForm, description: e.target.value })} />
-                      <Input placeholder="Проценето време (час.)" value={opForm.estimatedTime} onChange={(e) => setOpForm({ ...opForm, estimatedTime: e.target.value })} />
+                      <Input type="number" step="0.25" placeholder="Проценето време (час.)" value={opForm.estimatedTime} onChange={(e) => setOpForm({ ...opForm, estimatedTime: e.target.value })} />
+                      <Input type="number" step="10" placeholder="Цена по час (ден.)" value={opForm.costRate} onChange={(e) => setOpForm({ ...opForm, costRate: e.target.value })} />
                     </div>
                     <Button type="submit" size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={opCreateMut.isPending}><Plus className="h-3.5 w-3.5 mr-1" />Додади</Button>
                   </form>

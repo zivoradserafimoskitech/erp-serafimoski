@@ -3,7 +3,8 @@ import { eq, desc } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { workOrders, workOrderOperations, workOrderMaterials, orders, materials, warehouses, products, finishedGoodsStock } from "@db/schema";
+import { workOrders, workOrderOperations, workOrderMaterials, orders, orderItems, customers, deliveryNotes, documentItems, materials, warehouses, products, finishedGoodsStock } from "@db/schema";
+import { recalcWorkOrderCost } from "./wo-cost-helper";
 import { logAudit } from "./audit-helper";
 
 export const productionRouter = createRouter({
@@ -142,26 +143,36 @@ export const productionRouter = createRouter({
               fgWh = re[0];
             }
 
-            // Најди или создај производ поврзан со налогот
-            const prodCode = `ПРО-${wo.woNumber}`.slice(0, 100);
-            const existingProd = await db.select().from(products).where(eq(products.code, prodCode));
-            let productId: number;
-            if (existingProd[0]) {
-              productId = existingProd[0].id;
-            } else {
-              const insertedProd = await db.insert(products).values({
-                name: (wo.description || `Производ од налог ${wo.woNumber}`).slice(0, 255),
-                code: prodCode,
-                category: "производство",
-                unit: producedUnit || "ком",
-                basis: "piece",
-                isActive: "active",
-              } as any);
-              productId = Number(insertedProd[0].insertId);
+            // Прво: ако нарачката има ставка врзана со каталошки производ — користи го него
+            let productId: number | null = null;
+            if (wo.orderId) {
+              const oItems = await db.select().from(orderItems).where(eq(orderItems.orderId, wo.orderId));
+              const withProduct = oItems.filter(oi => oi.productId);
+              if (withProduct.length === 1) productId = Number(withProduct[0].productId);
+            }
+            // Инаку: најди или создај производ поврзан со налогот
+            if (!productId) {
+              const prodCode = `ПРО-${wo.woNumber}`.slice(0, 100);
+              const existingProd = await db.select().from(products).where(eq(products.code, prodCode));
+              if (existingProd[0]) {
+                productId = existingProd[0].id;
+              } else {
+                const insertedProd = await db.insert(products).values({
+                  name: (wo.description || `Производ од налог ${wo.woNumber}`).slice(0, 255),
+                  code: prodCode,
+                  category: "производство",
+                  unit: producedUnit || "ком",
+                  basis: "piece",
+                  isActive: "active",
+                } as any);
+                productId = Number(insertedProd[0].insertId);
+              }
             }
 
+            // Автоматска препресметка на цената пред да се пресмета трошок по единица
+            const freshCost = await recalcWorkOrderCost(id).catch(() => String(wo.costAmount ?? "0"));
             const qty = parseFloat(producedQty || "1") || 1;
-            const cost = parseFloat(String(wo.costAmount || "0")) || 0;
+            const cost = parseFloat(String(freshCost || "0")) || 0;
             const unitCost = qty > 0 && cost > 0 ? (cost / qty).toFixed(2) : "0";
 
             await db.insert(finishedGoodsStock).values({
@@ -174,6 +185,10 @@ export const productionRouter = createRouter({
             } as any);
             finishedGoodsRegistered = true;
             await logAudit({ action: "CREATE", entityType: "finished_goods", entityId: id, description: `Заведени ${qty} ${producedUnit || "ком"} готов производ во ГЛ-ПРОД од налог ${wo.woNumber}` });
+          }
+          // Нарачката е спремна за испорака
+          if (wo.orderId) {
+            await db.update(orders).set({ status: "ready" }).where(eq(orders.id, wo.orderId));
           }
         }
       }
@@ -206,6 +221,7 @@ export const productionRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       await db.insert(workOrderMaterials).values(input as any);
+      await recalcWorkOrderCost(input.workOrderId).catch(() => {});
       return { success: true };
     }),
 
@@ -213,7 +229,9 @@ export const productionRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      const wm = await db.select().from(workOrderMaterials).where(eq(workOrderMaterials.id, input.id));
       await db.delete(workOrderMaterials).where(eq(workOrderMaterials.id, input.id));
+      if (wm[0]) await recalcWorkOrderCost(wm[0].workOrderId).catch(() => {});
       return { success: true };
     }),
 
@@ -238,6 +256,7 @@ export const productionRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       await db.insert(workOrderOperations).values({ status: "pending", ...(input as any) });
+      await recalcWorkOrderCost(input.workOrderId).catch(() => {});
       return { success: true };
     }),
 
@@ -266,6 +285,8 @@ export const productionRouter = createRouter({
       const db = getDb();
       const { id, ...data } = input;
       await db.update(workOrderOperations).set(data).where(eq(workOrderOperations.id, id));
+      const op = await db.select().from(workOrderOperations).where(eq(workOrderOperations.id, id));
+      if (op[0]) await recalcWorkOrderCost(op[0].workOrderId).catch(() => {});
       return { success: true };
     }),
 
@@ -273,7 +294,9 @@ export const productionRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      const op = await db.select().from(workOrderOperations).where(eq(workOrderOperations.id, input.id));
       await db.delete(workOrderOperations).where(eq(workOrderOperations.id, input.id));
+      if (op[0]) await recalcWorkOrderCost(op[0].workOrderId).catch(() => {});
       return { success: true };
     }),
 
@@ -304,6 +327,61 @@ export const productionRouter = createRouter({
     }),
 
   // Точка 6: синџир работен налог → фактура (ставка од описот и трошокот)
+  // Синџир: завршен налог → испратница со готовиот производ
+  workOrderToDeliveryNote: publicQuery
+    .input(z.object({ workOrderId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const woRes = await db.select().from(workOrders).where(eq(workOrders.id, input.workOrderId));
+      const wo = woRes[0];
+      if (!wo) throw new Error("Налогот не постои");
+      if (wo.status !== "completed") throw new Error("Испратница се креира само од ЗАВРШЕН налог — прво заврши го");
+      if (!wo.orderId) throw new Error("Налогот нема поврзана нарачка — не знам кој е клиентот. Креирај ја испратницата рачно од Сметководство → Испратници");
+
+      const ordRes = await db.select().from(orders).where(eq(orders.id, wo.orderId));
+      if (!ordRes[0]) throw new Error("Нарачката на налогот не постои");
+      const customerId = ordRes[0].customerId;
+
+      // Готовите производи произведени по овој налог, со преостаната залиха
+      const fgRows = (await db.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.workOrderId, input.workOrderId)))
+        .filter(f => (parseFloat(String(f.quantity ?? "0")) || 0) > 0);
+      if (fgRows.length === 0) throw new Error("Нема залиха на готов производ од овој налог — или не е заведена, или веќе е испорачана");
+
+      const { getNextDocNumber, bumpDocCounter } = await import("./counters-helper");
+      const dnNumber = await getNextDocNumber("deliveryNote");
+      await bumpDocCounter("deliveryNote", dnNumber).catch(() => {});
+
+      const today = new Date();
+      const dnRes = await db.insert(deliveryNotes).values({
+        dnNumber, customerId, orderId: wo.orderId,
+        status: "issued", issueDate: today,
+        totalItems: fgRows.length,
+        notes: `Од работен налог ${wo.woNumber}`,
+      } as any);
+      const dnId = Number(dnRes[0].insertId);
+
+      // Ставки + одземање на залихата од ГЛ-ПРОД
+      for (const fg of fgRows) {
+        const prod = (await db.select().from(products).where(eq(products.id, fg.productId)))[0];
+        const qty = parseFloat(String(fg.quantity)) || 0;
+        await db.insert(documentItems).values({
+          documentId: dnId, documentType: "delivery_note",
+          description: prod?.name ?? `Производ #${fg.productId}`,
+          quantity: qty.toFixed(3), unit: prod?.unit ?? "ком",
+          unitPrice: "0", totalPrice: "0", vatRate: "0",
+          productId: fg.productId, itemType: "product",
+        } as any);
+        await db.update(finishedGoodsStock)
+          .set({ quantity: "0.000", updatedAt: new Date() } as any)
+          .where(eq(finishedGoodsStock.id, fg.id));
+      }
+
+      // Нарачката е испорачана
+      await db.update(orders).set({ status: "delivered" }).where(eq(orders.id, wo.orderId));
+      await logAudit({ action: "CREATE", entityType: "delivery_note", entityId: dnId, description: `Креирана испратница ${dnNumber} од налог ${wo.woNumber}` }).catch(() => {});
+      return { success: true, id: dnId, dnNumber };
+    }),
+
   workOrderToInvoice: publicQuery
     .input(z.object({ workOrderId: z.number(), marginPercent: z.number().default(30) }))
     .mutation(async ({ input }) => {

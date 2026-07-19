@@ -3,6 +3,7 @@ import { eq, desc, and } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
+import { recalcWorkOrderCost } from "./wo-cost-helper";
 import {
   materials, materialStock, materialLots,
   inventoryTransactions, warehouses,
@@ -290,6 +291,9 @@ export const storageRouter = createRouter({
         createdBy: userId ?? null,
       } as any);
 
+      if (sourceDocType === "work_order" && sourceDocId) {
+        await recalcWorkOrderCost(sourceDocId).catch(() => {});
+      }
       return { success: true, unitCost, totalCost: (qty * parseFloat(unitCost)).toFixed(2) };
     }),
 
