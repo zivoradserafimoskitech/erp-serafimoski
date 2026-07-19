@@ -431,31 +431,134 @@ export function printReceipt(rc: any, settings: any) {
 // ══════════════ ИЗВЕШТАЈ ЗА СМЕТКОВОДИТЕЛ ══════════════
 export function printAccountantReport(rep: any, period: { startDate: string; endDate: string }, settings: any) {
   const s = settings ?? {};
-  const sec = (title: string, heads: string[], rows: string) => `
-    <div class="stitle">${title}</div>
-    <table class="t"><thead><tr>${heads.map(h => `<th${h.startsWith(">") ? ' class=\"r\"' : ""}>${h.replace(/^>/, "")}</th>`).join("")}</tr></thead>
-    <tbody>${rows || `<tr><td colspan="${heads.length}" class="c" style="padding:8px;color:#999">Нема записи</td></tr>`}</tbody></table>`;
-  const out = (rep?.outgoing ?? []).map((i: any) => `<tr><td>${esc(i.invoiceNumber)}</td><td>${dt(i.issueDate)}</td><td class="r">${den(i.subtotal)}</td><td class="r">${den(i.vatAmount)}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
-  const inc = (rep?.incoming ?? []).map((i: any) => `<tr><td>${esc(i.invoiceNumber ?? i.documentNumber ?? "")}</td><td>${dt(i.receivedDate)}</td><td>${esc(i.supplierName ?? "")}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
-  const rc = (rep?.receiptsList ?? []).map((r: any) => `<tr><td>${esc(r.receiptNumber)}</td><td>${dt(r.receiptDate ?? r.createdAt)}</td><td class="r"><b>${den(r.totalAmount)}</b></td></tr>`).join("");
-  const dnr = (rep?.deliveryNotesList ?? []).map((x: any) => `<tr><td>${esc(x.dnNumber)}</td><td>${dt(x.issueDate)}</td><td>${esc(STATUS_MK[x.status] ?? x.status ?? "")}</td></tr>`).join("");
-  const wo = (rep?.workOrders ?? []).map((w: any) => `<tr><td>${esc(w.woNumber)}</td><td>${dt(w.createdAt)}</td><td>${esc(w.description ?? "")}</td><td>${esc(STATUS_MK[w.status] ?? w.status ?? "")}</td><td class="r">${den(w.costAmount)}</td></tr>`).join("");
-  const vatBalance = Number(rep?.totalOutgoingVat ?? 0) - Number(rep?.totalIncomingVat ?? 0);
-  const body = `
-  ${header(s, "ИЗВЕШТАЈ", "за сметководител", `Период: <b>${dt(period.startDate)} — ${dt(period.endDate)}</b>`)}
-  ${sec("Излезни фактури", ["Број", "Датум", ">Основица", ">ДДВ", ">Вкупно"], out)}
-  ${sec("Влезни фактури", ["Број", "Датум", "Добавувач", ">Вкупно"], inc)}
-  ${sec("Приемници", ["Број", "Датум", ">Вкупно"], rc)}
-  ${sec("Испратници", ["Број", "Датум", "Статус"], dnr)}
-  ${sec("Работни налози (со требовања)", ["Број", "Датум", "Опис", "Статус", ">Трошок"], wo)}
-  <div class="totals" style="width:80mm">
-    <div class="row"><span>Излезни — основица:</span><b>${den(rep?.totalOutgoingBase)} ден.</b></div>
-    <div class="row"><span>Излезни — ДДВ:</span><b>${den(rep?.totalOutgoingVat)} ден.</b></div>
-    <div class="row"><span>Влезни — вкупно:</span><b>${den(rep?.totalIncoming)} ден.</b></div>
-    <div class="row"><span>Влезни — ДДВ:</span><b>${den(rep?.totalIncomingVat)} ден.</b></div>
-    <div class="row grand"><span>ДДВ салдо:</span><span>${den(vatBalance)} ден.</span></div>
+  const logo = "/logo.png?v=2";
+  const outItems: any[] = rep?.outgoing?.items ?? [];
+  const incItems: any[] = rep?.incoming?.items ?? [];
+  const rcList: any[] = rep?.receiptsList ?? [];
+  const dnList: any[] = rep?.deliveryNotesList ?? [];
+  const woList: any[] = rep?.workOrders ?? [];
+  const vatGroups: Record<string, { base: number; vat: number }> = rep?.outgoing?.vatGroups ?? {};
+  const vat = rep?.vatRecapitulation ?? {};
+  const vatBalance = Number(vat?.vatBalance ?? 0);
+  const woCost = woList.reduce((a, w) => a + (parseFloat(String(w.costAmount ?? "0")) || 0), 0);
+
+  const section = (title: string, heads: string[], rows: string, totalRow = "") => `
+    <div class="sec">
+      <div class="stitle">${title}</div>
+      <table class="t"><thead><tr>${heads.map(h => `<th${h.startsWith(">") ? ' class="r"' : ""}>${h.replace(/^>/, "")}</th>`).join("")}</tr></thead>
+      <tbody>${rows || `<tr><td colspan="${heads.length}" class="c empty">Нема записи во периодот</td></tr>`}${totalRow}</tbody></table>
+    </div>`;
+
+  const out = outItems.map((i, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(i.invoiceNumber)}</td><td>${dt(i.issueDate)}</td><td class="r">${den(i.subtotal)}</td><td class="r">${den(i.vatAmount)}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
+  const outTotal = outItems.length ? `<tr class="sumrow"><td colspan="3">Вкупно излезни (${outItems.length})</td><td class="r">${den(rep?.outgoing?.totalBase)}</td><td class="r">${den(rep?.outgoing?.totalVat)}</td><td class="r">${den(rep?.outgoing?.total)}</td></tr>` : "";
+
+  const inc = incItems.map((i, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(i.supplierInvoiceNumber ?? i.invoiceNumber ?? "")}</td><td>${dt(i.receivedDate)}</td><td class="r">${den(i.subtotal)}</td><td class="r">${den(i.vatAmount)}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
+  const incTotal = incItems.length ? `<tr class="sumrow"><td colspan="3">Вкупно влезни (${incItems.length})</td><td class="r">${den(rep?.incoming?.totalBase)}</td><td class="r">${den(rep?.incoming?.totalVat)}</td><td class="r">${den(rep?.incoming?.total)}</td></tr>` : "";
+
+  const vatRows = Object.entries(vatGroups).map(([rate, g]) => `<tr><td>ДДВ ${esc(rate)}%</td><td class="r">${den(g.base)}</td><td class="r"><b>${den(g.vat)}</b></td></tr>`).join("");
+
+  const rc = rcList.map((r, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(r.receiptNumber)}</td><td>${dt(r.receiptDate ?? r.createdAt)}</td><td class="r"><b>${den(r.totalAmount)}</b></td></tr>`).join("");
+  const rcTotal = rcList.length ? `<tr class="sumrow"><td colspan="3">Вкупно приемници (${rcList.length})</td><td class="r">${den(rep?.totalReceipts)}</td></tr>` : "";
+
+  const dnr = dnList.map((x, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(x.dnNumber)}</td><td>${dt(x.issueDate)}</td><td>${esc(STATUS_MK[x.status] ?? x.status ?? "")}</td></tr>`).join("");
+
+  const wo = woList.map((w, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(w.woNumber)}</td><td>${dt(w.createdAt)}</td><td>${esc(w.description ?? "")}</td><td>${esc(STATUS_MK[w.status] ?? w.status ?? "")}</td><td class="r">${den(w.costAmount)}</td></tr>`).join("");
+  const woTotal = woList.length ? `<tr class="sumrow"><td colspan="5">Вкупно налози (${woList.length})</td><td class="r">${den(woCost)}</td></tr>` : "";
+
+  const html = `<!doctype html>
+<html lang="mk"><head><meta charset="utf-8"><title>Извештај за сметководител</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { --steel: #6188AF; --ink: #232A32; --mid: #4A5568; --line: #D8DCE1; --soft: #EEF4FB; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.5px; color: var(--ink); padding: 11mm 12mm; font-variant-numeric: tabular-nums; }
+  @page { size: A4; margin: 0; }
+  .lbl { font-size: 8px; text-transform: uppercase; letter-spacing: 2px; color: var(--mid); font-weight: 700; }
+  .mono { font-family: 'Consolas', monospace; font-size: 10px; }
+
+  .head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .head img { max-width: 290px; max-height: 48px; object-fit: contain; object-position: left; }
+  .head .co-sub { font-size: 9px; color: var(--mid); line-height: 1.6; margin-top: 6px; }
+  .tag { background: var(--steel); color: #fff; padding: 12px 18px 11px 22px; min-width: 64mm; clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px)); position: relative; }
+  .tag::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #C9DDF2; }
+  .tag h2 { font-size: 16px; letter-spacing: 4px; font-weight: 800; }
+  .tag .sub { font-size: 9.5px; color: #EAF2FA; margin-top: 2px; }
+  .tag .meta { font-size: 9.5px; color: #DDE9F4; margin-top: 7px; }
+  .tag .meta b { color: #fff; }
+  .rule { height: 2px; background: var(--line); margin: 11px 0 13px; position: relative; }
+  .rule::before { content: ""; position: absolute; left: 0; top: 0; height: 2px; width: 58mm; background: var(--steel); }
+
+  /* КПИ картички */
+  .kpis { display: flex; gap: 8px; }
+  .kpi { flex: 1; border: 1px solid var(--line); padding: 8px 11px; background: #FDFDFC; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%); }
+  .kpi .v { font-size: 13px; font-weight: 800; color: var(--ink); margin-top: 3px; white-space: nowrap; }
+  .kpi .n { font-size: 8.5px; color: var(--mid); margin-top: 1px; }
+  .kpi.hl { background: var(--steel); border-color: var(--steel); }
+  .kpi.hl .lbl, .kpi.hl .n { color: #DDE9F4; }
+  .kpi.hl .v { color: #fff; }
+
+  .sec { margin-top: 14px; break-inside: avoid-page; }
+  .stitle { font-size: 9px; text-transform: uppercase; letter-spacing: 2.4px; font-weight: 800; color: var(--steel); border-bottom: 2px solid var(--steel); padding-bottom: 3px; margin-bottom: 2px; }
+  table.t { width: 100%; border-collapse: collapse; }
+  table.t th { font-size: 8px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--mid); text-align: left; padding: 5px 8px 4px; border-bottom: 1px solid var(--line); }
+  table.t td { padding: 4.5px 8px; border-bottom: 1px solid #EEF0F3; }
+  .c { text-align: center; } .r { text-align: right; white-space: nowrap; }
+  th.r { text-align: right; }
+  .dim { color: #97A0AA; font-size: 9px; }
+  .empty { padding: 10px; color: #999; }
+  tr.sumrow td { background: var(--soft); font-weight: 700; border-bottom: 2px solid var(--steel); border-top: 1px solid var(--line); }
+
+  .vatblock { display: flex; justify-content: flex-end; margin-top: 14px; break-inside: avoid-page; }
+  .vatplate { width: 78mm; background: var(--steel); color: #fff; padding: 11px 15px; clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px)); border-top: 3px solid #C9DDF2; }
+  .vatplate .row { display: flex; justify-content: space-between; font-size: 10px; color: #DDE9F4; padding: 1.5px 0; }
+  .vatplate .row b { color: #fff; }
+  .vatplate .grand { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.35); font-size: 13.5px; font-weight: 800; }
+  .vatplate .grand small { font-size: 8.5px; letter-spacing: 2px; color: #E3EDF7; }
+
+  .sigs { display: flex; justify-content: space-between; margin-top: 34px; gap: 26px; }
+  .sig { flex: 1; text-align: center; }
+  .sig .line { border-top: 1px solid var(--mid); margin-top: 30px; padding-top: 5px; font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--mid); }
+  .foot { margin-top: 16px; background: var(--steel); color: #E3EDF7; font-size: 8.5px; text-align: center; padding: 6px 10px; letter-spacing: .6px; }
+  .foot b { color: #fff; }
+  @media print { body { padding: 10mm 11mm; } }
+</style></head><body>
+  <div class="head">
+    <div>
+      <img src="${esc(logo)}" alt="" onerror="this.style.display='none'">
+      <div class="co-sub">${esc(s?.name ?? "Serafimoski Tech DOOEL")}${s?.address ? "<br>" + esc(s.address) : ""}<br>ЕДБ: ${esc(s?.edb ?? "—")} · ЕМБС: ${esc(s?.embs ?? "—")}</div>
+    </div>
+    <div class="tag">
+      <h2>ИЗВЕШТАЈ</h2>
+      <div class="sub">за сметководител</div>
+      <div class="meta">Период: <b>${dt(period.startDate)} — ${dt(period.endDate)}</b></div>
+    </div>
   </div>
+  <div class="rule"></div>
+
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Излезни фактури</span><div class="v">${den(rep?.outgoing?.total)} ден.</div><div class="n">${rep?.outgoing?.count ?? 0} документи · ДДВ ${den(rep?.outgoing?.totalVat)}</div></div>
+    <div class="kpi"><span class="lbl">Влезни фактури</span><div class="v">${den(rep?.incoming?.total)} ден.</div><div class="n">${rep?.incoming?.count ?? 0} документи · ДДВ ${den(rep?.incoming?.totalVat)}</div></div>
+    <div class="kpi"><span class="lbl">Приемници</span><div class="v">${den(rep?.totalReceipts)} ден.</div><div class="n">${rcList.length} документи</div></div>
+    <div class="kpi hl"><span class="lbl">ДДВ салдо</span><div class="v">${den(Math.abs(vatBalance))} ден.</div><div class="n">${vatBalance >= 0 ? "за уплата" : "ДДВ побарување (за поврат)"}</div></div>
+  </div>
+
+  ${section("Излезни фактури", ["#", "Број", "Датум", ">Основица", ">ДДВ", ">Вкупно (ден.)"], out, outTotal)}
+  ${vatRows ? section("ДДВ рекапитулација по стапки (излезни)", ["Стапка", ">Основица", ">ДДВ (ден.)"], vatRows) : ""}
+  ${section("Влезни фактури", ["#", "Број", "Датум прием", ">Основица", ">ДДВ", ">Вкупно (ден.)"], inc, incTotal)}
+  ${section("Приемници", ["#", "Број", "Датум", ">Вкупно (ден.)"], rc, rcTotal)}
+  ${section("Испратници", ["#", "Број", "Датум", "Статус"], dnr)}
+  ${section("Работни налози (со требовања)", ["#", "Број", "Датум", "Опис", "Статус", ">Трошок (ден.)"], wo, woTotal)}
+
+  <div class="vatblock"><div class="vatplate">
+    <div class="row"><span>Излезен ДДВ:</span><b>${den(vat?.outgoingVat)} ден.</b></div>
+    <div class="row"><span>Влезен ДДВ (одбивка):</span><b>${den(vat?.incomingVat)} ден.</b></div>
+    <div class="grand"><small>${vatBalance >= 0 ? "ДДВ ЗА УПЛАТА" : "ДДВ ЗА ПОВРАТ"}</small><span>${den(Math.abs(vatBalance))} ден.</span></div>
+  </div></div>
+
   <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Сметководител</div></div></div>
-  ${footer(s)}`;
-  openPrint(shell("Извештај за сметководител", "#3a72b8", body));
+  <div class="foot"><b>${esc(s?.name ?? "Serafimoski Tech DOOEL")}</b> · ЕДБ ${esc(s?.edb ?? "")} · Извештај генериран од Metal ERP на ${new Date().toLocaleDateString("mk-MK")}</div>
+<script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+  openPrint(html);
 }
+
