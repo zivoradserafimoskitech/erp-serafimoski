@@ -274,7 +274,7 @@ export default function Quotations() {
               }
             }}>
               <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setEditingId(null)}><Plus className="h-4 w-4 mr-2" />Нова понуда</Button></DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-4xl max-h-[95vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editingId ? `Измени понуда ${qForm.quoteNumber}` : "Нова понуда"}</DialogTitle></DialogHeader>
                 <form onSubmit={handleQSubmit} className="space-y-4">
                   {/* Basic info */}
@@ -346,7 +346,7 @@ export default function Quotations() {
                   </div>
                 </form>
                 <Dialog open={customDialog} onOpenChange={setCustomDialog}>
-                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Custom производ</DialogTitle></DialogHeader>
                     <div className="space-y-3">
                       <div className="grid grid-cols-[1fr_5rem_5rem_7rem] gap-2">
@@ -557,7 +557,7 @@ export default function Quotations() {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0 gap-0">
+        <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto p-0 gap-0">
           {qDetail && (
             <>
               {/* Header */}
@@ -700,7 +700,7 @@ export default function Quotations() {
 
       {/* BOM Estimator Dialog */}
       <Dialog open={estDialog} onOpenChange={setEstDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Естиматор за производ</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-4 gap-3">
