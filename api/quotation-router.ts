@@ -338,22 +338,38 @@ export const quotationRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
-      {
-        const { bumpDocCounter } = await import("./counters-helper");
-        await bumpDocCounter("quote", input.quoteNumber).catch(() => {});
-      }
       const db = getDb();
       const { items, ...qData } = input;
-      const result = await db.insert(quotations).values({
+      const insertPayload: any = {
         ...qData,
         validUntil: qData.validUntil ? new Date(qData.validUntil) : null,
-      } as any);
-      const insertId = Number(result[0].insertId);
+      };
+
+      let insertId: number;
+      try {
+        const result = await db.insert(quotations).values(insertPayload);
+        insertId = Number(result[0].insertId);
+      } catch (err: any) {
+        const isDup = err?.code === "23505" || /duplicate key|unique constraint/i.test(String(err?.message ?? ""));
+        if (!isDup) throw err;
+        // Предложениот број е веќе зафатен (застарен предлог / паралелно креирање) -- земи вистински следен и обиди се уште еднаш
+        const { getNextDocNumberTxn } = await import("./counters-helper");
+        const freshNumber = await getNextDocNumberTxn(db, "quote");
+        insertPayload.quoteNumber = freshNumber;
+        qData.quoteNumber = freshNumber;
+        const result = await db.insert(quotations).values(insertPayload);
+        insertId = Number(result[0].insertId);
+      }
+
+      {
+        const { bumpDocCounter } = await import("./counters-helper");
+        await bumpDocCounter("quote", qData.quoteNumber).catch(() => {});
+      }
       if (items && items.length > 0) {
         await db.insert(quotationItems).values(items.map(i => ({ ...i, quotationId: insertId })));
       }
       await logAudit({ action: "CREATE", entityType: "quotation", entityId: insertId, description: `Креирана понуда ${qData.quoteNumber}` });
-      return { success: true, id: insertId };
+      return { success: true, id: insertId, quoteNumber: qData.quoteNumber };
     }),
 
   quotationUpdate: publicQuery

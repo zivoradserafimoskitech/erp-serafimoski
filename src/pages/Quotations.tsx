@@ -110,7 +110,16 @@ export default function Quotations() {
   const { data: materialsData } = trpc.quotation.materialList.useQuery({});
 
   const createQ = trpc.quotation.quotationCreate.useMutation({
-    onSuccess: () => { utils.quotation.quotationList.invalidate(); setQDialog(false); resetQForm(); },
+    onSuccess: (d: any) => {
+      utils.quotation.quotationList.invalidate();
+      setQDialog(false);
+      if (d?.quoteNumber && d.quoteNumber !== qForm.quoteNumber) {
+        toast.success(`Понудата е зачувана како ${d.quoteNumber} (предложениот број веќе беше зафатен)`);
+      } else {
+        toast.success(`Понудата ${d?.quoteNumber ?? ""} е зачувана`);
+      }
+      resetQForm();
+    },
   });
   const createSvc = trpc.quotation.serviceCreate.useMutation({
     onSuccess: () => { utils.quotation.serviceList.invalidate(); setSvcDialog(false); setSvcForm({ name: "", code: "", type: "laser_cutting", unit: "m2", description: "", saleRate: "0", costRate: "0" }); },
