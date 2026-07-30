@@ -465,6 +465,10 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
   const wo = woList.map((w, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(w.woNumber)}</td><td>${dt(w.createdAt)}</td><td>${esc(w.description ?? "")}</td><td>${esc(STATUS_MK[w.status] ?? w.status ?? "")}</td><td class="r">${den(w.costAmount)}</td></tr>`).join("");
   const woTotal = woList.length ? `<tr class="sumrow"><td colspan="5">Вкупно налози (${woList.length})</td><td class="r">${den(woCost)}</td></tr>` : "";
 
+  const reqList: any[] = rep?.requisitions ?? [];
+  const req = reqList.map((r, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(r.workOrderNumber)}</td><td>${esc(r.materialName)}</td><td class="r">${esc(r.quantity)} ${esc(r.unit ?? "")}</td><td class="r">${den(r.unitCost)}</td><td class="r"><b>${den(r.totalCost)}</b></td></tr>`).join("");
+  const reqTotal = reqList.length ? `<tr class="sumrow"><td colspan="5">Вкупно требовања (${reqList.length})</td><td class="r">${den(rep?.totalRequisitionCost)}</td></tr>` : "";
+
   const html = `<!doctype html>
 <html lang="mk"><head><meta charset="utf-8"><title>Извештај за сметководител</title>
 <style>
@@ -539,6 +543,7 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
     <div class="kpi"><span class="lbl">Излезни фактури</span><div class="v">${den(rep?.outgoing?.total)} ден.</div><div class="n">${rep?.outgoing?.count ?? 0} документи · ДДВ ${den(rep?.outgoing?.totalVat)}</div></div>
     <div class="kpi"><span class="lbl">Влезни фактури</span><div class="v">${den(rep?.incoming?.total)} ден.</div><div class="n">${rep?.incoming?.count ?? 0} документи · ДДВ ${den(rep?.incoming?.totalVat)}</div></div>
     <div class="kpi"><span class="lbl">Приемници</span><div class="v">${den(rep?.totalReceipts)} ден.</div><div class="n">${rcList.length} документи</div></div>
+    <div class="kpi"><span class="lbl">Требовања</span><div class="v">${den(rep?.totalRequisitionCost)} ден.</div><div class="n">${reqList.length} ставки</div></div>
     <div class="kpi hl"><span class="lbl">ДДВ салдо</span><div class="v">${den(Math.abs(vatBalance))} ден.</div><div class="n">${vatBalance >= 0 ? "за уплата" : "ДДВ побарување (за поврат)"}</div></div>
   </div>
 
@@ -547,7 +552,8 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
   ${section("Влезни фактури", ["#", "Број", "Датум прием", ">Основица", ">ДДВ", ">Вкупно (ден.)"], inc, incTotal)}
   ${section("Приемници", ["#", "Број", "Датум", ">Вкупно (ден.)"], rc, rcTotal)}
   ${section("Испратници", ["#", "Број", "Датум", "Статус"], dnr)}
-  ${section("Работни налози (со требовања)", ["#", "Број", "Датум", "Опис", "Статус", ">Трошок (ден.)"], wo, woTotal)}
+  ${section("Работни налози", ["#", "Број", "Датум", "Опис", "Статус", ">Трошок (ден.)"], wo, woTotal)}
+  ${section("Требовања (потрошен материјал по работни налози)", ["#", "Раб. налог", "Материјал", ">Количина", ">Цена", ">Вкупно (ден.)"], req, reqTotal)}
 
   <div class="vatblock"><div class="vatplate">
     <div class="row"><span>Излезен ДДВ:</span><b>${den(vat?.outgoingVat)} ден.</b></div>

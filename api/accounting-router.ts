@@ -628,13 +628,39 @@ export const accountingRouter = createRouter({
         vatGroups[rate].vat += parseFloat(inv.vatAmount);
       }
 
-      const { workOrders, receipts: rcT, deliveryNotes: dnT } = await import("@db/schema");
+      const { workOrders, receipts: rcT, deliveryNotes: dnT, workOrderMaterials: womT } = await import("@db/schema");
       const inRange = (d: any) => { const x = d ? new Date(d) : null; return x && x >= start && x <= end; };
       const allWO = (await db.select().from(workOrders)).filter((w: any) => inRange(w.createdAt));
       const allRc = (await db.select().from(rcT)).filter((r: any) => inRange(r.receiptDate ?? r.createdAt));
       const allDn = (await db.select().from(dnT)).filter((d: any) => inRange(d.issueDate ?? d.createdAt));
+
+      // Требовања: реално потрошен материјал (isActual='actual') по работните налози во периодот
+      const woIds = new Set(allWO.map((w: any) => w.id));
+      const allWOM = woIds.size
+        ? (await db.select().from(womT)).filter((m: any) => m.isActual === "actual" && woIds.has(m.workOrderId))
+        : [];
+      const allMaterialsForReport = await db.select().from(materials);
+      const matById = new Map(allMaterialsForReport.map((m: any) => [m.id, m]));
+      const woById = new Map(allWO.map((w: any) => [w.id, w]));
+      const requisitions = allWOM.map((m: any) => {
+        const mat = matById.get(m.materialId);
+        const wo = woById.get(m.workOrderId);
+        return {
+          workOrderId: m.workOrderId,
+          workOrderNumber: wo?.woNumber ?? "",
+          date: wo?.createdAt ?? null,
+          materialId: m.materialId,
+          materialName: mat?.name ?? `#${m.materialId}`,
+          unit: mat?.unit ?? "",
+          quantity: m.quantity,
+          unitCost: m.unitCost,
+          totalCost: m.totalCost,
+        };
+      });
+      const totalRequisitionCost = allWOM.reduce((a: number, m: any) => a + (parseFloat(String(m.totalCost ?? "0")) || 0), 0);
       return {
         workOrders: allWO, receiptsList: allRc, deliveryNotesList: allDn,
+        requisitions, totalRequisitionCost: totalRequisitionCost.toFixed(2),
         totalReceipts: allRc.reduce((a: number, r: any) => a + Number(r.totalAmount ?? 0), 0),
         period: { start: input.startDate, end: input.endDate },
         outgoing: {
