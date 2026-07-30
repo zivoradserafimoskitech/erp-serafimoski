@@ -12,25 +12,15 @@ import {
   FileText,
   ScanLine,
   ArrowRight,
-  TestTube,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router";
-import { useState } from "react";
 
 export default function Dashboard() {
   const { data: stats } = trpc.dashboard.stats.useQuery();
   const { data: parsedDocs } = trpc.ocr.parsedDocumentList.useQuery({ documentType: "receipt" });
   const navigate = useNavigate();
   const pendingParsed = parsedDocs?.filter(d => d.status === "parsed").length ?? 0;
-  const [testLog, setTestLog] = useState<string[]>([]);
-  const [testRunning, setTestRunning] = useState(false);
-
-  const testMutation = trpc.test.fullFlow.useMutation({
-    onMutate: () => { setTestRunning(true); setTestLog([]); },
-    onSuccess: (data) => { setTestLog(data.log); setTestRunning(false); },
-    onError: (e) => { setTestLog([`❌ Грешка: ${e.message}`]); setTestRunning(false); },
-  });
 
   const cards = [
     {
@@ -272,34 +262,6 @@ export default function Dashboard() {
                 {stats?.storage.totalMaterials ?? 0}
               </span>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* E2E Test */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <TestTube className="h-4 w-4 text-emerald-600" />
-              Тест: Приемница {'->'} Производство {'->'} Фактура
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              onClick={() => testMutation.mutate({})}
-              disabled={testRunning}
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
-            >
-              {testRunning ? "Се тестира..." : <><TestTube className="h-4 w-4 mr-2" />Пушти E2E тест</>}
-            </Button>
-            {testLog.length > 0 && (
-              <div className="bg-slate-50 rounded p-3 space-y-1 text-xs font-mono max-h-64 overflow-y-auto">
-                {testLog.map((line, i) => (
-                  <div key={i} className={line.startsWith("❌") ? "text-red-600" : line.startsWith("✅") ? "text-emerald-700 font-bold" : "text-gray-700"}>
-                    {line}
-                  </div>
-                ))}
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
