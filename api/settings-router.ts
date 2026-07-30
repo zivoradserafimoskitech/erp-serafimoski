@@ -34,6 +34,7 @@ export const settingsRouter = createRouter({
       defaultVatRate: z.string().default("18"),
       valuationMethod: z.enum(["weighted_average", "fifo"]).default("weighted_average"),
       currency: z.string().default("MKD"),
+      timezone: z.string().default("Europe/Skopje"),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
