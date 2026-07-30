@@ -143,6 +143,10 @@ export default function Procurement() {
   const updateItem = (idx: number, field: string, value: string) => {
     const newItems = [...items];
     (newItems[idx] as any)[field] = value;
+    if (field === "materialId") {
+      const mat = allMaterials?.find((m) => m.id.toString() === value);
+      if (mat) newItems[idx].description = mat.name;
+    }
     if (field === "quantity" || field === "unitPrice") {
       const q = parseFloat(newItems[idx].quantity) || 0;
       const p = parseFloat(newItems[idx].unitPrice) || 0;
@@ -269,9 +273,9 @@ export default function Procurement() {
                   </div>
                   {items.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-50 p-2 rounded">
-                      <div className="col-span-3">
+                      <div className="col-span-4">
                         <Select value={item.materialId} onValueChange={(v) => updateItem(idx, "materialId", v)}>
-                          <SelectTrigger className="text-xs"><SelectValue placeholder="Материјал" /></SelectTrigger>
+                          <SelectTrigger className="text-xs w-full"><SelectValue className="truncate" placeholder="Материјал" /></SelectTrigger>
                           <SelectContent>
                             {allMaterials?.map((m) => (
                               <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>
