@@ -12,7 +12,7 @@ import { MaterialPicker } from "@/components/MaterialPicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package } from "lucide-react";
+import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package, Pencil } from "lucide-react";
 
 // Status configs
 const qStatus: Record<string, { label: string; cls: string }> = {
@@ -78,6 +78,7 @@ export default function Quotations() {
   const [convertDialog, setConvertDialog] = useState(false);
   const [selQ, setSelQ] = useState<number | null>(null);
   const [convOrderNum, setConvOrderNum] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const { data: companySettings } = trpc.settings.settingsGet.useQuery();
   const quoToWO = trpc.quotation.quotationToWorkOrder.useMutation({ onSuccess: (d) => toast.success(`Креиран налог ${d.woNumber} (${d.materialsCopied} материјали од естимација)`) });
@@ -121,6 +122,16 @@ export default function Quotations() {
   const delSvc = trpc.quotation.serviceDelete.useMutation({ onSuccess: () => utils.quotation.serviceList.invalidate() });
   const delProd = trpc.quotation.productDelete.useMutation({ onSuccess: () => utils.quotation.productList.invalidate() });
   const updateQ = trpc.quotation.quotationUpdate.useMutation({ onSuccess: () => { utils.quotation.quotationList.invalidate(); utils.quotation.quotationById.invalidate(); } });
+  const updateQFull = trpc.quotation.quotationUpdate.useMutation({
+    onSuccess: () => {
+      utils.quotation.quotationList.invalidate();
+      utils.quotation.quotationById.invalidate();
+      toast.success("Понудата е зачувана");
+      setQDialog(false);
+      setEditingId(null);
+      resetQForm();
+    },
+  });
   const convertQ = trpc.quotation.quotationConvert.useMutation({
     onSuccess: () => { utils.quotation.quotationList.invalidate(); setConvertDialog(false); setConvOrderNum(""); },
   });
@@ -146,6 +157,28 @@ export default function Quotations() {
   const resetQForm = () => {
     setQForm({ quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14", paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18" });
     setQItems([]);
+  };
+
+  const openEditQ = () => {
+    if (!qDetail) return;
+    setQForm({
+      quoteNumber: qDetail.quoteNumber,
+      customerId: String(qDetail.customerId),
+      validUntil: qDetail.validUntil ? String(qDetail.validUntil).split("T")[0] : "",
+      deliveryDays: String(qDetail.deliveryDays ?? "14"),
+      paymentTerms: qDetail.paymentTerms ?? "14 дена",
+      notes: qDetail.notes ?? "",
+      currency: qDetail.currency ?? "MKD",
+      vatRate: qDetail.vatRate ?? "18",
+    });
+    setQItems((qDetail.items ?? []).map((i: any) => ({
+      itemType: i.itemType, referenceId: i.referenceId ?? null, description: i.description,
+      quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, totalPrice: i.totalPrice,
+      notes: i.notes ?? "", sortOrder: i.sortOrder ?? 0,
+    })));
+    setEditingId(qDetail.id);
+    setDetailOpen(false);
+    setQDialog(true);
   };
 
   const addItem = (type: "material" | "service" | "product", refId: number | null, desc: string, unit: string, price: string) => {
@@ -179,6 +212,20 @@ export default function Quotations() {
   const handleQSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const t = calcTotals();
+    if (editingId) {
+      updateQFull.mutate({
+        id: editingId,
+        customerId: parseInt(qForm.customerId),
+        validUntil: qForm.validUntil || undefined,
+        deliveryDays: parseInt(qForm.deliveryDays) || 14,
+        paymentTerms: qForm.paymentTerms,
+        notes: qForm.notes || undefined,
+        vatRate: qForm.vatRate,
+        currency: qForm.currency,
+        items: qItems.map(i => ({ ...i, referenceId: i.referenceId ?? undefined })),
+      });
+      return;
+    }
     createQ.mutate({
       quoteNumber: qForm.quoteNumber,
       customerId: parseInt(qForm.customerId),
@@ -208,17 +255,22 @@ export default function Quotations() {
             <Dialog open={qDialog} onOpenChange={(open) => {
               setQDialog(open);
               if (open) {
-                const d = new Date(); d.setDate(d.getDate() + 30);
-                setQForm(prev => ({ ...prev, validUntil: prev.validUntil || d.toISOString().slice(0, 10) }));
+                if (!editingId) {
+                  const d = new Date(); d.setDate(d.getDate() + 30);
+                  setQForm(prev => ({ ...prev, validUntil: prev.validUntil || d.toISOString().slice(0, 10) }));
+                }
+              } else {
+                setEditingId(null);
+                resetQForm();
               }
             }}>
-              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нова понуда</Button></DialogTrigger>
+              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setEditingId(null)}><Plus className="h-4 w-4 mr-2" />Нова понуда</Button></DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Нова понуда</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingId ? `Измени понуда ${qForm.quoteNumber}` : "Нова понуда"}</DialogTitle></DialogHeader>
                 <form onSubmit={handleQSubmit} className="space-y-4">
                   {/* Basic info */}
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-2"><Label>Број на понуда *</Label><Input value={qForm.quoteNumber} onChange={e => setQForm({ ...qForm, quoteNumber: e.target.value })} required placeholder="ПОН-2026-001" /></div>
+                    <div className="space-y-2"><Label>Број на понуда *</Label><Input value={qForm.quoteNumber} onChange={e => setQForm({ ...qForm, quoteNumber: e.target.value })} required disabled={!!editingId} placeholder="ПОН-2026-001" /></div>
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label>Важи до</Label><Input type="date" value={qForm.validUntil} onChange={e => setQForm({ ...qForm, validUntil: e.target.value })} /></div>
                   </div>
@@ -277,7 +329,9 @@ export default function Quotations() {
 
                   <div className="space-y-2"><Label>Белешки / Опис на понуда</Label><Textarea value={qForm.notes} onChange={e => setQForm({ ...qForm, notes: e.target.value })} placeholder="Технички детали, услови, напомени..." /></div>
                   <div className="space-y-1">
-                    <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createQ.isPending || !qForm.customerId || qItems.length === 0}>{createQ.isPending ? "Зачувување..." : "Креирај понуда"}</Button>
+                    <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createQ.isPending || updateQFull.isPending || !qForm.customerId || qItems.length === 0}>
+                      {editingId ? (updateQFull.isPending ? "Зачувување..." : "Зачувај измени") : (createQ.isPending ? "Зачувување..." : "Креирај понуда")}
+                    </Button>
                     {!qForm.customerId && <p className="text-xs text-red-500 text-center">Избери клиент за да продолжиш</p>}
                     {qForm.customerId && qItems.length === 0 && <p className="text-xs text-red-500 text-center">Додади барем една ставка (материјал, услуга или производ)</p>}
                   </div>
@@ -419,7 +473,7 @@ export default function Quotations() {
                       <TableCell className="font-mono text-sm font-medium">{q.quoteNumber}</TableCell>
                       <TableCell>{q.customerName} {q.customerCompany ? `(${q.customerCompany})` : ""}</TableCell>
                       <TableCell><Badge className={qStatus[q.status]?.cls}>{qStatus[q.status]?.label}</Badge></TableCell>
-                      <TableCell className="font-medium">{q.totalAmount} {q.currency}</TableCell>
+                      <TableCell className="font-medium">{Number(q.totalAmount).toLocaleString("mk-MK")} {q.currency}</TableCell>
                       <TableCell className="text-gray-500">{q.deliveryDays} дена</TableCell>
                       <TableCell className="text-gray-500">{q.validUntil ? String(q.validUntil).split("T")[0] : "-"}</TableCell>
                       <TableCell>
@@ -495,39 +549,65 @@ export default function Quotations() {
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="flex items-center justify-between pr-6">Понуда {qDetail?.quoteNumber}<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => qDetail && quoToWO.mutate({ quotationId: qDetail.id })} disabled={quoToWO.isPending}>→ Налог</Button><Button size="sm" variant="outline" onClick={() => qDetail && printQuotation(qDetail, companySettings)}>Печати / PDF</Button></span></DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between pr-6">
+              Понуда {qDetail?.quoteNumber}
+              <span className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={openEditQ}><Pencil className="h-3.5 w-3.5 mr-1" />Уреди</Button>
+                <Button size="sm" variant="outline" onClick={() => qDetail && quoToWO.mutate({ quotationId: qDetail.id })} disabled={quoToWO.isPending}>→ Налог</Button>
+                <Button size="sm" variant="outline" onClick={() => qDetail && printQuotation(qDetail, companySettings)}>Печати / PDF</Button>
+              </span>
+            </DialogTitle>
+          </DialogHeader>
           {qDetail && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-500">Клиент:</span> {qDetail.customer?.name}</div>
-                <div><span className="text-gray-500">Статус:</span> <Badge className={qStatus[qDetail.status]?.cls}>{qStatus[qDetail.status]?.label}</Badge></div>
-                <div><span className="text-gray-500">Нето:</span> <b>{qDetail.subtotal} {qDetail.currency}</b></div>
-                <div><span className="text-gray-500">ДДВ ({qDetail.vatRate}%):</span> {qDetail.vatAmount}</div>
-                <div><span className="text-gray-500">ВКУПНО:</span> <b className="text-lg">{qDetail.totalAmount} {qDetail.currency}</b></div>
-                <div><span className="text-gray-500">Испорака:</span> {qDetail.deliveryDays} дена</div>
-                <div><span className="text-gray-500">Плаќање:</span> {qDetail.paymentTerms}</div>
-                <div><span className="text-gray-500">Важи до:</span> {qDetail.validUntil ? String(qDetail.validUntil).split("T")[0] : "-"}</div>
+              <div className="flex items-center justify-between text-sm">
+                <div><span className="text-gray-500">Клиент:</span> <span className="font-medium">{qDetail.customer?.name}</span></div>
+                <Badge className={qStatus[qDetail.status]?.cls}>{qStatus[qDetail.status]?.label}</Badge>
               </div>
+
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500">Нето</div>
+                  <div className="font-semibold text-gray-800">{Number(qDetail.subtotal).toLocaleString("mk-MK")} {qDetail.currency}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500">ДДВ ({qDetail.vatRate}%)</div>
+                  <div className="font-semibold text-gray-800">{Number(qDetail.vatAmount).toLocaleString("mk-MK")} {qDetail.currency}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500">Вкупно</div>
+                  <div className="font-bold text-lg text-amber-700">{Number(qDetail.totalAmount).toLocaleString("mk-MK")} {qDetail.currency}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 text-sm text-gray-600">
+                <div><span className="text-gray-400 block text-[11px] uppercase tracking-wide">Испорака</span>{qDetail.deliveryDays} дена</div>
+                <div><span className="text-gray-400 block text-[11px] uppercase tracking-wide">Плаќање</span>{qDetail.paymentTerms}</div>
+                <div><span className="text-gray-400 block text-[11px] uppercase tracking-wide">Важи до</span>{qDetail.validUntil ? String(qDetail.validUntil).split("T")[0] : "-"}</div>
+              </div>
+
               {qDetail.items && qDetail.items.length > 0 && (
                 <div className="border-t pt-3">
                   <h4 className="font-semibold mb-2">Ставки</h4>
                   <Table>
-                    <TableHeader><TableRow className="text-xs"><TableHead>Тип</TableHead><TableHead>Опис</TableHead><TableHead>Кол</TableHead><TableHead>Цена</TableHead><TableHead>Вкупно</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow className="text-xs"><TableHead>Тип</TableHead><TableHead>Опис</TableHead><TableHead>Кол</TableHead><TableHead className="text-right">Цена</TableHead><TableHead className="text-right">Вкупно</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {qDetail.items.map(i => (
                         <TableRow key={i.id}>
                           <TableCell className="text-xs"><Badge variant="outline">{i.itemType === "material" ? "Мат" : i.itemType === "service" ? "Усл" : "Прд"}</Badge></TableCell>
                           <TableCell className="text-sm">{i.description}</TableCell>
-                          <TableCell className="text-sm">{i.quantity} {i.unit}</TableCell>
-                          <TableCell className="text-sm">{i.unitPrice}</TableCell>
-                          <TableCell className="text-sm font-medium">{i.totalPrice}</TableCell>
+                          <TableCell className="text-sm whitespace-nowrap">{i.quantity} {i.unit}</TableCell>
+                          <TableCell className="text-sm text-right">{Number(i.unitPrice).toLocaleString("mk-MK")}</TableCell>
+                          <TableCell className="text-sm font-medium text-right">{Number(i.totalPrice).toLocaleString("mk-MK")}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center border-t pt-3">
+                <span className="text-xs text-gray-400 mr-1">Статус:</span>
                 <Select value={qDetail.status} onValueChange={v => updateQ.mutate({ id: qDetail.id, status: v as any })}>
                   <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                   <SelectContent>{Object.entries(qStatus).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>

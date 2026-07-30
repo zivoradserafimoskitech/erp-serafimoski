@@ -359,18 +359,54 @@ export const quotationRouter = createRouter({
   quotationUpdate: publicQuery
     .input(z.object({
       id: z.number(),
+      customerId: z.number().optional(),
       status: z.enum(["draft", "sent", "accepted", "rejected", "expired", "converted"]).optional(),
+      currency: z.string().optional(),
+      vatRate: z.string().optional(),
       validUntil: z.string().optional(),
       deliveryDays: z.number().optional(),
       paymentTerms: z.string().optional(),
       notes: z.string().optional(),
+      items: z.array(z.object({
+        itemType: z.enum(["material", "service", "product"]),
+        referenceId: z.number().nullable().optional(),
+        description: z.string().min(1),
+        quantity: z.string(),
+        unit: z.string(),
+        unitPrice: z.string(),
+        unitCost: z.string().default("0"),
+        totalPrice: z.string(),
+        totalCost: z.string().default("0"),
+        vatRate: z.string().default("18"),
+        notes: z.string().optional(),
+        sortOrder: z.number().default(0),
+      })).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const { id, ...data } = input;
+      const { id, items, ...data } = input;
       const updateData: any = { ...data };
       if (data.validUntil) updateData.validUntil = new Date(data.validUntil);
+
+      if (items) {
+        await db.delete(quotationItems).where(eq(quotationItems.quotationId, id));
+        if (items.length > 0) {
+          await db.insert(quotationItems).values(items.map(i => ({ ...i, quotationId: id })));
+        }
+        const subtotal = items.reduce((s, i) => s + parseFloat(i.totalPrice), 0);
+        const costTotal = items.reduce((s, i) => s + parseFloat(i.totalCost || "0"), 0);
+        const vatR = parseFloat(data.vatRate ?? "18");
+        const vatAmount = subtotal * vatR / 100;
+        updateData.subtotal = subtotal.toFixed(2);
+        updateData.costAmount = costTotal.toFixed(2);
+        updateData.marginAmount = (subtotal - costTotal).toFixed(2);
+        updateData.marginPercent = costTotal > 0 ? ((subtotal - costTotal) / costTotal * 100).toFixed(2) : "0";
+        updateData.vatAmount = vatAmount.toFixed(2);
+        updateData.totalAmount = (subtotal + vatAmount).toFixed(2);
+      }
+
       await db.update(quotations).set(updateData).where(eq(quotations.id, id));
+      await logAudit({ action: "UPDATE", entityType: "quotation", entityId: id, description: `Изменета понуда` });
       return { success: true };
     }),
 
