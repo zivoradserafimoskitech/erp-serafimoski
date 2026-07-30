@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { MaterialPicker } from "@/components/MaterialPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Search,
@@ -274,14 +275,13 @@ export default function Procurement() {
                   {items.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-50 p-2 rounded">
                       <div className="col-span-4">
-                        <Select value={item.materialId} onValueChange={(v) => updateItem(idx, "materialId", v)}>
-                          <SelectTrigger className="text-xs w-full"><SelectValue className="truncate" placeholder="Материјал" /></SelectTrigger>
-                          <SelectContent>
-                            {allMaterials?.map((m) => (
-                              <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <MaterialPicker
+                          materials={allMaterials as any}
+                          value={item.materialId}
+                          placeholder="Избери материјал…"
+                          title="Избери материјал"
+                          onSelect={(m) => updateItem(idx, "materialId", m.id.toString())}
+                        />
                       </div>
                       <div className="col-span-3">
                         <Input size={1} placeholder="Опис" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} />
