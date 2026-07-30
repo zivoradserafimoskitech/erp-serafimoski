@@ -11,9 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { MaterialPicker } from "@/components/MaterialPicker";
-import { jsPDF } from "jspdf";
 import { printInvoice, printDeliveryNote, printAccountantReport } from "@/lib/print-documents";
-import autoTable from "jspdf-autotable";
 import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
   Receipt, Truck, ArrowUpRight, ArrowDownLeft, Calculator,
@@ -57,16 +55,6 @@ function exportCSV(filename: string, headers: string[], rows: string[][]) {
   const a = document.createElement("a");
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
-}
-
-// ===== PDF EXPORT =====
-function exportPDF(title: string, headers: string[], rows: (string | number)[][]) {
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text(title, 14, 20);
-  doc.setFontSize(10);
-  autoTable(doc, { head: [headers], body: rows, startY: 30, theme: "grid" });
-  doc.save(`${title.replace(/\s+/g, "_")}.pdf`);
 }
 
 export default function Accounting() {
@@ -568,57 +556,117 @@ export default function Accounting() {
           )}
           <Dialog open={reportDialog} onOpenChange={setReportDialog}>
             <DialogTrigger asChild><Button variant="outline"><Calculator className="h-4 w-4 mr-2" />Извештај за сметководител</Button></DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Извештај за сметководител</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2"><Label>Од датум</Label><Input type="date" value={reportPeriod.startDate} onChange={(e) => setReportPeriod({ ...reportPeriod, startDate: e.target.value })} /></div>
                   <div className="space-y-2"><Label>До датум</Label><Input type="date" value={reportPeriod.endDate} onChange={(e) => setReportPeriod({ ...reportPeriod, endDate: e.target.value })} /></div>
                 </div>
-                <Button
-                  variant="default"
-                  className="w-full bg-emerald-600 hover:bg-emerald-700"
-                  disabled={!reportPeriod.startDate || !reportPeriod.endDate || reportLoading}
-                  onClick={handleGenerateReport}
-                >
-                  {reportLoading ? "Се генерира..." : <><Calculator className="h-4 w-4 mr-2" />Генерирај извештај</>}
-                </Button>
-                {reportData && <Button variant="outline" onClick={() => printAccountantReport(reportData, reportPeriod, companySettings)}>Печати извештај / PDF</Button>}
-                {reportData && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <Card className="bg-blue-50"><CardContent className="p-4"><p className="text-sm text-gray-600">Излезни фактури</p><p className="text-xl font-bold text-blue-700">{reportData.outgoing.count} ({reportData.outgoing.total} ден.)</p></CardContent></Card>
-                      <Card className="bg-emerald-50"><CardContent className="p-4"><p className="text-sm text-gray-600">Влезни фактури</p><p className="text-xl font-bold text-emerald-700">{reportData.incoming.count} ({reportData.incoming.total} ден.)</p></CardContent></Card>
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                    disabled={!reportPeriod.startDate || !reportPeriod.endDate || reportLoading}
+                    onClick={handleGenerateReport}
+                  >
+                    {reportLoading ? "Се генерира..." : <><Calculator className="h-4 w-4 mr-2" />Генерирај извештај</>}
+                  </Button>
+                  {reportData && <Button variant="outline" onClick={() => printAccountantReport(reportData, reportPeriod, companySettings)}><FileText className="h-4 w-4 mr-2" />Печати извештај / PDF</Button>}
+                </div>
+
+                {reportData && (() => {
+                  const wo = reportData.workOrders ?? [];
+                  const req = reportData.requisitions ?? [];
+                  const woCost = wo.reduce((a: number, w: any) => a + (parseFloat(String(w.costAmount ?? "0")) || 0), 0);
+                  const mkd = (n: any) => Number(n ?? 0).toLocaleString("mk-MK");
+                  const dt = (d: any) => d ? String(d).split("T")[0] : "";
+
+                  const Section = ({ title, count, total, headers, rows, onExport, color }: any) => (
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className={`flex items-center justify-between px-4 py-2.5 ${color}`}>
+                        <div>
+                          <span className="font-semibold text-gray-800">{title}</span>
+                          <span className="text-sm text-gray-500 ml-2">{count} · {mkd(total)} ден.</span>
+                        </div>
+                        <Button size="sm" variant="outline" className="bg-white" onClick={onExport} disabled={count === 0}>
+                          <Download className="h-3.5 w-3.5 mr-1" />CSV
+                        </Button>
+                      </div>
+                      <div className="max-h-52 overflow-y-auto">
+                        <Table>
+                          <TableHeader><TableRow>{headers.map((h: string) => <TableHead key={h} className="text-xs">{h}</TableHead>)}</TableRow></TableHeader>
+                          <TableBody>
+                            {rows}
+                            {count === 0 && <TableRow><TableCell colSpan={headers.length} className="text-center text-sm text-gray-400 py-6">Нема записи во периодот</TableCell></TableRow>}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <Card className="bg-amber-50"><CardContent className="p-4"><p className="text-sm text-gray-600">ДДВ излез</p><p className="text-xl font-bold text-amber-700">{reportData.outgoing.totalVat} ден.</p></CardContent></Card>
-                      <Card className="bg-purple-50"><CardContent className="p-4"><p className="text-sm text-gray-600">ДДВ влез</p><p className="text-xl font-bold text-purple-700">{reportData.incoming.totalVat} ден.</p></CardContent></Card>
+                  );
+
+                  return (
+                    <div className="space-y-4">
+                      {/* KPI grid */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <Card className="bg-blue-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Излезни фактури</p><p className="text-lg font-bold text-blue-700">{reportData.outgoing.count} · {mkd(reportData.outgoing.total)}</p></CardContent></Card>
+                        <Card className="bg-emerald-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Влезни фактури</p><p className="text-lg font-bold text-emerald-700">{reportData.incoming.count} · {mkd(reportData.incoming.total)}</p></CardContent></Card>
+                        <Card className="bg-indigo-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Работни налози</p><p className="text-lg font-bold text-indigo-700">{wo.length} · {mkd(woCost)}</p></CardContent></Card>
+                        <Card className="bg-amber-50"><CardContent className="p-3"><p className="text-xs text-gray-600">ДДВ излез</p><p className="text-lg font-bold text-amber-700">{mkd(reportData.outgoing.totalVat)}</p></CardContent></Card>
+                        <Card className="bg-purple-50"><CardContent className="p-3"><p className="text-xs text-gray-600">ДДВ влез</p><p className="text-lg font-bold text-purple-700">{mkd(reportData.incoming.totalVat)}</p></CardContent></Card>
+                        <Card className="bg-orange-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Требовања</p><p className="text-lg font-bold text-orange-700">{req.length} · {mkd(reportData.totalRequisitionCost)}</p></CardContent></Card>
+                      </div>
+                      <div className="bg-gray-100 p-3 rounded-lg text-center">
+                        <span className="text-gray-600">ДДВ салдо: </span>
+                        <span className="font-bold text-lg">{mkd(reportData.vatRecapitulation.vatBalance)} ден.</span>
+                      </div>
+
+                      {/* Излезни фактури */}
+                      <Section title="Излезни фактури" count={reportData.outgoing.count} total={reportData.outgoing.total} color="bg-blue-50/60"
+                        headers={["Број", "Клиент", "Датум", "Основица", "ДДВ", "Вкупно"]}
+                        rows={reportData.outgoing.items.map((i: any) => (
+                          <TableRow key={i.id}><TableCell className="font-mono text-xs">{i.invoiceNumber}</TableCell><TableCell className="text-sm">{i.customerName ?? ""}</TableCell><TableCell className="text-sm">{dt(i.issueDate)}</TableCell><TableCell className="text-sm text-right">{mkd(i.subtotal)}</TableCell><TableCell className="text-sm text-right">{mkd(i.vatAmount)}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(i.totalAmount)}</TableCell></TableRow>
+                        ))}
+                        onExport={() => exportCSV(`излезни-фактури_${reportData.period.start}_${reportData.period.end}.csv`,
+                          ["Број", "Клиент", "Датум", "Основица", "ДДВ", "Вкупно"],
+                          reportData.outgoing.items.map((i: any) => [i.invoiceNumber, i.customerName ?? "", dt(i.issueDate), i.subtotal, i.vatAmount, i.totalAmount]))}
+                      />
+
+                      {/* Влезни фактури */}
+                      <Section title="Влезни фактури" count={reportData.incoming.count} total={reportData.incoming.total} color="bg-emerald-50/60"
+                        headers={["Број", "Добавувач", "Датум прием", "Основица", "ДДВ", "Вкупно"]}
+                        rows={reportData.incoming.items.map((i: any) => (
+                          <TableRow key={i.id}><TableCell className="font-mono text-xs">{i.supplierInvoiceNumber}</TableCell><TableCell className="text-sm">{i.supplierName ?? ""}</TableCell><TableCell className="text-sm">{dt(i.receivedDate)}</TableCell><TableCell className="text-sm text-right">{mkd(i.subtotal)}</TableCell><TableCell className="text-sm text-right">{mkd(i.vatAmount)}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(i.totalAmount)}</TableCell></TableRow>
+                        ))}
+                        onExport={() => exportCSV(`влезни-фактури_${reportData.period.start}_${reportData.period.end}.csv`,
+                          ["Број", "Добавувач", "Датум прием", "Основица", "ДДВ", "Вкупно"],
+                          reportData.incoming.items.map((i: any) => [i.supplierInvoiceNumber, i.supplierName ?? "", dt(i.receivedDate), i.subtotal, i.vatAmount, i.totalAmount]))}
+                      />
+
+                      {/* Работни налози */}
+                      <Section title="Работни налози" count={wo.length} total={woCost} color="bg-indigo-50/60"
+                        headers={["Број", "Датум", "Опис", "Статус", "Трошок"]}
+                        rows={wo.map((w: any) => (
+                          <TableRow key={w.id}><TableCell className="font-mono text-xs">{w.woNumber}</TableCell><TableCell className="text-sm">{dt(w.createdAt)}</TableCell><TableCell className="text-sm">{w.description ?? ""}</TableCell><TableCell className="text-sm">{w.status ?? ""}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(w.costAmount)}</TableCell></TableRow>
+                        ))}
+                        onExport={() => exportCSV(`работни-налози_${reportData.period.start}_${reportData.period.end}.csv`,
+                          ["Број", "Датум", "Опис", "Статус", "Трошок"],
+                          wo.map((w: any) => [w.woNumber, dt(w.createdAt), w.description ?? "", w.status ?? "", w.costAmount]))}
+                      />
+
+                      {/* Требовања */}
+                      <Section title="Требовања (потрошен материјал)" count={req.length} total={reportData.totalRequisitionCost} color="bg-orange-50/60"
+                        headers={["Раб. налог", "Материјал", "Количина", "Цена", "Вкупно"]}
+                        rows={req.map((r: any, n: number) => (
+                          <TableRow key={n}><TableCell className="font-mono text-xs">{r.workOrderNumber}</TableCell><TableCell className="text-sm">{r.materialName}</TableCell><TableCell className="text-sm text-right">{r.quantity} {r.unit}</TableCell><TableCell className="text-sm text-right">{mkd(r.unitCost)}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(r.totalCost)}</TableCell></TableRow>
+                        ))}
+                        onExport={() => exportCSV(`требовања_${reportData.period.start}_${reportData.period.end}.csv`,
+                          ["Раб. налог", "Материјал", "Количина", "Единица", "Цена", "Вкупно"],
+                          req.map((r: any) => [r.workOrderNumber, r.materialName, r.quantity, r.unit, r.unitCost, r.totalCost]))}
+                      />
                     </div>
-                    <div className="bg-gray-100 p-3 rounded-lg text-center">
-                      <span className="text-gray-600">ДДВ салдо: </span>
-                      <span className="font-bold text-lg">{reportData.vatRecapitulation.vatBalance} ден.</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => exportPDF(`Извештај_${reportData.period.start}_${reportData.period.end}`, ["Тип", "Број", "Износ", "ДДВ"],
-                        [...reportData.outgoing.items.map((i: any) => ["Излезна", i.invoiceNumber, i.totalAmount, i.vatAmount]),
-                         ...reportData.incoming.items.map((i: any) => ["Влезна", i.supplierInvoiceNumber, i.totalAmount, i.vatAmount])])}>
-                        <Download className="h-4 w-4 mr-1" /> PDF
-                      </Button>
-                      <Button variant="outline" onClick={() => exportCSV(`извештај_${reportData.period.start}_${reportData.period.end}.csv`, ["Тип", "Број", "Износ", "ДДВ", "Датум"],
-                        [...reportData.outgoing.items.map((i: any) => ["Излезна", i.invoiceNumber, i.totalAmount, i.vatAmount, i.issueDate ? String(i.issueDate).split("T")[0] : ""]),
-                         ...reportData.incoming.items.map((i: any) => ["Влезна", i.supplierInvoiceNumber, i.totalAmount, i.vatAmount, i.receivedDate ? String(i.receivedDate).split("T")[0] : ""])])}>
-                        <Download className="h-4 w-4 mr-1" /> CSV
-                      </Button>
-                      <Button variant="outline" onClick={() => {
-                        const allInv = [...(reportData.outgoing.items || []), ...(reportData.incoming.items || [])];
-                        exportCSV(`фактури_${reportData.period.start}_${reportData.period.end}.csv`, ["Број", "Клиент/Добавувач", "Износ", "ДДВ", "Вкупно", "Датум"],
-                          allInv.map((i: any) => [i.invoiceNumber || i.supplierInvoiceNumber, i.customerName || i.supplierName || "", i.subtotal || i.totalAmount, i.vatAmount, i.totalAmount, i.issueDate || i.receivedDate || ""]));
-                      }}>
-                        <FileText className="h-4 w-4 mr-1" /> Сите фактури (CSV)
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </DialogContent>
           </Dialog>
