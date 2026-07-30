@@ -12,7 +12,7 @@ import { MaterialPicker } from "@/components/MaterialPicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package, Pencil } from "lucide-react";
+import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package, Pencil, Truck, CalendarClock, CreditCard, Building2 } from "lucide-react";
 
 // Status configs
 const qStatus: Record<string, { label: string; cls: string }> = {
@@ -557,75 +557,126 @@ export default function Quotations() {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between pr-6">
-              Понуда {qDetail?.quoteNumber}
-              <span className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={openEditQ}><Pencil className="h-3.5 w-3.5 mr-1" />Уреди</Button>
-                <Button size="sm" variant="outline" onClick={() => qDetail && quoToWO.mutate({ quotationId: qDetail.id })} disabled={quoToWO.isPending}>→ Налог</Button>
-                <Button size="sm" variant="outline" onClick={() => qDetail && printQuotation(qDetail, companySettings)}>Печати / PDF</Button>
-              </span>
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0 gap-0">
           {qDetail && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <div><span className="text-gray-500">Клиент:</span> <span className="font-medium">{qDetail.customer?.name}</span></div>
-                <Badge className={qStatus[qDetail.status]?.cls}>{qStatus[qDetail.status]?.label}</Badge>
+            <>
+              {/* Header */}
+              <div className="px-8 pt-7 pb-5 border-b bg-gradient-to-b from-gray-50 to-white">
+                <DialogHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <DialogTitle className="text-2xl font-bold text-gray-900 tracking-tight">
+                        Понуда {qDetail.quoteNumber}
+                      </DialogTitle>
+                      <div className="flex items-center gap-2 mt-2 text-gray-600">
+                        <Building2 className="h-4 w-4 text-gray-400" />
+                        <span className="text-base font-medium">{qDetail.customer?.name}</span>
+                        <Badge className={`${qStatus[qDetail.status]?.cls} ml-1`}>{qStatus[qDetail.status]?.label}</Badge>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button variant="outline" onClick={openEditQ}><Pencil className="h-4 w-4 mr-1.5" />Уреди</Button>
+                      <Button variant="outline" onClick={() => quoToWO.mutate({ quotationId: qDetail.id })} disabled={quoToWO.isPending}>
+                        <ArrowRight className="h-4 w-4 mr-1.5" />Налог
+                      </Button>
+                      <Button variant="outline" onClick={() => printQuotation(qDetail, companySettings)}>
+                        <FileText className="h-4 w-4 mr-1.5" />PDF
+                      </Button>
+                    </div>
+                  </div>
+                </DialogHeader>
               </div>
 
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500">Нето</div>
-                  <div className="font-semibold text-gray-800">{Number(qDetail.subtotal).toLocaleString("mk-MK")} {qDetail.currency}</div>
+              <div className="px-8 py-6 space-y-6">
+                {/* Totals — ВКУПНО dominant */}
+                <div className="rounded-xl bg-amber-50/70 border border-amber-200 p-6 flex items-center justify-between">
+                  <div className="flex gap-10">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1">Нето</div>
+                      <div className="text-xl font-semibold text-gray-800">{Number(qDetail.subtotal).toLocaleString("mk-MK")} <span className="text-sm font-normal text-gray-500">{qDetail.currency}</span></div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1">ДДВ ({qDetail.vatRate}%)</div>
+                      <div className="text-xl font-semibold text-gray-800">{Number(qDetail.vatAmount).toLocaleString("mk-MK")} <span className="text-sm font-normal text-gray-500">{qDetail.currency}</span></div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-medium uppercase tracking-wider text-amber-700/70 mb-1">Вкупно за плаќање</div>
+                    <div className="text-3xl font-bold text-amber-700 tracking-tight">{Number(qDetail.totalAmount).toLocaleString("mk-MK")} <span className="text-lg font-semibold">{qDetail.currency}</span></div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500">ДДВ ({qDetail.vatRate}%)</div>
-                  <div className="font-semibold text-gray-800">{Number(qDetail.vatAmount).toLocaleString("mk-MK")} {qDetail.currency}</div>
+
+                {/* Meta info with icons */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                    <Truck className="h-5 w-5 text-gray-400 shrink-0" />
+                    <div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide">Испорака</div>
+                      <div className="text-sm font-medium text-gray-800">{qDetail.deliveryDays} дена</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                    <CreditCard className="h-5 w-5 text-gray-400 shrink-0" />
+                    <div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide">Плаќање</div>
+                      <div className="text-sm font-medium text-gray-800">{qDetail.paymentTerms}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                    <CalendarClock className="h-5 w-5 text-gray-400 shrink-0" />
+                    <div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide">Важи до</div>
+                      <div className="text-sm font-medium text-gray-800">{qDetail.validUntil ? String(qDetail.validUntil).split("T")[0] : "-"}</div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500">Вкупно</div>
-                  <div className="font-bold text-lg text-amber-700">{Number(qDetail.totalAmount).toLocaleString("mk-MK")} {qDetail.currency}</div>
-                </div>
+
+                {/* Items */}
+                {qDetail.items && qDetail.items.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-3">Ставки</h4>
+                    <div className="rounded-lg border border-gray-200 overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 hover:bg-gray-50">
+                            <TableHead className="w-16">Тип</TableHead>
+                            <TableHead>Опис</TableHead>
+                            <TableHead>Кол.</TableHead>
+                            <TableHead className="text-right">Цена</TableHead>
+                            <TableHead className="text-right">Вкупно</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {qDetail.items.map(i => (
+                            <TableRow key={i.id}>
+                              <TableCell><Badge variant="outline" className="font-normal">{i.itemType === "material" ? "Мат" : i.itemType === "service" ? "Усл" : "Прд"}</Badge></TableCell>
+                              <TableCell className="font-medium text-gray-800">{i.description}</TableCell>
+                              <TableCell className="whitespace-nowrap text-gray-600">{i.quantity} {i.unit}</TableCell>
+                              <TableCell className="text-right text-gray-600">{Number(i.unitPrice).toLocaleString("mk-MK")}</TableCell>
+                              <TableCell className="text-right font-semibold text-gray-800">{Number(i.totalPrice).toLocaleString("mk-MK")}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-sm text-gray-600">
-                <div><span className="text-gray-400 block text-[11px] uppercase tracking-wide">Испорака</span>{qDetail.deliveryDays} дена</div>
-                <div><span className="text-gray-400 block text-[11px] uppercase tracking-wide">Плаќање</span>{qDetail.paymentTerms}</div>
-                <div><span className="text-gray-400 block text-[11px] uppercase tracking-wide">Важи до</span>{qDetail.validUntil ? String(qDetail.validUntil).split("T")[0] : "-"}</div>
-              </div>
-
-              {qDetail.items && qDetail.items.length > 0 && (
-                <div className="border-t pt-3">
-                  <h4 className="font-semibold mb-2">Ставки</h4>
-                  <Table>
-                    <TableHeader><TableRow className="text-xs"><TableHead>Тип</TableHead><TableHead>Опис</TableHead><TableHead>Кол</TableHead><TableHead className="text-right">Цена</TableHead><TableHead className="text-right">Вкупно</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                      {qDetail.items.map(i => (
-                        <TableRow key={i.id}>
-                          <TableCell className="text-xs"><Badge variant="outline">{i.itemType === "material" ? "Мат" : i.itemType === "service" ? "Усл" : "Прд"}</Badge></TableCell>
-                          <TableCell className="text-sm">{i.description}</TableCell>
-                          <TableCell className="text-sm whitespace-nowrap">{i.quantity} {i.unit}</TableCell>
-                          <TableCell className="text-sm text-right">{Number(i.unitPrice).toLocaleString("mk-MK")}</TableCell>
-                          <TableCell className="text-sm font-medium text-right">{Number(i.totalPrice).toLocaleString("mk-MK")}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-              <div className="flex gap-2 items-center border-t pt-3">
-                <span className="text-xs text-gray-400 mr-1">Статус:</span>
+              {/* Footer: status + convert */}
+              <div className="px-8 py-4 border-t bg-gray-50 flex items-center gap-3">
+                <span className="text-sm text-gray-500">Статус:</span>
                 <Select value={qDetail.status} onValueChange={v => updateQ.mutate({ id: qDetail.id, status: v as any })}>
-                  <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-44 bg-white"><SelectValue /></SelectTrigger>
                   <SelectContent>{Object.entries(qStatus).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>
                 </Select>
                 {qDetail.status === "accepted" && (
-                  <Button className="bg-purple-500 hover:bg-purple-600 text-white" onClick={() => { setSelQ(qDetail.id); setConvertDialog(true); }}><ArrowRight className="h-4 w-4 mr-1" />Конвертирај во нарачка</Button>
+                  <Button className="bg-purple-500 hover:bg-purple-600 text-white ml-auto" onClick={() => { setSelQ(qDetail.id); setConvertDialog(true); }}>
+                    <ArrowRight className="h-4 w-4 mr-1.5" />Конвертирај во нарачка
+                  </Button>
                 )}
               </div>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
