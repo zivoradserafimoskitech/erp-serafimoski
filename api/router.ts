@@ -11,6 +11,7 @@ import { warehouseRouter } from "./warehouse-router";
 import { catalogRouter } from "./catalog-router";
 import { ocrRouter } from "./ocr-router";
 import { emailRouter } from "./email-router";
+import { remnantsRouter } from "./remnants-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -28,6 +29,7 @@ export const appRouter = createRouter({
   catalog: catalogRouter,
   ocr: ocrRouter,
   email: emailRouter,
+  remnants: remnantsRouter,
 });
 
 export type AppRouter = typeof appRouter;

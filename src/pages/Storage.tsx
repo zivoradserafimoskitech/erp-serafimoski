@@ -15,7 +15,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, AlertTriangle, ArrowDownLeft, Package } from "lucide-react";
+import { Search, Plus, AlertTriangle, ArrowDownLeft, Package, Scissors } from "lucide-react";
+import RemnantsTab from "@/components/RemnantsTab";
 
 const materialTypes: Record<string, string> = {
   steel_sheet: "Челичен лим", steel_profile: "Челичен профил", steel_bar: "Челична прачка",
@@ -27,7 +28,7 @@ const units: Record<string, string> = { kg: "кг", m: "м", m2: "м²", pcs: "�
 
 export default function Storage() {
   const utils = trpc.useUtils();
-  const [mainTab, setMainTab] = useState<"materials" | "finished">("materials");
+  const [mainTab, setMainTab] = useState<"materials" | "finished" | "remnants">("materials");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
@@ -149,14 +150,17 @@ export default function Storage() {
       {/* Табови: Материјали / Готови производи */}
       <div className="flex gap-1 border-b border-gray-200">
         {[
-          { key: "materials" as const, label: "Материјали" },
-          { key: "finished" as const, label: "Готови производи (ГЛ-ПРОД)" },
+          { key: "materials" as const, label: "Материјали", icon: Package },
+          { key: "finished" as const, label: "Готови производи (ГЛ-ПРОД)", icon: Package },
+          { key: "remnants" as const, label: "Остатоци (крајки)", icon: Scissors },
         ].map(t => (
           <button key={t.key} onClick={() => setMainTab(t.key)} className={`flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === t.key ? "border-amber-500 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-            <Package className="h-4 w-4" />{t.label}
+            <t.icon className="h-4 w-4" />{t.label}
           </button>
         ))}
       </div>
+
+      {mainTab === "remnants" && <RemnantsTab />}
 
       {mainTab === "finished" && (
         <Card>

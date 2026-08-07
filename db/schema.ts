@@ -33,6 +33,9 @@ export const companySettings = pgTable("company_settings", {
   emailUsername: varchar("email_username", { length: 255 }),
   emailPassword: varchar("email_password", { length: 255 }),
   emailCheckInterval: integer("email_check_interval").default(60),
+  // Параметри за кроење / остатоци
+  cutKerfMm: decimal("cut_kerf_mm", { precision: 6, scale: 1 }).default("2"),
+  minRemnantMm: decimal("min_remnant_mm", { precision: 8, scale: 1 }).default("300"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -162,6 +165,29 @@ export const materialLots = pgTable("material_lots", {
 });
 
 export type MaterialLot = typeof materialLots.$inferSelect;
+
+// ============= ОСТАТОЦИ (крајки) =============
+export const materialRemnants = pgTable("material_remnants", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 30 }).notNull().unique(),
+  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }),
+  lengthMm: decimal("length_mm", { precision: 12, scale: 1 }).notNull().default("0"),
+  quantity: integer("quantity").notNull().default(1),
+  location: varchar("location", { length: 150 }),
+  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }),
+  sourceRemnantId: bigint("source_remnant_id", { mode: "number", unsigned: true }),
+  status: varchar("status", { length: 30 }).notNull().default("available"),
+  usedInRef: varchar("used_in_ref", { length: 255 }),
+  usedAt: timestamp("used_at"),
+  notes: text("notes"),
+  createdBy: varchar("created_by", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type MaterialRemnant = typeof materialRemnants.$inferSelect;
+export type InsertMaterialRemnant = typeof materialRemnants.$inferInsert;
 
 // ============= INVENTORY TRANSACTIONS =============
 export const inventoryTransactions = pgTable("inventory_transactions", {

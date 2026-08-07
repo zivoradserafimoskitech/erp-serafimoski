@@ -1202,5 +1202,47 @@ export function getInitSql(): string[] {
     `ALTER TABLE "work_orders" ALTER COLUMN "status" SET DEFAULT 'pending'`,
     `ALTER TABLE "work_orders" ALTER COLUMN "priority" SET DEFAULT 'normal'`,
     `ALTER TABLE "work_orders" ADD COLUMN IF NOT EXISTS "quotation_id" bigint`,
+
+    // ===== ОСТАТОЦИ (крајки) =====
+    `CREATE TABLE IF NOT EXISTS "material_remnants" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"code" varchar(30) NOT NULL,
+	"material_id" bigint NOT NULL,
+	"warehouse_id" bigint,
+	"length_mm" numeric(12, 1) DEFAULT '0' NOT NULL,
+	"quantity" integer DEFAULT 1 NOT NULL,
+	"location" varchar(150),
+	"work_order_id" bigint,
+	"source_remnant_id" bigint,
+	"status" varchar(30) DEFAULT 'available' NOT NULL,
+	"used_in_ref" varchar(255),
+	"used_at" timestamp,
+	"notes" text,
+	"created_by" varchar(255),
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "code" varchar(30)`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "material_id" bigint`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "warehouse_id" bigint`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "length_mm" numeric(12, 1) DEFAULT '0'`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "quantity" integer DEFAULT 1`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "location" varchar(150)`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "work_order_id" bigint`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "source_remnant_id" bigint`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "status" varchar(30) DEFAULT 'available'`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "used_in_ref" varchar(255)`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "used_at" timestamp`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "notes" text`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "created_by" varchar(255)`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "created_at" timestamp DEFAULT now()`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now()`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "material_remnants_code_uq" ON "material_remnants" ("code")`,
+    `CREATE INDEX IF NOT EXISTS "material_remnants_material_idx" ON "material_remnants" ("material_id")`,
+    `CREATE INDEX IF NOT EXISTS "material_remnants_status_idx" ON "material_remnants" ("status")`,
+
+    // ===== Параметри за кроење =====
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "cut_kerf_mm" numeric(6, 1) DEFAULT '2'`,
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "min_remnant_mm" numeric(8, 1) DEFAULT '300'`,
   ];
 }

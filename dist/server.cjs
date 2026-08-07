@@ -8811,6 +8811,7 @@ __export(schema_exports, {
   laborRates: () => laborRates,
   machines: () => machines,
   materialLots: () => materialLots,
+  materialRemnants: () => materialRemnants,
   materialStock: () => materialStock,
   materials: () => materials,
   orderItems: () => orderItems,
@@ -8838,7 +8839,7 @@ __export(schema_exports, {
   workOrderOperations: () => workOrderOperations,
   workOrders: () => workOrders
 });
-var companySettings, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
+var companySettings, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_pg_core();
@@ -8863,6 +8864,9 @@ var init_schema2 = __esm({
       emailUsername: varchar("email_username", { length: 255 }),
       emailPassword: varchar("email_password", { length: 255 }),
       emailCheckInterval: integer2("email_check_interval").default(60),
+      // Параметри за кроење / остатоци
+      cutKerfMm: decimal("cut_kerf_mm", { precision: 6, scale: 1 }).default("2"),
+      minRemnantMm: decimal("min_remnant_mm", { precision: 8, scale: 1 }).default("300"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
@@ -8956,6 +8960,24 @@ var init_schema2 = __esm({
       landedCost: decimal("landed_cost", { precision: 12, scale: 2 }).notNull().default("0"),
       date: date5("date").notNull(),
       createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    materialRemnants = pgTable("material_remnants", {
+      id: serial("id").primaryKey(),
+      code: varchar("code", { length: 30 }).notNull().unique(),
+      materialId: bigint4("material_id", { mode: "number", unsigned: true }).notNull(),
+      warehouseId: bigint4("warehouse_id", { mode: "number", unsigned: true }),
+      lengthMm: decimal("length_mm", { precision: 12, scale: 1 }).notNull().default("0"),
+      quantity: integer2("quantity").notNull().default(1),
+      location: varchar("location", { length: 150 }),
+      workOrderId: bigint4("work_order_id", { mode: "number", unsigned: true }),
+      sourceRemnantId: bigint4("source_remnant_id", { mode: "number", unsigned: true }),
+      status: varchar("status", { length: 30 }).notNull().default("available"),
+      usedInRef: varchar("used_in_ref", { length: 255 }),
+      usedAt: timestamp("used_at"),
+      notes: text("notes"),
+      createdBy: varchar("created_by", { length: 255 }),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
     inventoryTransactions = pgTable("inventory_transactions", {
       id: serial("id").primaryKey(),
@@ -10773,7 +10795,47 @@ function getInitSql() {
     `ALTER TABLE "work_order_operations" ALTER COLUMN "status" SET DEFAULT 'pending'`,
     `ALTER TABLE "work_orders" ALTER COLUMN "status" SET DEFAULT 'pending'`,
     `ALTER TABLE "work_orders" ALTER COLUMN "priority" SET DEFAULT 'normal'`,
-    `ALTER TABLE "work_orders" ADD COLUMN IF NOT EXISTS "quotation_id" bigint`
+    `ALTER TABLE "work_orders" ADD COLUMN IF NOT EXISTS "quotation_id" bigint`,
+    // ===== ОСТАТОЦИ (крајки) =====
+    `CREATE TABLE IF NOT EXISTS "material_remnants" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"code" varchar(30) NOT NULL,
+	"material_id" bigint NOT NULL,
+	"warehouse_id" bigint,
+	"length_mm" numeric(12, 1) DEFAULT '0' NOT NULL,
+	"quantity" integer DEFAULT 1 NOT NULL,
+	"location" varchar(150),
+	"work_order_id" bigint,
+	"source_remnant_id" bigint,
+	"status" varchar(30) DEFAULT 'available' NOT NULL,
+	"used_in_ref" varchar(255),
+	"used_at" timestamp,
+	"notes" text,
+	"created_by" varchar(255),
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "code" varchar(30)`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "material_id" bigint`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "warehouse_id" bigint`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "length_mm" numeric(12, 1) DEFAULT '0'`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "quantity" integer DEFAULT 1`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "location" varchar(150)`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "work_order_id" bigint`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "source_remnant_id" bigint`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "status" varchar(30) DEFAULT 'available'`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "used_in_ref" varchar(255)`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "used_at" timestamp`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "notes" text`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "created_by" varchar(255)`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "created_at" timestamp DEFAULT now()`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now()`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "material_remnants_code_uq" ON "material_remnants" ("code")`,
+    `CREATE INDEX IF NOT EXISTS "material_remnants_material_idx" ON "material_remnants" ("material_id")`,
+    `CREATE INDEX IF NOT EXISTS "material_remnants_status_idx" ON "material_remnants" ("status")`,
+    // ===== Параметри за кроење =====
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "cut_kerf_mm" numeric(6, 1) DEFAULT '2'`,
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "min_remnant_mm" numeric(8, 1) DEFAULT '300'`
   ];
 }
 var init_init_db_sql = __esm({
@@ -35764,7 +35826,7 @@ var accountingRouter = createRouter({
       vatGroups[rate].base += parseFloat(inv.subtotal);
       vatGroups[rate].vat += parseFloat(inv.vatAmount);
     }
-    const { workOrders: workOrders2, receipts: rcT, deliveryNotes: dnT } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
+    const { workOrders: workOrders2, receipts: rcT, deliveryNotes: dnT, workOrderMaterials: womT } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
     const inRange = (d) => {
       const x = d ? new Date(d) : null;
       return x && x >= start && x <= end;
@@ -35772,10 +35834,33 @@ var accountingRouter = createRouter({
     const allWO = (await db2.select().from(workOrders2)).filter((w) => inRange(w.createdAt));
     const allRc = (await db2.select().from(rcT)).filter((r) => inRange(r.receiptDate ?? r.createdAt));
     const allDn = (await db2.select().from(dnT)).filter((d) => inRange(d.issueDate ?? d.createdAt));
+    const woIds = new Set(allWO.map((w) => w.id));
+    const allWOM = woIds.size ? (await db2.select().from(womT)).filter((m) => m.isActual === "actual" && woIds.has(m.workOrderId)) : [];
+    const allMaterialsForReport = await db2.select().from(materials);
+    const matById = new Map(allMaterialsForReport.map((m) => [m.id, m]));
+    const woById = new Map(allWO.map((w) => [w.id, w]));
+    const requisitions = allWOM.map((m) => {
+      const mat = matById.get(m.materialId);
+      const wo = woById.get(m.workOrderId);
+      return {
+        workOrderId: m.workOrderId,
+        workOrderNumber: wo?.woNumber ?? "",
+        date: wo?.createdAt ?? null,
+        materialId: m.materialId,
+        materialName: mat?.name ?? `#${m.materialId}`,
+        unit: mat?.unit ?? "",
+        quantity: m.quantity,
+        unitCost: m.unitCost,
+        totalCost: m.totalCost
+      };
+    });
+    const totalRequisitionCost = allWOM.reduce((a, m) => a + (parseFloat(String(m.totalCost ?? "0")) || 0), 0);
     return {
       workOrders: allWO,
       receiptsList: allRc,
       deliveryNotesList: allDn,
+      requisitions,
+      totalRequisitionCost: totalRequisitionCost.toFixed(2),
       totalReceipts: allRc.reduce((a, r) => a + Number(r.totalAmount ?? 0), 0),
       period: { start: input.startDate, end: input.endDate },
       outgoing: {
@@ -36420,37 +36505,84 @@ var quotationRouter = createRouter({
       sortOrder: external_exports.number().default(0)
     })).optional()
   })).mutation(async ({ input }) => {
-    {
-      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
-      await bumpDocCounter2("quote", input.quoteNumber).catch(() => {
-      });
-    }
     const db2 = getDb();
     const { items, ...qData } = input;
-    const result = await db2.insert(quotations).values({
+    const insertPayload = {
       ...qData,
       validUntil: qData.validUntil ? new Date(qData.validUntil) : null
-    });
-    const insertId = Number(result[0].insertId);
+    };
+    let insertId;
+    try {
+      const result = await db2.insert(quotations).values(insertPayload);
+      insertId = Number(result[0].insertId);
+    } catch (err) {
+      const isDup = err?.code === "23505" || /duplicate key|unique constraint/i.test(String(err?.message ?? ""));
+      if (!isDup) throw err;
+      const { getNextDocNumberTxn: getNextDocNumberTxn2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      const freshNumber = await getNextDocNumberTxn2(db2, "quote");
+      insertPayload.quoteNumber = freshNumber;
+      qData.quoteNumber = freshNumber;
+      const result = await db2.insert(quotations).values(insertPayload);
+      insertId = Number(result[0].insertId);
+    }
+    {
+      const { bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+      await bumpDocCounter2("quote", qData.quoteNumber).catch(() => {
+      });
+    }
     if (items && items.length > 0) {
       await db2.insert(quotationItems).values(items.map((i) => ({ ...i, quotationId: insertId })));
     }
     await logAudit({ action: "CREATE", entityType: "quotation", entityId: insertId, description: `\u041A\u0440\u0435\u0438\u0440\u0430\u043D\u0430 \u043F\u043E\u043D\u0443\u0434\u0430 ${qData.quoteNumber}` });
-    return { success: true, id: insertId };
+    return { success: true, id: insertId, quoteNumber: qData.quoteNumber };
   }),
   quotationUpdate: publicQuery.input(external_exports.object({
     id: external_exports.number(),
+    customerId: external_exports.number().optional(),
     status: external_exports.enum(["draft", "sent", "accepted", "rejected", "expired", "converted"]).optional(),
+    currency: external_exports.string().optional(),
+    vatRate: external_exports.string().optional(),
     validUntil: external_exports.string().optional(),
     deliveryDays: external_exports.number().optional(),
     paymentTerms: external_exports.string().optional(),
-    notes: external_exports.string().optional()
+    notes: external_exports.string().optional(),
+    items: external_exports.array(external_exports.object({
+      itemType: external_exports.enum(["material", "service", "product"]),
+      referenceId: external_exports.number().nullable().optional(),
+      description: external_exports.string().min(1),
+      quantity: external_exports.string(),
+      unit: external_exports.string(),
+      unitPrice: external_exports.string(),
+      unitCost: external_exports.string().default("0"),
+      totalPrice: external_exports.string(),
+      totalCost: external_exports.string().default("0"),
+      vatRate: external_exports.string().default("18"),
+      notes: external_exports.string().optional(),
+      sortOrder: external_exports.number().default(0)
+    })).optional()
   })).mutation(async ({ input }) => {
     const db2 = getDb();
-    const { id, ...data } = input;
+    const { id, items, ...data } = input;
     const updateData = { ...data };
     if (data.validUntil) updateData.validUntil = new Date(data.validUntil);
+    if (items) {
+      await db2.delete(quotationItems).where(eq(quotationItems.quotationId, id));
+      if (items.length > 0) {
+        await db2.insert(quotationItems).values(items.map((i) => ({ ...i, quotationId: id })));
+      }
+      const subtotal = items.reduce((s, i) => s + parseFloat(i.totalPrice), 0);
+      const costTotal = items.reduce((s, i) => s + parseFloat(i.totalCost || "0"), 0);
+      const vatR = parseFloat(data.vatRate ?? "18");
+      const vatAmount = subtotal * vatR / 100;
+      updateData.subtotal = subtotal.toFixed(2);
+      updateData.costAmount = costTotal.toFixed(2);
+      updateData.marginAmount = (subtotal - costTotal).toFixed(2);
+      updateData.marginPercent = costTotal > 0 ? ((subtotal - costTotal) / costTotal * 100).toFixed(2) : "0";
+      updateData.vatAmount = vatAmount.toFixed(2);
+      updateData.totalAmount = (subtotal + vatAmount).toFixed(2);
+    }
     await db2.update(quotations).set(updateData).where(eq(quotations.id, id));
+    await logAudit({ action: "UPDATE", entityType: "quotation", entityId: id, description: `\u0418\u0437\u043C\u0435\u043D\u0435\u0442\u0430 \u043F\u043E\u043D\u0443\u0434\u0430` });
     return { success: true };
   }),
   quotationDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
@@ -36549,7 +36681,10 @@ var settingsRouter = createRouter({
     logoUrl: external_exports.string().optional(),
     defaultVatRate: external_exports.string().default("18"),
     valuationMethod: external_exports.enum(["weighted_average", "fifo"]).default("weighted_average"),
-    currency: external_exports.string().default("MKD")
+    currency: external_exports.string().default("MKD"),
+    timezone: external_exports.string().default("Europe/Skopje"),
+    cutKerfMm: external_exports.string().optional(),
+    minRemnantMm: external_exports.string().optional()
   })).mutation(async ({ input }) => {
     const db2 = getDb();
     const existing = await db2.select().from(companySettings);
@@ -37999,6 +38134,264 @@ var emailRouter = createRouter({
   })
 });
 
+// api/remnants-router.ts
+init_drizzle_orm();
+init_connection();
+init_schema2();
+async function nextRemnantCode() {
+  const db2 = getDb();
+  const y = (/* @__PURE__ */ new Date()).getFullYear();
+  const existing = await db2.select().from(docCounters).where(and(eq(docCounters.kind, "remnant"), eq(docCounters.year, y)));
+  let nextVal;
+  if (existing.length === 0) {
+    await db2.insert(docCounters).values({ kind: "remnant", year: y, value: 1 });
+    nextVal = 1;
+  } else {
+    nextVal = existing[0].value + 1;
+    await db2.update(docCounters).set({ value: nextVal, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
+  }
+  return `\u041E\u0421\u0422-${String(y).slice(-2)}-${String(nextVal).padStart(4, "0")}`;
+}
+async function getCutParams() {
+  const db2 = getDb();
+  const rows = await db2.select().from(companySettings);
+  const s = rows[0] ?? {};
+  return {
+    kerf: Number(s.cutKerfMm ?? 2) || 0,
+    minRemnant: Number(s.minRemnantMm ?? 300) || 0
+  };
+}
+var baseSelect = {
+  id: materialRemnants.id,
+  code: materialRemnants.code,
+  materialId: materialRemnants.materialId,
+  warehouseId: materialRemnants.warehouseId,
+  lengthMm: materialRemnants.lengthMm,
+  quantity: materialRemnants.quantity,
+  location: materialRemnants.location,
+  workOrderId: materialRemnants.workOrderId,
+  sourceRemnantId: materialRemnants.sourceRemnantId,
+  status: materialRemnants.status,
+  usedInRef: materialRemnants.usedInRef,
+  usedAt: materialRemnants.usedAt,
+  notes: materialRemnants.notes,
+  createdAt: materialRemnants.createdAt,
+  materialName: materials.name,
+  materialCode: materials.code,
+  materialType: materials.type,
+  warehouseName: warehouses.name
+};
+var remnantsRouter = createRouter({
+  // ===== ЛИСТА =====
+  remnantList: publicQuery.input(
+    external_exports.object({
+      search: external_exports.string().optional(),
+      materialId: external_exports.number().optional(),
+      status: external_exports.enum(["available", "used", "scrapped", "all"]).optional(),
+      minLengthMm: external_exports.number().optional()
+    }).optional()
+  ).query(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select(baseSelect).from(materialRemnants).leftJoin(materials, eq(materialRemnants.materialId, materials.id)).leftJoin(warehouses, eq(materialRemnants.warehouseId, warehouses.id)).orderBy(desc(materialRemnants.createdAt));
+    let out = rows;
+    const status = input?.status ?? "available";
+    if (status !== "all") out = out.filter((r) => r.status === status);
+    if (input?.materialId) out = out.filter((r) => r.materialId === input.materialId);
+    if (input?.minLengthMm) out = out.filter((r) => Number(r.lengthMm) >= input.minLengthMm);
+    if (input?.search) {
+      const s = input.search.trim().toLowerCase();
+      out = out.filter(
+        (r) => (r.code ?? "").toLowerCase().includes(s) || (r.materialName ?? "").toLowerCase().includes(s) || (r.materialCode ?? "").toLowerCase().includes(s) || (r.location ?? "").toLowerCase().includes(s)
+      );
+    }
+    return out;
+  }),
+  // ===== ДОСТАПНИ ОСТАТОЦИ ЗА ЕДЕН МАТЕРИЈАЛ (за предлог при кроење) =====
+  remnantsForMaterial: publicQuery.input(external_exports.object({ materialId: external_exports.number(), minLengthMm: external_exports.number().optional() })).query(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select(baseSelect).from(materialRemnants).leftJoin(materials, eq(materialRemnants.materialId, materials.id)).leftJoin(warehouses, eq(materialRemnants.warehouseId, warehouses.id)).where(
+      and(
+        eq(materialRemnants.materialId, input.materialId),
+        eq(materialRemnants.status, "available")
+      )
+    );
+    const min2 = input.minLengthMm ?? 0;
+    return rows.filter((r) => Number(r.lengthMm) >= min2).sort((a, b) => Number(a.lengthMm) - Number(b.lengthMm));
+  }),
+  // ===== СТАТИСТИКА =====
+  remnantStats: publicQuery.query(async () => {
+    const db2 = getDb();
+    const rows = await db2.select({
+      materialId: materialRemnants.materialId,
+      lengthMm: materialRemnants.lengthMm,
+      quantity: materialRemnants.quantity,
+      status: materialRemnants.status
+    }).from(materialRemnants);
+    const available = rows.filter((r) => r.status === "available");
+    const totalPieces = available.reduce((a, r) => a + (r.quantity ?? 1), 0);
+    const totalMeters = available.reduce((a, r) => a + Number(r.lengthMm) * (r.quantity ?? 1), 0) / 1e3;
+    const materialsWith = new Set(available.map((r) => r.materialId)).size;
+    return {
+      totalPieces,
+      totalMeters: Math.round(totalMeters * 100) / 100,
+      materialsWith,
+      usedCount: rows.filter((r) => r.status === "used").length
+    };
+  }),
+  // ===== ПАРАМЕТРИ ЗА КРОЕЊЕ =====
+  cutParamsGet: publicQuery.query(async () => {
+    return await getCutParams();
+  }),
+  cutParamsSet: publicQuery.input(external_exports.object({ kerf: external_exports.number().min(0).max(50), minRemnant: external_exports.number().min(0).max(5e3) })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(companySettings);
+    if (rows.length === 0) return { success: false };
+    await db2.update(companySettings).set({
+      cutKerfMm: String(input.kerf),
+      minRemnantMm: String(input.minRemnant),
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(companySettings.id, rows[0].id));
+    return { success: true };
+  }),
+  // ===== СОЗДАВАЊЕ =====
+  remnantCreate: publicQuery.input(
+    external_exports.object({
+      materialId: external_exports.number(),
+      lengthMm: external_exports.number().min(1),
+      quantity: external_exports.number().int().min(1).default(1),
+      warehouseId: external_exports.number().optional(),
+      location: external_exports.string().optional(),
+      workOrderId: external_exports.number().optional(),
+      notes: external_exports.string().optional(),
+      createdBy: external_exports.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const code = await nextRemnantCode();
+    const inserted = await db2.insert(materialRemnants).values({
+      code,
+      materialId: input.materialId,
+      warehouseId: input.warehouseId ?? null,
+      lengthMm: String(input.lengthMm),
+      quantity: input.quantity,
+      location: input.location ?? null,
+      workOrderId: input.workOrderId ?? null,
+      notes: input.notes ?? null,
+      createdBy: input.createdBy ?? null,
+      status: "available"
+    }).returning();
+    const row = inserted[0];
+    try {
+      await logAudit({
+        action: "CREATE",
+        entityType: "material_remnant",
+        entityId: row?.id,
+        description: `\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u0430\u043D \u043E\u0441\u0442\u0430\u0442\u043E\u043A ${code} \u2014 ${input.lengthMm} mm`
+      });
+    } catch {
+    }
+    return { success: true, id: row?.id, code };
+  }),
+  // ===== ИЗМЕНА =====
+  remnantUpdate: publicQuery.input(
+    external_exports.object({
+      id: external_exports.number(),
+      lengthMm: external_exports.number().min(1).optional(),
+      quantity: external_exports.number().int().min(1).optional(),
+      location: external_exports.string().optional(),
+      warehouseId: external_exports.number().optional(),
+      notes: external_exports.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const { id, ...rest } = input;
+    const data = { updatedAt: /* @__PURE__ */ new Date() };
+    if (rest.lengthMm !== void 0) data.lengthMm = String(rest.lengthMm);
+    if (rest.quantity !== void 0) data.quantity = rest.quantity;
+    if (rest.location !== void 0) data.location = rest.location;
+    if (rest.warehouseId !== void 0) data.warehouseId = rest.warehouseId;
+    if (rest.notes !== void 0) data.notes = rest.notes;
+    await db2.update(materialRemnants).set(data).where(eq(materialRemnants.id, id));
+    return { success: true };
+  }),
+  // ===== ИСКОРИСТУВАЊЕ (со автоматски нов остаток ако остане доволно) =====
+  remnantUse: publicQuery.input(
+    external_exports.object({
+      id: external_exports.number(),
+      usedLengthMm: external_exports.number().min(1),
+      ref: external_exports.string().optional(),
+      // работен налог / опис
+      keepRemainder: external_exports.boolean().default(true)
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(materialRemnants).where(eq(materialRemnants.id, input.id));
+    if (rows.length === 0) throw new Error("\u041E\u0441\u0442\u0430\u0442\u043E\u043A\u043E\u0442 \u043D\u0435 \u0435 \u043F\u0440\u043E\u043D\u0430\u0458\u0434\u0435\u043D");
+    const r = rows[0];
+    if (r.status !== "available") throw new Error("\u041E\u0441\u0442\u0430\u0442\u043E\u043A\u043E\u0442 \u0432\u0435\u045C\u0435 \u043D\u0435 \u0435 \u0434\u043E\u0441\u0442\u0430\u043F\u0435\u043D");
+    const total = Number(r.lengthMm);
+    if (input.usedLengthMm > total) throw new Error("\u0412\u043D\u0435\u0441\u0435\u043D\u0430\u0442\u0430 \u0434\u043E\u043B\u0436\u0438\u043D\u0430 \u0435 \u043F\u043E\u0433\u043E\u043B\u0435\u043C\u0430 \u043E\u0434 \u043E\u0441\u0442\u0430\u0442\u043E\u043A\u043E\u0442");
+    const { kerf, minRemnant } = await getCutParams();
+    const rest = Math.max(0, total - input.usedLengthMm - kerf);
+    await db2.update(materialRemnants).set({
+      status: "used",
+      usedAt: /* @__PURE__ */ new Date(),
+      usedInRef: input.ref ?? null,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(materialRemnants.id, input.id));
+    let newCode = null;
+    let scrapMm = 0;
+    if (rest > 0 && input.keepRemainder && rest >= minRemnant) {
+      newCode = await nextRemnantCode();
+      await db2.insert(materialRemnants).values({
+        code: newCode,
+        materialId: r.materialId,
+        warehouseId: r.warehouseId,
+        lengthMm: String(Math.round(rest * 10) / 10),
+        quantity: 1,
+        location: r.location,
+        workOrderId: r.workOrderId,
+        sourceRemnantId: r.id,
+        status: "available",
+        notes: `\u041E\u0434 ${r.code}`
+      });
+    } else {
+      scrapMm = rest;
+    }
+    return {
+      success: true,
+      restMm: Math.round(rest * 10) / 10,
+      newCode,
+      scrapMm: Math.round(scrapMm * 10) / 10,
+      minRemnant,
+      kerf
+    };
+  }),
+  // ===== ОТПИС =====
+  remnantScrap: publicQuery.input(external_exports.object({ id: external_exports.number(), reason: external_exports.string().optional() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    await db2.update(materialRemnants).set({
+      status: "scrapped",
+      usedAt: /* @__PURE__ */ new Date(),
+      usedInRef: input.reason ?? "\u041E\u0442\u043F\u0438\u0441",
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(materialRemnants.id, input.id));
+    return { success: true };
+  }),
+  // ===== ВРАЌАЊЕ ВО ДОСТАПНИ =====
+  remnantRestore: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    await db2.update(materialRemnants).set({ status: "available", usedAt: null, usedInRef: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq(materialRemnants.id, input.id));
+    return { success: true };
+  }),
+  // ===== БРИШЕЊЕ =====
+  remnantDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    await db2.delete(materialRemnants).where(eq(materialRemnants.id, input.id));
+    return { success: true };
+  })
+});
+
 // api/router.ts
 var appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -38014,7 +38407,8 @@ var appRouter = createRouter({
   warehouse: warehouseRouter,
   catalog: catalogRouter,
   ocr: ocrRouter,
-  email: emailRouter
+  email: emailRouter,
+  remnants: remnantsRouter
 });
 
 // api/kimi/auth.ts

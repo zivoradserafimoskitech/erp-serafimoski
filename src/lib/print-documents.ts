@@ -568,3 +568,54 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
   openPrint(html);
 }
 
+
+// ══════════════ ЕТИКЕТИ ЗА ОСТАТОЦИ (крајки) ══════════════
+export function printRemnantLabels(remnants: any[], settings: any) {
+  const list = Array.isArray(remnants) ? remnants : [remnants];
+  if (list.length === 0) return;
+
+  const cards = list
+    .map((r) => {
+      const lenM = (Number(r.lengthMm ?? 0) / 1000).toFixed(3);
+      return `<div class="lbl">
+        <div class="lbl-top">
+          <span class="lbl-co">${esc(settings?.name ?? "Serafimoski Tech")}</span>
+          <span class="lbl-date">${dt(r.createdAt)}</span>
+        </div>
+        <div class="lbl-code">${esc(r.code)}</div>
+        <div class="lbl-mat">${esc(r.materialName ?? "")}</div>
+        <div class="lbl-sub">${esc(r.materialCode ?? "")}</div>
+        <div class="lbl-len">${esc(Number(r.lengthMm ?? 0).toFixed(0))} <small>mm</small></div>
+        <div class="lbl-sub">${lenM} m${(r.quantity ?? 1) > 1 ? ` · ${r.quantity} ком` : ""}</div>
+        <div class="lbl-foot">${r.location ? "📍 " + esc(r.location) : "&nbsp;"}</div>
+      </div>`;
+    })
+    .join("");
+
+  const html = `<!doctype html>
+<html lang="mk"><head><meta charset="utf-8"><title>Етикети — остатоци</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  @page { size: A4; margin: 8mm; }
+  body { font-family:'Segoe UI', Arial, sans-serif; color:#16112b; padding:8mm; }
+  h1 { font-size:13px; margin-bottom:6mm; color:#b45309; letter-spacing:.5px; text-transform:uppercase; }
+  .sheet { display:grid; grid-template-columns:repeat(3, 1fr); gap:4mm; }
+  .lbl { border:1.5px solid #16112b; border-radius:4px; padding:3.5mm; height:38mm;
+         display:flex; flex-direction:column; page-break-inside:avoid; }
+  .lbl-top { display:flex; justify-content:space-between; font-size:7px; color:#888; border-bottom:1px solid #eee; padding-bottom:1.5mm; }
+  .lbl-co { font-weight:700; letter-spacing:.3px; }
+  .lbl-code { font-size:17px; font-weight:800; letter-spacing:.5px; margin-top:2mm; color:#b45309; font-family:'Consolas', monospace; }
+  .lbl-mat { font-size:9.5px; font-weight:600; margin-top:1.5mm; line-height:1.25; overflow:hidden; }
+  .lbl-sub { font-size:7.5px; color:#777; }
+  .lbl-len { font-size:22px; font-weight:800; margin-top:auto; line-height:1; }
+  .lbl-len small { font-size:10px; font-weight:600; color:#777; }
+  .lbl-foot { font-size:7.5px; color:#555; margin-top:1.5mm; border-top:1px dotted #ddd; padding-top:1.5mm; }
+  @media print { body { padding:0; } }
+</style></head><body>
+  <h1>Етикети за остатоци · ${list.length} ${list.length === 1 ? "парче" : "парчиња"}</h1>
+  <div class="sheet">${cards}</div>
+<script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+
+  openPrint(html);
+}

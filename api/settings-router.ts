@@ -35,6 +35,8 @@ export const settingsRouter = createRouter({
       valuationMethod: z.enum(["weighted_average", "fifo"]).default("weighted_average"),
       currency: z.string().default("MKD"),
       timezone: z.string().default("Europe/Skopje"),
+      cutKerfMm: z.string().optional(),
+      minRemnantMm: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
