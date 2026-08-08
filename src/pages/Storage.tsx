@@ -62,6 +62,7 @@ export default function Storage() {
   const { data: stats } = trpc.storage.storageStats.useQuery();
   const { data: finishedGoods } = trpc.accounting.finishedGoodsList.useQuery();
   const { data: warehousesData } = trpc.warehouse.warehouseList.useQuery();
+  const { data: suppliersData } = trpc.procurement.supplierList.useQuery({});
 
   const createMutation = trpc.storage.materialCreate.useMutation({
     onSuccess: () => {
@@ -399,6 +400,7 @@ export default function Storage() {
                   description: editForm.description ?? undefined,
                   minStock: String(editForm.minStock ?? "0"),
                   densityKey: (editForm.densityKey ?? "steel") as any,
+                  defaultSupplierId: editForm.defaultSupplierId ?? null,
                   weightPerUnit: (() => { const um = unitMeta(editForm.unit); return um.locked ? (um.fixedValue ?? "0") : String(editForm.weightPerUnit ?? "0"); })(),
                   location: editForm.location ?? undefined,
                 });
@@ -470,6 +472,20 @@ export default function Storage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Минимална залиха</Label><Input type="number" step="0.001" value={editForm.minStock ?? "0"} onChange={(e) => setEditForm({ ...editForm, minStock: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Локација во склад</Label><Input value={editForm.location ?? ""} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
+              </div>
+              <div className="space-y-2">
+                <Label>Стандарден добавувач</Label>
+                <Select value={editForm.defaultSupplierId ? String(editForm.defaultSupplierId) : "none"}
+                  onValueChange={(v) => setEditForm({ ...editForm, defaultSupplierId: v === "none" ? null : Number(v) })}>
+                  <SelectTrigger><SelectValue placeholder="Нема" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Нема</SelectItem>
+                    {suppliersData?.map((sp: any) => (
+                      <SelectItem key={sp.id} value={String(sp.id)}>{sp.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-gray-400">Се користи во „Набавка → Потреби" за да се групираат нарачките.</p>
               </div>
               <div className="space-y-2"><Label>Опис</Label><Textarea value={editForm.description ?? ""} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></div>
 

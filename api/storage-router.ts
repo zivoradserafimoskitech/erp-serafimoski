@@ -85,6 +85,7 @@ export const storageRouter = createRouter({
       lastPurchasePrice: z.string().default("0"),
       weightPerUnit: z.string().optional(),
       densityKey: z.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
+      defaultSupplierId: z.number().nullable().optional(),
       location: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -112,6 +113,7 @@ export const storageRouter = createRouter({
       lastPurchasePrice: z.string().optional(),
       weightPerUnit: z.string().optional(),
       densityKey: z.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
+      defaultSupplierId: z.number().nullable().optional(),
       location: z.string().optional(),
       isActive: z.enum(["active", "inactive"]).optional(),
     }))

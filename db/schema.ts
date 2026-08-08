@@ -132,6 +132,7 @@ export const materials = pgTable("materials", {
   weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
   // Од кој материјал е: steel | stainless | aluminum | copper | brass
   densityKey: varchar("density_key", { length: 20 }).default("steel"),
+  defaultSupplierId: bigint("default_supplier_id", { mode: "number", unsigned: true }),
   location: varchar("location", { length: 100 }),
   isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

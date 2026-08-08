@@ -8939,6 +8939,7 @@ var init_schema2 = __esm({
       weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
       // Од кој материјал е: steel | stainless | aluminum | copper | brass
       densityKey: varchar("density_key", { length: 20 }).default("steel"),
+      defaultSupplierId: bigint4("default_supplier_id", { mode: "number", unsigned: true }),
       location: varchar("location", { length: 100 }),
       isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -11136,7 +11137,8 @@ function getInitSql() {
     `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
     `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
     `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_mode" varchar(10) DEFAULT 'unit'`,
-    `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_per_kg" numeric(12, 4) DEFAULT '0'`
+    `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_per_kg" numeric(12, 4) DEFAULT '0'`,
+    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "default_supplier_id" bigint`
   ];
 }
 var init_init_db_sql = __esm({
@@ -32570,6 +32572,7 @@ var storageRouter = createRouter({
     lastPurchasePrice: external_exports.string().default("0"),
     weightPerUnit: external_exports.string().optional(),
     densityKey: external_exports.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
+    defaultSupplierId: external_exports.number().nullable().optional(),
     location: external_exports.string().optional()
   })).mutation(async ({ input }) => {
     const db2 = getDb();
@@ -32604,6 +32607,7 @@ var storageRouter = createRouter({
     lastPurchasePrice: external_exports.string().optional(),
     weightPerUnit: external_exports.string().optional(),
     densityKey: external_exports.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
+    defaultSupplierId: external_exports.number().nullable().optional(),
     location: external_exports.string().optional(),
     isActive: external_exports.enum(["active", "inactive"]).optional()
   })).mutation(async ({ input }) => {
@@ -33669,6 +33673,118 @@ var procurementRouter = createRouter({
     }).from(purchaseOrderItems).leftJoin(materials, eq(purchaseOrderItems.materialId, materials.id)).where(eq(purchaseOrderItems.purchaseOrderId, input.id));
     const sup = await db2.select().from(suppliers).where(eq(suppliers.id, po[0].supplierId));
     return { ...po[0], items, supplier: sup[0] ?? null };
+  }),
+  // ═══════════ ПОТРЕБИ ЗА НАБАВКА ═══════════
+  // Што недостига = резервирано од отворени налози + минимална залиха − тековна залиха
+  procurementNeeds: publicQuery.input(external_exports.object({ includeMinStock: external_exports.boolean().default(true) }).optional()).query(async ({ input }) => {
+    const db2 = getDb();
+    const useMin = input?.includeMinStock ?? true;
+    const mats = await db2.select().from(materials).where(eq(materials.isActive, "active"));
+    const openMats = await db2.select({
+      materialId: workOrderMaterials.materialId,
+      quantity: workOrderMaterials.quantity,
+      isActual: workOrderMaterials.isActual,
+      woStatus: workOrders.status,
+      woNumber: workOrders.woNumber
+    }).from(workOrderMaterials).leftJoin(workOrders, eq(workOrderMaterials.workOrderId, workOrders.id));
+    const reserved = /* @__PURE__ */ new Map();
+    for (const r of openMats) {
+      const st = r.woStatus;
+      if (st === "completed" || st === "cancelled") continue;
+      if (r.isActual === "actual") continue;
+      const cur = reserved.get(r.materialId) ?? { qty: 0, wos: /* @__PURE__ */ new Set() };
+      cur.qty += Number(r.quantity ?? 0) || 0;
+      if (r.woNumber) cur.wos.add(r.woNumber);
+      reserved.set(r.materialId, cur);
+    }
+    const rows = mats.map((m) => {
+      const stock = Number(m.currentStock ?? 0) || 0;
+      const min2 = Number(m.minStock ?? 0) || 0;
+      const res = reserved.get(m.id);
+      const reservedQty = res?.qty ?? 0;
+      const need = reservedQty + (useMin ? min2 : 0) - stock;
+      const price = Number(m.lastPurchasePrice ?? 0) || Number(m.avgCost ?? 0) || 0;
+      return {
+        id: m.id,
+        code: m.code,
+        name: m.name,
+        unit: m.unit,
+        currentStock: stock,
+        minStock: min2,
+        reservedQty: Math.round(reservedQty * 1e3) / 1e3,
+        workOrders: res ? Array.from(res.wos) : [],
+        shortage: Math.round(Math.max(0, need) * 1e3) / 1e3,
+        lastPrice: price,
+        estCost: Math.round(Math.max(0, need) * price * 100) / 100,
+        weightPerUnit: Number(m.weightPerUnit ?? 0) || 0,
+        defaultSupplierId: m.defaultSupplierId ?? null
+      };
+    }).filter((r) => r.shortage > 0);
+    const sups = await db2.select().from(suppliers);
+    const supMap = new Map(sups.map((x) => [x.id, x.name]));
+    const withSup = rows.map((r) => ({
+      ...r,
+      supplierName: r.defaultSupplierId ? supMap.get(r.defaultSupplierId) ?? null : null
+    }));
+    withSup.sort((a, b) => b.estCost - a.estCost);
+    return {
+      rows: withSup,
+      totals: {
+        count: withSup.length,
+        estCost: Math.round(withSup.reduce((a, r) => a + r.estCost, 0)),
+        fromWorkOrders: withSup.filter((r) => r.reservedQty > 0).length,
+        noSupplier: withSup.filter((r) => !r.defaultSupplierId).length
+      }
+    };
+  }),
+  // Креира по една набавна нарачка за секој добавувач од избраните редови
+  poCreateFromNeeds: publicQuery.input(external_exports.object({
+    items: external_exports.array(external_exports.object({
+      materialId: external_exports.number(),
+      supplierId: external_exports.number(),
+      description: external_exports.string(),
+      quantity: external_exports.string(),
+      unitPrice: external_exports.string()
+    })).min(1),
+    expectedDate: external_exports.string().optional()
+  })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const { getNextDocNumber: getNextDocNumber2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
+    const bySupplier = /* @__PURE__ */ new Map();
+    for (const it of input.items) {
+      const list = bySupplier.get(it.supplierId) ?? [];
+      list.push(it);
+      bySupplier.set(it.supplierId, list);
+    }
+    const created = [];
+    for (const [supplierId, list] of bySupplier) {
+      const poNumber = await getNextDocNumber2("po");
+      const res = await db2.insert(purchaseOrders).values({
+        poNumber,
+        supplierId,
+        status: "draft",
+        expectedDate: input.expectedDate ? new Date(input.expectedDate) : null,
+        notes: "\u0413\u0435\u043D\u0435\u0440\u0438\u0440\u0430\u043D\u043E \u043E\u0434 \u043F\u0440\u0435\u0434\u043B\u043E\u0433 \u0437\u0430 \u043D\u0430\u0431\u0430\u0432\u043A\u0430"
+      });
+      const poId = Number(res[0].insertId);
+      await db2.insert(purchaseOrderItems).values(
+        list.map((it) => ({
+          purchaseOrderId: poId,
+          materialId: it.materialId,
+          description: it.description,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          totalPrice: ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)).toFixed(2)
+        }))
+      );
+      const total = list.reduce(
+        (a, it) => a + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0),
+        0
+      );
+      await db2.update(purchaseOrders).set({ totalAmount: total.toFixed(2) }).where(eq(purchaseOrders.id, poId));
+      created.push({ id: poId, poNumber, supplierId, lines: list.length });
+    }
+    return { success: true, created };
   }),
   poCreate: publicQuery.input(external_exports.object({
     poNumber: external_exports.string().min(1),

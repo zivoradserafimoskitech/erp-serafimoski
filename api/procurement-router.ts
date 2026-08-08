@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq, desc, like } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { suppliers, purchaseOrders, purchaseOrderItems, materials } from "@db/schema";
+import { suppliers, purchaseOrders, purchaseOrderItems, materials, workOrders, workOrderMaterials } from "@db/schema";
 // audit helper available for future use
 
 export const procurementRouter = createRouter({
@@ -124,6 +124,135 @@ export const procurementRouter = createRouter({
         .where(eq(purchaseOrderItems.purchaseOrderId, input.id));
       const sup = await db.select().from(suppliers).where(eq(suppliers.id, po[0].supplierId));
       return { ...po[0], items, supplier: sup[0] ?? null };
+    }),
+
+  // ═══════════ ПОТРЕБИ ЗА НАБАВКА ═══════════
+  // Што недостига = резервирано од отворени налози + минимална залиха − тековна залиха
+  procurementNeeds: publicQuery
+    .input(z.object({ includeMinStock: z.boolean().default(true) }).optional())
+    .query(async ({ input }) => {
+      const db = getDb();
+      const useMin = input?.includeMinStock ?? true;
+
+      const mats = await db.select().from(materials).where(eq(materials.isActive, "active"));
+
+      // Планиран материјал на налози што сè уште не се затворени
+      const openMats = await db
+        .select({
+          materialId: workOrderMaterials.materialId,
+          quantity: workOrderMaterials.quantity,
+          isActual: workOrderMaterials.isActual,
+          woStatus: workOrders.status,
+          woNumber: workOrders.woNumber,
+        })
+        .from(workOrderMaterials)
+        .leftJoin(workOrders, eq(workOrderMaterials.workOrderId, workOrders.id));
+
+      const reserved = new Map<number, { qty: number; wos: Set<string> }>();
+      for (const r of openMats as any[]) {
+        const st = r.woStatus;
+        if (st === "completed" || st === "cancelled") continue;
+        if (r.isActual === "actual") continue; // веќе издадено, залихата е намалена
+        const cur = reserved.get(r.materialId) ?? { qty: 0, wos: new Set<string>() };
+        cur.qty += Number(r.quantity ?? 0) || 0;
+        if (r.woNumber) cur.wos.add(r.woNumber);
+        reserved.set(r.materialId, cur);
+      }
+
+      const rows = (mats as any[]).map((m) => {
+        const stock = Number(m.currentStock ?? 0) || 0;
+        const min = Number(m.minStock ?? 0) || 0;
+        const res = reserved.get(m.id);
+        const reservedQty = res?.qty ?? 0;
+        const need = reservedQty + (useMin ? min : 0) - stock;
+        const price = Number(m.lastPurchasePrice ?? 0) || Number(m.avgCost ?? 0) || 0;
+        return {
+          id: m.id, code: m.code, name: m.name, unit: m.unit,
+          currentStock: stock, minStock: min,
+          reservedQty: Math.round(reservedQty * 1000) / 1000,
+          workOrders: res ? Array.from(res.wos) : [],
+          shortage: Math.round(Math.max(0, need) * 1000) / 1000,
+          lastPrice: price,
+          estCost: Math.round(Math.max(0, need) * price * 100) / 100,
+          weightPerUnit: Number(m.weightPerUnit ?? 0) || 0,
+          defaultSupplierId: m.defaultSupplierId ?? null,
+        };
+      }).filter((r) => r.shortage > 0);
+
+      // Име на добавувачот
+      const sups = await db.select().from(suppliers);
+      const supMap = new Map((sups as any[]).map((x) => [x.id, x.name]));
+      const withSup = rows.map((r) => ({
+        ...r,
+        supplierName: r.defaultSupplierId ? (supMap.get(r.defaultSupplierId) ?? null) : null,
+      }));
+
+      withSup.sort((a, b) => b.estCost - a.estCost);
+
+      return {
+        rows: withSup,
+        totals: {
+          count: withSup.length,
+          estCost: Math.round(withSup.reduce((a, r) => a + r.estCost, 0)),
+          fromWorkOrders: withSup.filter((r) => r.reservedQty > 0).length,
+          noSupplier: withSup.filter((r) => !r.defaultSupplierId).length,
+        },
+      };
+    }),
+
+  // Креира по една набавна нарачка за секој добавувач од избраните редови
+  poCreateFromNeeds: publicQuery
+    .input(z.object({
+      items: z.array(z.object({
+        materialId: z.number(),
+        supplierId: z.number(),
+        description: z.string(),
+        quantity: z.string(),
+        unitPrice: z.string(),
+      })).min(1),
+      expectedDate: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { getNextDocNumber } = await import("./counters-helper");
+
+      const bySupplier = new Map<number, typeof input.items>();
+      for (const it of input.items) {
+        const list = bySupplier.get(it.supplierId) ?? [];
+        list.push(it);
+        bySupplier.set(it.supplierId, list);
+      }
+
+      const created: { id: number; poNumber: string; supplierId: number; lines: number }[] = [];
+      for (const [supplierId, list] of bySupplier) {
+        const poNumber = await getNextDocNumber("po");
+        const res = await db.insert(purchaseOrders).values({
+          poNumber, supplierId, status: "draft",
+          expectedDate: input.expectedDate ? new Date(input.expectedDate) : null,
+          notes: "Генерирано од предлог за набавка",
+        } as any);
+        const poId = Number(res[0].insertId);
+
+        await db.insert(purchaseOrderItems).values(
+          list.map((it) => ({
+            purchaseOrderId: poId,
+            materialId: it.materialId,
+            description: it.description,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            totalPrice: ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)).toFixed(2),
+          })) as any
+        );
+        const total = list.reduce(
+          (a, it) => a + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0), 0
+        );
+        await db.update(purchaseOrders)
+          .set({ totalAmount: total.toFixed(2) })
+          .where(eq(purchaseOrders.id, poId));
+
+        created.push({ id: poId, poNumber, supplierId, lines: list.length });
+      }
+      return { success: true, created };
     }),
 
   poCreate: publicQuery

@@ -1256,5 +1256,6 @@ export function getInitSql(): string[] {
     `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
     `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_mode" varchar(10) DEFAULT 'unit'`,
     `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_per_kg" numeric(12, 4) DEFAULT '0'`,
+    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "default_supplier_id" bigint`,
   ];
 }

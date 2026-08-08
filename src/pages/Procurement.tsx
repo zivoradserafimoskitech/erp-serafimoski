@@ -30,6 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ProcurementNeeds from "@/components/ProcurementNeeds";
 import {
   Search,
   Plus,
@@ -37,6 +38,7 @@ import {
   Truck,
   Trash2,
   Eye,
+  AlertTriangle,
 } from "lucide-react";
 
 const poStatusConfig: Record<string, { label: string; className: string }> = {
@@ -333,7 +335,15 @@ export default function Procurement() {
             <ShoppingCart className="h-4 w-4 mr-1" />
             Набавни нарачки
           </TabsTrigger>
+          <TabsTrigger value="needs">
+            <AlertTriangle className="h-4 w-4 mr-1" />
+            Потреби
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="needs">
+          <ProcurementNeeds />
+        </TabsContent>
 
         <TabsContent value="suppliers">
           <Card>
