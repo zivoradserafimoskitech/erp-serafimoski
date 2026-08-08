@@ -389,6 +389,10 @@ export const accountingRouter = createRouter({
         totalPrice: z.string(),
         landedCostAlloc: z.string().default("0"),
         vatRate: z.string().default("18"),
+        heatNumber: z.string().optional(),
+        certNumber: z.string().optional(),
+        certStandard: z.string().optional(),
+        certUrl: z.string().optional(),
         notes: z.string().optional(),
       })).optional(),
     }))

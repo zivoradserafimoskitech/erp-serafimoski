@@ -659,3 +659,91 @@ export function printRemnantLabels(remnants: any[], settings: any) {
 
   openPrint(html);
 }
+
+// ══════════════ ИЗЈАВА ЗА ВГРАДЕНИ МАТЕРИЈАЛИ (АТЕСТИ) ══════════════
+export function printCertificateStatement(dn: any, certs: any[], settings: any) {
+  const list = Array.isArray(certs) ? certs : [];
+  const rows = list.map((c, i) => `<tr>
+    <td class="c">${i + 1}</td>
+    <td>${esc(c.materialName ?? "—")}</td>
+    <td class="c"><b>${esc(c.heatNumber ?? "—")}</b></td>
+    <td class="c">${esc(c.certNumber ?? "—")}</td>
+    <td class="c">${esc(c.certStandard ?? "—")}</td>
+    <td class="r">${Number(c.quantity ?? 0) > 0 ? den(c.quantity) : "—"}</td>
+    <td>${esc(c.supplierName ?? "—")}</td>
+  </tr>`).join("");
+
+  const html = `<!doctype html>
+<html lang="mk"><head><meta charset="utf-8"><title>Изјава за вградени материјали ${esc(dn?.dnNumber ?? "")}</title>
+<style>
+  :root { --steel: #6188AF; --dark: #16112b; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  @page { size: A4; margin: 14mm; }
+  body { font-family:'Segoe UI', Arial, sans-serif; color:var(--dark); font-size:11px; line-height:1.45; }
+  .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid var(--steel); padding-bottom:8px; }
+  .co { font-size:15px; font-weight:800; letter-spacing:.3px; }
+  .co small { display:block; font-weight:400; font-size:9px; color:#666; margin-top:2px; line-height:1.4; }
+  .logo { height:34px; }
+  h1 { font-size:15px; margin:14px 0 3px; text-transform:uppercase; letter-spacing:.6px; }
+  .sub { font-size:10px; color:#666; margin-bottom:12px; }
+  .meta { display:flex; gap:22px; font-size:10px; margin-bottom:12px; padding:7px 10px; background:#F4F7FA; border-left:3px solid var(--steel); }
+  .meta b { display:block; font-size:11px; }
+  .meta span { color:#777; text-transform:uppercase; font-size:8px; letter-spacing:.4px; }
+  table { width:100%; border-collapse:collapse; margin-bottom:14px; }
+  th { background:var(--dark); color:#fff; font-size:8.5px; text-transform:uppercase; letter-spacing:.4px; padding:6px 5px; text-align:left; }
+  td { padding:5px; border-bottom:1px solid #E4E9EE; font-size:10px; }
+  tr:nth-child(even) td { background:#FAFBFC; }
+  .c { text-align:center; } .r { text-align:right; }
+  .stmt { border:1.5px solid var(--dark); padding:10px 12px; font-size:10px; margin-bottom:16px; }
+  .stmt b { display:block; margin-bottom:4px; font-size:10.5px; }
+  .sigs { display:flex; justify-content:space-between; margin-top:26px; font-size:9px; }
+  .sig { width:44%; text-align:center; }
+  .sig .line { border-top:1px solid #999; margin-bottom:3px; height:34px; }
+  .foot { margin-top:18px; border-top:1px solid #E4E9EE; padding-top:5px; font-size:8px; color:#999; text-align:center; }
+</style></head><body>
+  <div class="head">
+    <div class="co">${esc(settings?.name ?? "Serafimoski Tech DOOEL")}
+      <small>${esc(settings?.address ?? "")}${settings?.city ? ", " + esc(settings.city) : ""}<br>
+      ЕДБ ${esc(settings?.edb ?? "—")}${settings?.phone ? " · тел. " + esc(settings.phone) : ""}</small>
+    </div>
+    ${settings?.logoUrl ? `<img class="logo" src="${esc(settings.logoUrl)}">` : ""}
+  </div>
+
+  <h1>Изјава за вградени материјали</h1>
+  <div class="sub">Следливост на материјалот согласно EN 10204 · тип 3.1</div>
+
+  <div class="meta">
+    <div><span>Испратница</span><b>${esc(dn?.dnNumber ?? "—")}</b></div>
+    <div><span>Датум</span><b>${dt(dn?.dnDate ?? dn?.createdAt)}</b></div>
+    <div><span>Купувач</span><b>${esc(dn?.customerName ?? "—")}</b></div>
+    <div><span>Позиции</span><b>${list.length}</b></div>
+  </div>
+
+  <table><thead><tr>
+    <th class="c" style="width:24px">#</th><th>Материјал</th>
+    <th class="c" style="width:70px">Шаржа</th><th class="c" style="width:82px">Атест бр.</th>
+    <th class="c" style="width:82px">Квалитет</th><th class="r" style="width:60px">Количина</th>
+    <th style="width:92px">Добавувач</th>
+  </tr></thead><tbody>
+    ${rows || `<tr><td colspan="7" class="c" style="padding:16px;color:#999">Нема внесени шаржи за оваа испорака</td></tr>`}
+  </tbody></table>
+
+  <div class="stmt">
+    <b>Изјавуваме под целосна одговорност:</b>
+    Материјалите наведени во оваа изјава се вградени во производите испорачани со горенаведената
+    испратница. За секоја наведена шаржа поседуваме оригинален испитен извештај (атест) издаден од
+    производителот на челикот, кој е достапен на увид по барање на Инвеститорот или надзорниот орган.
+    Материјалите одговараат на наведениот квалитет и стандард.
+  </div>
+
+  <div class="sigs">
+    <div class="sig"><div class="line"></div>Одговорно лице · ${esc(settings?.name ?? "")}</div>
+    <div class="sig"><div class="line"></div>Примил / Надзор</div>
+  </div>
+
+  <div class="foot">Документот е генериран од ERP системот на ${esc(settings?.name ?? "")} · ${dt(new Date())}</div>
+<script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+
+  openPrint(html);
+}

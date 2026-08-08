@@ -66,8 +66,16 @@ export default function Receipts() {
     unitPrice: string;
     totalPrice: string;
     notes: string;
+    heatNumber?: string;
+    certNumber?: string;
+    certStandard?: string;
+    certUrl?: string;
   }>>([]);
-  const [itemForm, setItemForm] = useState({ materialId: "", quantity: "", unitPrice: "", notes: "" });
+  const [itemForm, setItemForm] = useState({
+    materialId: "", quantity: "", unitPrice: "", notes: "",
+    heatNumber: "", certNumber: "", certStandard: "", certUrl: "",
+  });
+  const [showCertFields, setShowCertFields] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: receiptsData } = trpc.accounting.receiptList.useQuery({ status: statusFilter === "all" ? undefined : statusFilter, search: search || undefined });
@@ -213,8 +221,17 @@ export default function Receipts() {
       unitPrice: itemForm.unitPrice,
       totalPrice: (qty * price).toFixed(2),
       notes: itemForm.notes,
+      heatNumber: itemForm.heatNumber || undefined,
+      certNumber: itemForm.certNumber || undefined,
+      certStandard: itemForm.certStandard || undefined,
+      certUrl: itemForm.certUrl || undefined,
     }]);
-    setItemForm({ materialId: "", quantity: "", unitPrice: "", notes: "" });
+    setItemForm({
+      materialId: "", quantity: "", unitPrice: "", notes: "",
+      // Шаржата обично е иста за целата испорака — ја задржувам
+      heatNumber: itemForm.heatNumber, certNumber: itemForm.certNumber,
+      certStandard: itemForm.certStandard, certUrl: itemForm.certUrl,
+    });
   };
 
   const removeItem = (idx: number) => {
@@ -234,6 +251,10 @@ export default function Receipts() {
         unitPrice: i.unitPrice,
         totalPrice: i.totalPrice,
         notes: i.notes,
+        heatNumber: i.heatNumber,
+        certNumber: i.certNumber,
+        certStandard: i.certStandard,
+        certUrl: i.certUrl,
       })),
     });
   };
@@ -246,6 +267,11 @@ export default function Receipts() {
       unitPrice: i.unitPrice,
       totalPrice: i.totalPrice,
       landedCostAlloc: i.landedCostAlloc ?? "0",
+      heatNumber: i.heatNumber ?? undefined,
+      certNumber: i.certNumber ?? undefined,
+      certStandard: i.certStandard ?? undefined,
+      certUrl: i.certUrl ?? undefined,
+      supplierId: receipt.supplierId ?? undefined,
     })) ?? [];
     processMutation.mutate({
       receiptId: receipt.id,
@@ -502,6 +528,43 @@ export default function Receipts() {
                       </div>
                       <Button type="button" variant="outline" size="sm" className="h-9" onClick={addItem}>+ Додади</Button>
                     </div>
+
+                    <button type="button" onClick={() => setShowCertFields(!showCertFields)}
+                      className="text-[11px] text-blue-600 hover:text-blue-800 underline">
+                      {showCertFields ? "Скрий ги полињата за атест" : "Шаржа / атест (за носечки конструкции)"}
+                    </button>
+
+                    {showCertFields && (
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 p-2.5 rounded-lg bg-blue-50/60 border border-blue-100">
+                        <div className="space-y-1">
+                          <Label className="text-[11px] text-gray-500">Шаржа (heat no.)</Label>
+                          <Input className="text-xs h-8" placeholder="на пр. 512884"
+                            value={itemForm.heatNumber}
+                            onChange={e => setItemForm({ ...itemForm, heatNumber: e.target.value })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[11px] text-gray-500">Број на атест</Label>
+                          <Input className="text-xs h-8" placeholder="на пр. 3.1/2026-441"
+                            value={itemForm.certNumber}
+                            onChange={e => setItemForm({ ...itemForm, certNumber: e.target.value })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[11px] text-gray-500">Квалитет / стандард</Label>
+                          <Input className="text-xs h-8" placeholder="S235JR EN 10025"
+                            value={itemForm.certStandard}
+                            onChange={e => setItemForm({ ...itemForm, certStandard: e.target.value })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[11px] text-gray-500">Линк до PDF</Label>
+                          <Input className="text-xs h-8" placeholder="https://…"
+                            value={itemForm.certUrl}
+                            onChange={e => setItemForm({ ...itemForm, certUrl: e.target.value })} />
+                        </div>
+                        <p className="md:col-span-4 text-[10px] text-gray-500">
+                          Останува пополнето за следната ставка — обично целата испорака е од иста шаржа.
+                        </p>
+                      </div>
+                    )}
                     {items.length > 0 && (
                       <div className="space-y-1.5">
                         <div className="hidden md:grid md:grid-cols-[1fr_6rem_6rem_6.5rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
@@ -511,7 +574,14 @@ export default function Receipts() {
                           const m = materialsData?.find(x => x.id.toString() === it.materialId);
                           return (
                             <div key={idx} className="grid grid-cols-[1fr_6rem_6rem_6.5rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
-                              <span className="text-xs truncate"><span className="font-mono text-[10px] text-gray-400 mr-1">{m?.code}</span>{m?.name}</span>
+                              <span className="text-xs truncate">
+                                <span className="font-mono text-[10px] text-gray-400 mr-1">{m?.code}</span>{m?.name}
+                                {it.heatNumber && (
+                                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-mono">
+                                    ш. {it.heatNumber}
+                                  </span>
+                                )}
+                              </span>
                               <span className="text-xs">{it.quantity} {it.unit}</span>
                               <span className="text-xs">{Number(it.unitPrice).toLocaleString("mk-MK")}</span>
                               <span className="text-xs font-medium text-right whitespace-nowrap">{Number(it.totalPrice).toLocaleString("mk-MK")}</span>

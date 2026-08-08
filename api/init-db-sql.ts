@@ -1257,5 +1257,34 @@ export function getInitSql(): string[] {
     `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_mode" varchar(10) DEFAULT 'unit'`,
     `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_per_kg" numeric(12, 4) DEFAULT '0'`,
     `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "default_supplier_id" bigint`,
+
+    // ===== АТЕСТИ И ШАРЖИ =====
+    `ALTER TABLE "receipt_items" ADD COLUMN IF NOT EXISTS "heat_number" varchar(60)`,
+    `ALTER TABLE "receipt_items" ADD COLUMN IF NOT EXISTS "cert_number" varchar(80)`,
+    `ALTER TABLE "receipt_items" ADD COLUMN IF NOT EXISTS "cert_standard" varchar(60)`,
+    `ALTER TABLE "receipt_items" ADD COLUMN IF NOT EXISTS "cert_url" text`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "heat_number" varchar(60)`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "cert_number" varchar(80)`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "cert_standard" varchar(60)`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "cert_url" text`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "supplier_id" bigint`,
+    `CREATE TABLE IF NOT EXISTS "dn_certificates" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"delivery_note_id" bigint NOT NULL,
+	"lot_id" bigint,
+	"material_id" bigint,
+	"material_name" varchar(255),
+	"heat_number" varchar(60),
+	"cert_number" varchar(80),
+	"cert_standard" varchar(60),
+	"cert_url" text,
+	"supplier_name" varchar(255),
+	"quantity" numeric(12, 3) DEFAULT '0',
+	"unit" varchar(20),
+	"notes" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE INDEX IF NOT EXISTS "dn_certificates_dn_idx" ON "dn_certificates" ("delivery_note_id")`,
+    `CREATE INDEX IF NOT EXISTS "material_lots_heat_idx" ON "material_lots" ("heat_number")`,
   ];
 }

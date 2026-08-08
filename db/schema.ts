@@ -166,10 +166,37 @@ export const materialLots = pgTable("material_lots", {
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   landedCost: decimal("landed_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   date: date("date").notNull(),
+  // Следливост: шаржа и атест на партијата
+  heatNumber: varchar("heat_number", { length: 60 }),
+  certNumber: varchar("cert_number", { length: 80 }),
+  certStandard: varchar("cert_standard", { length: 60 }),
+  certUrl: text("cert_url"),
+  supplierId: bigint("supplier_id", { mode: "number", unsigned: true }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export type MaterialLot = typeof materialLots.$inferSelect;
+
+// ============= АТЕСТИ ВРЗАНИ ЗА ИСПРАТНИЦА =============
+// Кои шаржи се вградени во конкретна испорака — основа за изјавата кон купувачот
+export const dnCertificates = pgTable("dn_certificates", {
+  id: serial("id").primaryKey(),
+  deliveryNoteId: bigint("delivery_note_id", { mode: "number", unsigned: true }).notNull(),
+  lotId: bigint("lot_id", { mode: "number", unsigned: true }),
+  materialId: bigint("material_id", { mode: "number", unsigned: true }),
+  materialName: varchar("material_name", { length: 255 }),
+  heatNumber: varchar("heat_number", { length: 60 }),
+  certNumber: varchar("cert_number", { length: 80 }),
+  certStandard: varchar("cert_standard", { length: 60 }),
+  certUrl: text("cert_url"),
+  supplierName: varchar("supplier_name", { length: 255 }),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).default("0"),
+  unit: varchar("unit", { length: 20 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type DnCertificate = typeof dnCertificates.$inferSelect;
 
 // ============= ОСТАТОЦИ (крајки) =============
 export const materialRemnants = pgTable("material_remnants", {
@@ -725,6 +752,11 @@ export const receiptItems = pgTable("receipt_items", {
   totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default("0"),
   landedCostAlloc: decimal("landed_cost_alloc", { precision: 12, scale: 2 }).notNull().default("0"),
   vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+  // Следливост на челик: шаржа (heat number) и атест EN 10204
+  heatNumber: varchar("heat_number", { length: 60 }),
+  certNumber: varchar("cert_number", { length: 80 }),
+  certStandard: varchar("cert_standard", { length: 60 }),
+  certUrl: text("cert_url"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

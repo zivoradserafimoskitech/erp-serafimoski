@@ -8798,6 +8798,7 @@ __export(schema_exports, {
   customers: () => customers,
   deliveryNotes: () => deliveryNotes,
   digitalCertificates: () => digitalCertificates,
+  dnCertificates: () => dnCertificates,
   docCounters: () => docCounters,
   documentItems: () => documentItems,
   eInvoices: () => eInvoices,
@@ -8839,7 +8840,7 @@ __export(schema_exports, {
   workOrderOperations: () => workOrderOperations,
   workOrders: () => workOrders
 });
-var companySettings, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
+var companySettings, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_pg_core();
@@ -8964,6 +8965,28 @@ var init_schema2 = __esm({
       unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull().default("0"),
       landedCost: decimal("landed_cost", { precision: 12, scale: 2 }).notNull().default("0"),
       date: date5("date").notNull(),
+      // Следливост: шаржа и атест на партијата
+      heatNumber: varchar("heat_number", { length: 60 }),
+      certNumber: varchar("cert_number", { length: 80 }),
+      certStandard: varchar("cert_standard", { length: 60 }),
+      certUrl: text("cert_url"),
+      supplierId: bigint4("supplier_id", { mode: "number", unsigned: true }),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    dnCertificates = pgTable("dn_certificates", {
+      id: serial("id").primaryKey(),
+      deliveryNoteId: bigint4("delivery_note_id", { mode: "number", unsigned: true }).notNull(),
+      lotId: bigint4("lot_id", { mode: "number", unsigned: true }),
+      materialId: bigint4("material_id", { mode: "number", unsigned: true }),
+      materialName: varchar("material_name", { length: 255 }),
+      heatNumber: varchar("heat_number", { length: 60 }),
+      certNumber: varchar("cert_number", { length: 80 }),
+      certStandard: varchar("cert_standard", { length: 60 }),
+      certUrl: text("cert_url"),
+      supplierName: varchar("supplier_name", { length: 255 }),
+      quantity: decimal("quantity", { precision: 12, scale: 3 }).default("0"),
+      unit: varchar("unit", { length: 20 }),
+      notes: text("notes"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
     materialRemnants = pgTable("material_remnants", {
@@ -9396,6 +9419,11 @@ var init_schema2 = __esm({
       totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default("0"),
       landedCostAlloc: decimal("landed_cost_alloc", { precision: 12, scale: 2 }).notNull().default("0"),
       vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+      // Следливост на челик: шаржа (heat number) и атест EN 10204
+      heatNumber: varchar("heat_number", { length: 60 }),
+      certNumber: varchar("cert_number", { length: 80 }),
+      certStandard: varchar("cert_standard", { length: 60 }),
+      certUrl: text("cert_url"),
       notes: text("notes"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
@@ -11138,7 +11166,35 @@ function getInitSql() {
     `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
     `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_mode" varchar(10) DEFAULT 'unit'`,
     `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_per_kg" numeric(12, 4) DEFAULT '0'`,
-    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "default_supplier_id" bigint`
+    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "default_supplier_id" bigint`,
+    // ===== АТЕСТИ И ШАРЖИ =====
+    `ALTER TABLE "receipt_items" ADD COLUMN IF NOT EXISTS "heat_number" varchar(60)`,
+    `ALTER TABLE "receipt_items" ADD COLUMN IF NOT EXISTS "cert_number" varchar(80)`,
+    `ALTER TABLE "receipt_items" ADD COLUMN IF NOT EXISTS "cert_standard" varchar(60)`,
+    `ALTER TABLE "receipt_items" ADD COLUMN IF NOT EXISTS "cert_url" text`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "heat_number" varchar(60)`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "cert_number" varchar(80)`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "cert_standard" varchar(60)`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "cert_url" text`,
+    `ALTER TABLE "material_lots" ADD COLUMN IF NOT EXISTS "supplier_id" bigint`,
+    `CREATE TABLE IF NOT EXISTS "dn_certificates" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"delivery_note_id" bigint NOT NULL,
+	"lot_id" bigint,
+	"material_id" bigint,
+	"material_name" varchar(255),
+	"heat_number" varchar(60),
+	"cert_number" varchar(80),
+	"cert_standard" varchar(60),
+	"cert_url" text,
+	"supplier_name" varchar(255),
+	"quantity" numeric(12, 3) DEFAULT '0',
+	"unit" varchar(20),
+	"notes" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE INDEX IF NOT EXISTS "dn_certificates_dn_idx" ON "dn_certificates" ("delivery_note_id")`,
+    `CREATE INDEX IF NOT EXISTS "material_lots_heat_idx" ON "material_lots" ("heat_number")`
   ];
 }
 var init_init_db_sql = __esm({
@@ -32707,7 +32763,12 @@ var storageRouter = createRouter({
       quantity: external_exports.string(),
       unitPrice: external_exports.string(),
       totalPrice: external_exports.string(),
-      landedCostAlloc: external_exports.string().default("0")
+      landedCostAlloc: external_exports.string().default("0"),
+      heatNumber: external_exports.string().optional(),
+      certNumber: external_exports.string().optional(),
+      certStandard: external_exports.string().optional(),
+      certUrl: external_exports.string().optional(),
+      supplierId: external_exports.number().optional()
     })),
     transportCost: external_exports.string().default("0"),
     customsCost: external_exports.string().default("0"),
@@ -32760,7 +32821,13 @@ var storageRouter = createRouter({
         remainingQty: qty.toFixed(3),
         unitCost: unitPrice.toFixed(2),
         landedCost: landedAlloc.toFixed(2),
-        date: /* @__PURE__ */ new Date()
+        date: /* @__PURE__ */ new Date(),
+        // Следливост — доаѓа од ставката на приемницата
+        heatNumber: item.heatNumber ?? null,
+        certNumber: item.certNumber ?? null,
+        certStandard: item.certStandard ?? null,
+        certUrl: item.certUrl ?? null,
+        supplierId: item.supplierId ?? null
       });
       await db2.insert(inventoryTransactions).values({
         materialId: item.materialId,
@@ -36162,6 +36229,10 @@ var accountingRouter = createRouter({
       totalPrice: external_exports.string(),
       landedCostAlloc: external_exports.string().default("0"),
       vatRate: external_exports.string().default("18"),
+      heatNumber: external_exports.string().optional(),
+      certNumber: external_exports.string().optional(),
+      certStandard: external_exports.string().optional(),
+      certUrl: external_exports.string().optional(),
       notes: external_exports.string().optional()
     })).optional()
   })).mutation(async ({ input }) => {
@@ -38977,6 +39048,201 @@ var remnantsRouter = createRouter({
   })
 });
 
+// api/certificates-router.ts
+init_drizzle_orm();
+init_connection();
+init_schema2();
+var lotSelect = {
+  id: materialLots.id,
+  materialId: materialLots.materialId,
+  warehouseId: materialLots.warehouseId,
+  receiptId: materialLots.receiptId,
+  quantity: materialLots.quantity,
+  remainingQty: materialLots.remainingQty,
+  unitCost: materialLots.unitCost,
+  date: materialLots.date,
+  heatNumber: materialLots.heatNumber,
+  certNumber: materialLots.certNumber,
+  certStandard: materialLots.certStandard,
+  certUrl: materialLots.certUrl,
+  supplierId: materialLots.supplierId,
+  materialName: materials.name,
+  materialCode: materials.code,
+  materialUnit: materials.unit
+};
+var certificatesRouter = createRouter({
+  // ═══════════ РЕГИСТАР НА ШАРЖИ ═══════════
+  lotCertList: publicQuery.input(
+    external_exports.object({
+      search: external_exports.string().optional(),
+      materialId: external_exports.number().optional(),
+      filter: external_exports.enum(["all", "with_cert", "missing_cert"]).optional()
+    }).optional()
+  ).query(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select(lotSelect).from(materialLots).leftJoin(materials, eq(materialLots.materialId, materials.id)).orderBy(desc(materialLots.date));
+    const sups = await db2.select().from(suppliers);
+    const supMap = new Map(sups.map((x) => [x.id, x.name]));
+    const rcs = await db2.select().from(receipts);
+    const rcMap = new Map(rcs.map((x) => [x.id, { num: x.receiptNumber, supplierId: x.supplierId }]));
+    let out = rows.map((r) => {
+      const rc = r.receiptId ? rcMap.get(r.receiptId) : null;
+      const supId = r.supplierId ?? rc?.supplierId ?? null;
+      return {
+        ...r,
+        receiptNumber: rc?.num ?? null,
+        supplierName: supId ? supMap.get(supId) ?? null : null,
+        hasCert: Boolean(r.heatNumber || r.certNumber)
+      };
+    });
+    const f = input?.filter ?? "all";
+    if (f === "with_cert") out = out.filter((r) => r.hasCert);
+    if (f === "missing_cert") out = out.filter((r) => !r.hasCert);
+    if (input?.materialId) out = out.filter((r) => r.materialId === input.materialId);
+    if (input?.search) {
+      const s = input.search.trim().toLowerCase();
+      out = out.filter(
+        (r) => (r.heatNumber ?? "").toLowerCase().includes(s) || (r.certNumber ?? "").toLowerCase().includes(s) || (r.certStandard ?? "").toLowerCase().includes(s) || (r.materialName ?? "").toLowerCase().includes(s) || (r.materialCode ?? "").toLowerCase().includes(s) || (r.receiptNumber ?? "").toLowerCase().includes(s)
+      );
+    }
+    return out;
+  }),
+  lotCertStats: publicQuery.query(async () => {
+    const db2 = getDb();
+    const rows = await db2.select().from(materialLots);
+    const all = rows;
+    const withCert = all.filter((r) => r.heatNumber || r.certNumber);
+    const inStock = all.filter((r) => Number(r.remainingQty ?? 0) > 0);
+    return {
+      total: all.length,
+      withCert: withCert.length,
+      missing: all.length - withCert.length,
+      inStockMissing: inStock.filter((r) => !(r.heatNumber || r.certNumber)).length
+    };
+  }),
+  lotCertUpdate: publicQuery.input(
+    external_exports.object({
+      id: external_exports.number(),
+      heatNumber: external_exports.string().optional(),
+      certNumber: external_exports.string().optional(),
+      certStandard: external_exports.string().optional(),
+      certUrl: external_exports.string().optional(),
+      supplierId: external_exports.number().nullable().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const { id, ...rest } = input;
+    const patch = {};
+    for (const [k, v] of Object.entries(rest)) {
+      if (v !== void 0) patch[k] = v === "" ? null : v;
+    }
+    if (Object.keys(patch).length === 0) return { success: true };
+    await db2.update(materialLots).set(patch).where(eq(materialLots.id, id));
+    await logAudit({
+      action: "UPDATE",
+      entityType: "material_lot",
+      entityId: id,
+      description: `\u0410\u0436\u0443\u0440\u0438\u0440\u0430\u043D \u0430\u0442\u0435\u0441\u0442/\u0448\u0430\u0440\u0436\u0430 \u043D\u0430 \u043F\u0430\u0440\u0442\u0438\u0458\u0430 #${id}`
+    }).catch(() => {
+    });
+    return { success: true };
+  }),
+  // ═══════════ АТЕСТИ НА ИСПРАТНИЦА ═══════════
+  dnCertList: publicQuery.input(external_exports.object({ deliveryNoteId: external_exports.number() })).query(async ({ input }) => {
+    const db2 = getDb();
+    return await db2.select().from(dnCertificates).where(eq(dnCertificates.deliveryNoteId, input.deliveryNoteId)).orderBy(dnCertificates.id);
+  }),
+  /**
+   * Предлага шаржи за испратницата: гледа кои материјали се на неа
+   * (директно, или преку работниот налог на нејзината нарачка) и враќа
+   * партии со внесена шаржа, најстарите први (FIFO).
+   */
+  dnCertSuggest: publicQuery.input(external_exports.object({ deliveryNoteId: external_exports.number() })).query(async ({ input }) => {
+    const db2 = getDb();
+    const dnRows = await db2.select().from(deliveryNotes).where(eq(deliveryNotes.id, input.deliveryNoteId));
+    const dn = dnRows[0];
+    if (!dn) return { materialIds: [], lots: [] };
+    const items = await db2.select().from(documentItems).where(and(eq(documentItems.documentId, input.deliveryNoteId), eq(documentItems.documentType, "delivery_note")));
+    const matIds = /* @__PURE__ */ new Set();
+    for (const it of items) if (it.materialId) matIds.add(it.materialId);
+    if (matIds.size === 0 && dn.orderId) {
+      const wos = await db2.select().from(workOrders).where(eq(workOrders.orderId, dn.orderId));
+      for (const wo of wos) {
+        const wms = await db2.select().from(workOrderMaterials).where(eq(workOrderMaterials.workOrderId, wo.id));
+        for (const wm of wms) if (wm.materialId) matIds.add(wm.materialId);
+      }
+    }
+    if (matIds.size === 0) return { materialIds: [], lots: [] };
+    const rows = await db2.select(lotSelect).from(materialLots).leftJoin(materials, eq(materialLots.materialId, materials.id)).orderBy(materialLots.date);
+    const sups = await db2.select().from(suppliers);
+    const supMap = new Map(sups.map((x) => [x.id, x.name]));
+    const rcs = await db2.select().from(receipts);
+    const rcMap = new Map(rcs.map((x) => [x.id, { num: x.receiptNumber, supplierId: x.supplierId }]));
+    const lots = rows.filter((r) => matIds.has(r.materialId) && (r.heatNumber || r.certNumber)).map((r) => {
+      const rc = r.receiptId ? rcMap.get(r.receiptId) : null;
+      const supId = r.supplierId ?? rc?.supplierId ?? null;
+      return { ...r, receiptNumber: rc?.num ?? null, supplierName: supId ? supMap.get(supId) ?? null : null };
+    });
+    return { materialIds: Array.from(matIds), lots };
+  }),
+  /** Го заменува целиот сет атести на испратницата */
+  dnCertSet: publicQuery.input(
+    external_exports.object({
+      deliveryNoteId: external_exports.number(),
+      entries: external_exports.array(
+        external_exports.object({
+          lotId: external_exports.number().nullable().optional(),
+          materialId: external_exports.number().nullable().optional(),
+          materialName: external_exports.string().optional(),
+          heatNumber: external_exports.string().optional(),
+          certNumber: external_exports.string().optional(),
+          certStandard: external_exports.string().optional(),
+          certUrl: external_exports.string().optional(),
+          supplierName: external_exports.string().optional(),
+          quantity: external_exports.string().optional(),
+          unit: external_exports.string().optional(),
+          notes: external_exports.string().optional()
+        })
+      )
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    await db2.delete(dnCertificates).where(eq(dnCertificates.deliveryNoteId, input.deliveryNoteId));
+    if (input.entries.length > 0) {
+      await db2.insert(dnCertificates).values(
+        input.entries.map((e) => ({
+          deliveryNoteId: input.deliveryNoteId,
+          lotId: e.lotId ?? null,
+          materialId: e.materialId ?? null,
+          materialName: e.materialName ?? null,
+          heatNumber: e.heatNumber ?? null,
+          certNumber: e.certNumber ?? null,
+          certStandard: e.certStandard ?? null,
+          certUrl: e.certUrl ?? null,
+          supplierName: e.supplierName ?? null,
+          quantity: e.quantity ?? "0",
+          unit: e.unit ?? null,
+          notes: e.notes ?? null
+        }))
+      );
+    }
+    return { success: true, count: input.entries.length };
+  }),
+  /** Каде е употребена една шаржа — за прашањето „кај кого отиде оваа партија“ */
+  heatTrace: publicQuery.input(external_exports.object({ heatNumber: external_exports.string().min(1) })).query(async ({ input }) => {
+    const db2 = getDb();
+    const h = input.heatNumber.trim().toLowerCase();
+    const lots = await db2.select(lotSelect).from(materialLots).leftJoin(materials, eq(materialLots.materialId, materials.id));
+    const matched = lots.filter((r) => (r.heatNumber ?? "").toLowerCase() === h);
+    const certs = await db2.select().from(dnCertificates);
+    const used = certs.filter((c) => (c.heatNumber ?? "").toLowerCase() === h);
+    const dnIds = Array.from(new Set(used.map((c) => c.deliveryNoteId)));
+    const dnRows = dnIds.length > 0 ? await db2.select().from(deliveryNotes) : [];
+    const dns = dnRows.filter((d) => dnIds.includes(d.id));
+    return { lots: matched, deliveries: dns };
+  })
+});
+
 // api/router.ts
 var appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -38993,7 +39259,8 @@ var appRouter = createRouter({
   catalog: catalogRouter,
   ocr: ocrRouter,
   email: emailRouter,
-  remnants: remnantsRouter
+  remnants: remnantsRouter,
+  certificates: certificatesRouter
 });
 
 // api/kimi/auth.ts

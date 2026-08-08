@@ -219,6 +219,11 @@ export const storageRouter = createRouter({
         unitPrice: z.string(),
         totalPrice: z.string(),
         landedCostAlloc: z.string().default("0"),
+        heatNumber: z.string().optional(),
+        certNumber: z.string().optional(),
+        certStandard: z.string().optional(),
+        certUrl: z.string().optional(),
+        supplierId: z.number().optional(),
       })),
       transportCost: z.string().default("0"),
       customsCost: z.string().default("0"),
@@ -300,6 +305,12 @@ export const storageRouter = createRouter({
           unitCost: unitPrice.toFixed(2),
           landedCost: landedAlloc.toFixed(2),
           date: new Date(),
+          // Следливост — доаѓа од ставката на приемницата
+          heatNumber: (item as any).heatNumber ?? null,
+          certNumber: (item as any).certNumber ?? null,
+          certStandard: (item as any).certStandard ?? null,
+          certUrl: (item as any).certUrl ?? null,
+          supplierId: (item as any).supplierId ?? null,
         } as any);
 
         // Log transaction
