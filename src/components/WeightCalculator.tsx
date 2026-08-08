@@ -7,15 +7,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Calculator } from "lucide-react";
+import {
+  DENSITIES, areaRoundBar, areaSquareBar, areaFlat,
+  areaRectTube, areaRoundTube, areaAngle,
+  kgPerMeter, kgPerSquareMeter, kgPerSheet,
+} from "@contracts/weight-geometry";
 
-// Густини (кг/м³)
-const DENSITIES: Record<string, { label: string; value: number }> = {
-  steel: { label: "Челик / железо", value: 7850 },
-  stainless: { label: "Нерѓосувачки (INOX)", value: 7900 },
-  aluminum: { label: "Алуминиум", value: 2700 },
-  copper: { label: "Бакар", value: 8960 },
-  brass: { label: "Месинг", value: 8500 },
-};
+// Реекспорт за постојните повикувачи
+export { lineWeightKg, unitMeta } from "@contracts/weight-geometry";
+export type { UnitMeta } from "@contracts/weight-geometry";
 
 type Field = { key: string; label: string; hint?: string };
 
@@ -32,22 +32,22 @@ const SHAPES: Shape[] = [
   {
     key: "round_bar", label: "Тркалезна прачка (Ø)", unit: "m",
     fields: [{ key: "d", label: "Ø дијаметар (mm)" }],
-    area: (v) => Math.PI * Math.pow(v.d / 2, 2),
+    area: (v) => areaRoundBar(v.d),
   },
   {
     key: "square_bar", label: "Квадратна прачка", unit: "m",
     fields: [{ key: "a", label: "Страна a (mm)" }],
-    area: (v) => v.a * v.a,
+    area: (v) => areaSquareBar(v.a),
   },
   {
     key: "flat", label: "Плоснато железо / трака", unit: "m",
     fields: [{ key: "b", label: "Ширина b (mm)" }, { key: "t", label: "Дебелина t (mm)" }],
-    area: (v) => v.b * v.t,
+    area: (v) => areaFlat(v.b, v.t),
   },
   {
     key: "square_tube", label: "Квадратна цевка (кутија)", unit: "m",
     fields: [{ key: "a", label: "Страна a (mm)" }, { key: "t", label: "Дебелина ѕид t (mm)" }],
-    area: (v) => Math.max(0, v.a * v.a - Math.pow(v.a - 2 * v.t, 2)),
+    area: (v) => areaRectTube(v.a, v.a, v.t),
   },
   {
     key: "rect_tube", label: "Правоаголна цевка (кутија)", unit: "m",
@@ -56,12 +56,12 @@ const SHAPES: Shape[] = [
       { key: "b", label: "Страна b (mm)" },
       { key: "t", label: "Дебелина ѕид t (mm)" },
     ],
-    area: (v) => Math.max(0, v.a * v.b - Math.max(0, v.a - 2 * v.t) * Math.max(0, v.b - 2 * v.t)),
+    area: (v) => areaRectTube(v.a, v.b, v.t),
   },
   {
     key: "round_tube", label: "Тркалезна цевка", unit: "m",
     fields: [{ key: "d", label: "Надв. Ø D (mm)" }, { key: "t", label: "Дебелина ѕид t (mm)" }],
-    area: (v) => Math.PI * v.t * Math.max(0, v.d - v.t),
+    area: (v) => areaRoundTube(v.d, v.t),
   },
   {
     key: "angle", label: "Аголник L", unit: "m",
@@ -70,7 +70,7 @@ const SHAPES: Shape[] = [
       { key: "b", label: "Крак b (mm)" },
       { key: "t", label: "Дебелина t (mm)" },
     ],
-    area: (v) => Math.max(0, v.t * (v.a + v.b - v.t)),
+    area: (v) => areaAngle(v.a, v.b, v.t),
   },
   {
     key: "sheet_m2", label: "Лим — по m²", unit: "m2",
@@ -115,16 +115,14 @@ export function WeightCalculator({
     if (!ok) return null;
 
     if (shape.key === "sheet_pcs") {
-      // mm³ → m³ → kg (тежина на едно парче)
-      const kg = (v.L * v.W * v.t / 1e9) * rho;
+      const kg = kgPerSheet(v.t, v.W, v.L, rho);
       return { kg, unitLabel: "кг/ком", desc: `${v.L}×${v.W}×${v.t} mm` };
     }
     if (shape.unit === "m2") {
-      const kg = (v.t / 1000) * rho; // kg по m²
+      const kg = kgPerSquareMeter(v.t, rho);
       return { kg, unitLabel: "кг/м²", desc: `дебелина ${v.t} mm` };
     }
-    const areaMm2 = shape.area(v);
-    const kg = (areaMm2 / 1e6) * rho; // kg по метар
+    const kg = kgPerMeter(shape.area(v), rho);
     const desc = shape.fields.map((f) => v[f.key]).join("×") + " mm";
     return { kg, unitLabel: "кг/м", desc };
   }, [shape, vals, rho]);
@@ -210,63 +208,4 @@ export function WeightCalculator({
       </Dialog>
     </>
   );
-}
-
-// Помошна: тежина на ставка од материјал × количина
-export function lineWeightKg(weightPerUnit: any, quantity: any): number {
-  const w = Number(weightPerUnit ?? 0);
-  const q = Number(quantity ?? 0);
-  if (!Number.isFinite(w) || !Number.isFinite(q)) return 0;
-  return Math.round(w * q * 1000) / 1000;
-}
-
-// ── Значење на полето „тежина по единица“ според мерната единица ──────────
-export type UnitMeta = {
-  applicable: boolean;   // дали полето воопшто има смисла
-  locked: boolean;       // дали вредноста е фиксна (kg → 1)
-  fixedValue?: string;
-  label: string;         // етикета на полето
-  hint: string;          // објаснување под полето
-  shortLabel: string;    // за табела: „кг/м“
-};
-
-export function unitMeta(unit: string): UnitMeta {
-  switch (unit) {
-    case "m":
-      return {
-        applicable: true, locked: false,
-        label: "Тежина по метар (кг/м)",
-        hint: "Колку тежи 1 метар од профилот. Користи го калкулаторот ако не ја знаеш.",
-        shortLabel: "кг/м",
-      };
-    case "m2":
-      return {
-        applicable: true, locked: false,
-        label: "Тежина по м² (кг/м²)",
-        hint: "Колку тежи 1 м² лим. За челик: дебелина во mm × 7.85.",
-        shortLabel: "кг/м²",
-      };
-    case "pcs":
-    case "sheet":
-      return {
-        applicable: true, locked: false,
-        label: `Тежина по ${unit === "sheet" ? "табла" : "парче"} (кг)`,
-        hint: "Колку тежи едно парче. За профил купен на должина: должина во m × кг/м.",
-        shortLabel: unit === "sheet" ? "кг/табла" : "кг/ком",
-      };
-    case "kg":
-      return {
-        applicable: true, locked: true, fixedValue: "1",
-        label: "Тежина по единица (кг/кг)",
-        hint: "Материјалот веќе се води во килограми — вредноста е секогаш 1.",
-        shortLabel: "кг/кг",
-      };
-    default:
-      return {
-        applicable: false, locked: true, fixedValue: "0",
-        label: "Тежина по единица",
-        hint: "Не е применливо за оваа мерна единица.",
-        shortLabel: "—",
-      };
-  }
 }

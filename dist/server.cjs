@@ -9504,197 +9504,39 @@ var init_schema2 = __esm({
   }
 });
 
-// api/weight-parser.ts
-var weight_parser_exports = {};
-__export(weight_parser_exports, {
-  parseWeightFromName: () => parseWeightFromName
-});
-function norm(s) {
-  return s.replace(/[хХ]/g, "x").replace(/[Х]/g, "x").replace(/(\d),(\d)/g, "$1.$2").toLowerCase().trim();
+// contracts/weight-geometry.ts
+function detectDensity(name2) {
+  for (const h of MATERIAL_HINTS) {
+    if (h.words.test(name2)) return { key: h.key, explicit: true };
+  }
+  return { key: "steel", explicit: false };
 }
-function inchToOd(text2) {
-  const frac = text2.match(/(\d+)\s*\/\s*(\d+)\s*"/);
-  if (frac) {
-    const v = Number(frac[1]) / Number(frac[2]);
-    const od = INCH_OD[String(Math.round(v * 1e3) / 1e3)];
-    if (od) return { od, label: `${frac[1]}/${frac[2]}"` };
-    return null;
-  }
-  const whole = text2.match(/(?:^|[^\d/.])(\d+)\s*"/);
-  if (whole) {
-    const od = INCH_OD[whole[1]];
-    if (od) return { od, label: `${whole[1]}"` };
-  }
-  return null;
-}
-function nums(s) {
-  return (s.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
-}
-function parseWeightFromName(rawName, unit) {
-  const n = norm(rawName);
-  if (unit === "kg") {
-    return { weightPerUnit: 1, shape: "\u0421\u0435 \u0432\u043E\u0434\u0438 \u0432\u043E \u043A\u0438\u043B\u043E\u0433\u0440\u0430\u043C\u0438", dims: "\u2014", confidence: "high" };
-  }
-  const isPerMeter = unit === "m";
-  const isPerPiece = unit === "pcs" || unit === "sheet";
-  const isPerM2 = unit === "m2";
-  if (/лим/.test(n)) {
-    const isRifel = /рифел/.test(n);
-    const v = nums(n.replace(/\d+\s*x\s*\d+\s*\)/g, ""));
-    const triple = n.match(/(\d+(?:\.\d+)?)\s*x\s*(\d{3,4})\s*x\s*(\d{3,4})/);
-    if (triple) {
-      const t2 = Number(triple[1]);
-      const w = Number(triple[2]);
-      const l = Number(triple[3]);
-      if (t2 > 0 && t2 < 60 && w > 0 && l > 0) {
-        if (isPerPiece) {
-          const kg = Math.round(t2 * w * l / 1e9 * RHO_STEEL * 1e4) / 1e4;
-          return {
-            weightPerUnit: kg,
-            shape: isRifel ? "\u0420\u0438\u0444\u0435\u043B \u043B\u0438\u043C \u2014 \u0446\u0435\u043B\u0430 \u0442\u0430\u0431\u043B\u0430" : "\u041B\u0438\u043C \u2014 \u0446\u0435\u043B\u0430 \u0442\u0430\u0431\u043B\u0430",
-            dims: `${t2}\xD7${w}\xD7${l} mm`,
-            confidence: isRifel ? "medium" : "high",
-            note: isRifel ? "\u0420\u0435\u0431\u0440\u0430\u0442\u0430 \u0434\u043E\u0434\u0430\u0432\u0430\u0430\u0442 \u0442\u0435\u0436\u0438\u043D\u0430 \u043F\u0440\u0435\u043A\u0443 \u0442\u0435\u043E\u0440\u0435\u0442\u0441\u043A\u0430\u0442\u0430 \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u0438 \u0441\u043E \u0444\u0430\u043A\u0442\u0443\u0440\u0430." : void 0
-          };
-        }
-        if (isPerM2) {
-          const kg = Math.round(t2 / 1e3 * RHO_STEEL * 1e4) / 1e4;
-          return {
-            weightPerUnit: kg,
-            shape: isRifel ? "\u0420\u0438\u0444\u0435\u043B \u043B\u0438\u043C \u2014 \u043F\u043E m\xB2" : "\u041B\u0438\u043C \u2014 \u043F\u043E m\xB2",
-            dims: `\u0434\u0435\u0431\u0435\u043B\u0438\u043D\u0430 ${t2} mm`,
-            confidence: isRifel ? "medium" : "high",
-            note: isRifel ? "\u0420\u0435\u0431\u0440\u0430\u0442\u0430 \u0434\u043E\u0434\u0430\u0432\u0430\u0430\u0442 \u0442\u0435\u0436\u0438\u043D\u0430 \u043F\u0440\u0435\u043A\u0443 \u0442\u0435\u043E\u0440\u0435\u0442\u0441\u043A\u0430\u0442\u0430." : void 0
-          };
-        }
-      }
-    }
-    if (isPerM2 && v.length >= 1 && v[0] > 0 && v[0] < 60) {
-      const kg = Math.round(v[0] / 1e3 * RHO_STEEL * 1e4) / 1e4;
-      return {
-        weightPerUnit: kg,
-        shape: "\u041B\u0438\u043C \u2014 \u043F\u043E m\xB2",
-        dims: `\u0434\u0435\u0431\u0435\u043B\u0438\u043D\u0430 ${v[0]} mm`,
-        confidence: "medium",
-        note: "\u0414\u0435\u0431\u0435\u043B\u0438\u043D\u0430\u0442\u0430 \u0435 \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u0430 \u043A\u0430\u043A\u043E \u043F\u0440\u0432 \u0431\u0440\u043E\u0458 \u0432\u043E \u0438\u043C\u0435\u0442\u043E \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u0438."
-      };
-    }
-    return null;
-  }
-  if (!isPerMeter) return null;
-  if (/цевка/.test(n)) {
-    const fi = n.match(/(?:фи|ф|ø)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/);
-    if (fi) {
-      const d = Number(fi[1]), t2 = Number(fi[2]);
-      if (d > t2 && t2 > 0) {
-        return {
-          weightPerUnit: kgPerM(areaRoundTube(d, t2)),
-          shape: "\u0422\u0440\u043A\u0430\u043B\u0435\u0437\u043D\u0430 \u0446\u0435\u0432\u043A\u0430",
-          dims: `\xD8${d}\xD7${t2} mm`,
-          confidence: "high"
-        };
-      }
-    }
-    const inch = inchToOd(n);
-    if (inch) {
-      const after = n.split('"')[1] ?? "";
-      const wallM = after.match(/x\s*(\d+(?:\.\d+)?)/);
-      if (wallM) {
-        const t2 = Number(wallM[1]);
-        if (t2 > 0 && t2 < inch.od / 2) {
-          return {
-            weightPerUnit: kgPerM(areaRoundTube(inch.od, t2)),
-            shape: "\u0422\u0440\u043A\u0430\u043B\u0435\u0437\u043D\u0430 \u0446\u0435\u0432\u043A\u0430 (\u0446\u043E\u043B\u043D\u0430)",
-            dims: `${inch.label} (\xD8${inch.od}) \xD7${t2} mm`,
-            confidence: "high"
-          };
-        }
-      }
-      return null;
-    }
-    return null;
-  }
-  if (/винкла|аголник/.test(n)) {
-    const v = nums(n);
-    if (v.length >= 3) {
-      const [a, b, t2] = v;
-      if (a > 0 && b > 0 && t2 > 0 && t2 < Math.min(a, b)) {
-        return {
-          weightPerUnit: kgPerM(areaAngle(a, b, t2)),
-          shape: "\u0410\u0433\u043E\u043B\u043D\u0438\u043A L",
-          dims: `${a}\xD7${b}\xD7${t2} mm`,
-          confidence: "high"
-        };
-      }
-    }
-    return null;
-  }
-  if (/правоаголен профил|квадратен профил|кутија/.test(n)) {
-    const v = nums(n);
-    if (v.length >= 3) {
-      const [a, b, t2] = v;
-      if (a > 0 && b > 0 && t2 > 0 && t2 < Math.min(a, b) / 2) {
-        return {
-          weightPerUnit: kgPerM(areaRectTube(a, b, t2)),
-          shape: /квадратен/.test(n) ? "\u041A\u0432\u0430\u0434\u0440\u0430\u0442\u043D\u0430 \u043A\u0443\u0442\u0438\u0458\u0430" : "\u041F\u0440\u0430\u0432\u043E\u0430\u0433\u043E\u043B\u043D\u0430 \u043A\u0443\u0442\u0438\u0458\u0430",
-          dims: `${a}\xD7${b}\xD7${t2} mm`,
-          confidence: "high"
-        };
-      }
-    }
-    return null;
-  }
-  if (/арматура|(?:^|\s)фи\s*\d/.test(n) && !/цевка/.test(n)) {
-    const m = n.match(/(?:фи|ф|ø)\s*(\d+(?:\.\d+)?)/);
-    if (m) {
-      const d = Number(m[1]);
-      if (d > 0 && d < 200) {
-        return {
-          weightPerUnit: kgPerM(areaRoundBar(d)),
-          shape: "\u0422\u0440\u043A\u0430\u043B\u0435\u0437\u043D\u0430 \u043F\u0440\u0430\u0447\u043A\u0430 (\u0430\u0440\u043C\u0430\u0442\u0443\u0440\u0430)",
-          dims: `\xD8${d} mm`,
-          confidence: "high"
-        };
-      }
-    }
-    return null;
-  }
-  if (/квадратно железо/.test(n)) {
-    const v = nums(n);
-    if (v.length >= 1) {
-      const a = v[0];
-      if (a > 0 && a < 200) {
-        return {
-          weightPerUnit: kgPerM(areaSquareBar(a)),
-          shape: "\u041A\u0432\u0430\u0434\u0440\u0430\u0442\u043D\u0430 \u043F\u0440\u0430\u0447\u043A\u0430",
-          dims: `${a}\xD7${a} mm`,
-          confidence: "high"
-        };
-      }
-    }
-    return null;
-  }
-  if (/трака|плоснат|флах/.test(n)) {
-    const v = nums(n);
-    if (v.length >= 2) {
-      const [b, t2] = v;
-      if (b > 0 && t2 > 0 && t2 <= b) {
-        return {
-          weightPerUnit: kgPerM(areaFlat(b, t2)),
-          shape: "\u041F\u043B\u043E\u0441\u043D\u0430\u0442\u043E \u0436\u0435\u043B\u0435\u0437\u043E",
-          dims: `${b}\xD7${t2} mm`,
-          confidence: "high"
-        };
-      }
-    }
-    return null;
-  }
-  return null;
-}
-var RHO_STEEL, INCH_OD, areaRoundBar, areaSquareBar, areaFlat, areaRectTube, areaRoundTube, areaAngle, kgPerM;
-var init_weight_parser = __esm({
-  "api/weight-parser.ts"() {
-    RHO_STEEL = 7850;
+var DENSITIES, MATERIAL_HINTS, areaRoundBar, areaSquareBar, areaFlat, areaRectTube, areaRoundTube, areaAngle, round4, kgPerMeter, kgPerSquareMeter, kgPerSheet, INCH_OD;
+var init_weight_geometry = __esm({
+  "contracts/weight-geometry.ts"() {
+    DENSITIES = {
+      steel: { label: "\u0427\u0435\u043B\u0438\u043A / \u0436\u0435\u043B\u0435\u0437\u043E", value: 7850 },
+      stainless: { label: "\u041D\u0435\u0440\u0453\u043E\u0441\u0443\u0432\u0430\u0447\u043A\u0438 (INOX)", value: 7900 },
+      aluminum: { label: "\u0410\u043B\u0443\u043C\u0438\u043D\u0438\u0443\u043C", value: 2700 },
+      copper: { label: "\u0411\u0430\u043A\u0430\u0440", value: 8960 },
+      brass: { label: "\u041C\u0435\u0441\u0438\u043D\u0433", value: 8500 }
+    };
+    MATERIAL_HINTS = [
+      { key: "aluminum", words: /алуминиум|алуминиј|aluminij|alu\b|ал\.проф/i },
+      { key: "stainless", words: /инокс|inox|нерѓ|нерг|прохром|рос(ф|)фрај|а4\b|aisi/i },
+      { key: "copper", words: /бакар|бакарн|copper|cu\b/i },
+      { key: "brass", words: /месинг|месинган|brass|латун/i }
+    ];
+    areaRoundBar = (d) => Math.PI * Math.pow(d / 2, 2);
+    areaSquareBar = (a) => a * a;
+    areaFlat = (b, t2) => b * t2;
+    areaRectTube = (a, b, t2) => Math.max(0, a * b - Math.max(0, a - 2 * t2) * Math.max(0, b - 2 * t2));
+    areaRoundTube = (d, t2) => Math.PI * t2 * Math.max(0, d - t2);
+    areaAngle = (a, b, t2) => Math.max(0, t2 * (a + b - t2));
+    round4 = (v) => Math.round(v * 1e4) / 1e4;
+    kgPerMeter = (areaMm2, density = DENSITIES.steel.value) => round4(areaMm2 / 1e6 * density);
+    kgPerSquareMeter = (thicknessMm, density = DENSITIES.steel.value) => round4(thicknessMm / 1e3 * density);
+    kgPerSheet = (t2, w, l, density = DENSITIES.steel.value) => round4(t2 * w * l / 1e9 * density);
     INCH_OD = {
       "0.25": 13.5,
       // 1/4"
@@ -9723,13 +9565,215 @@ var init_weight_parser = __esm({
       "6": 168.3
       // 6"
     };
-    areaRoundBar = (d) => Math.PI * Math.pow(d / 2, 2);
-    areaSquareBar = (a) => a * a;
-    areaFlat = (b, t2) => b * t2;
-    areaRectTube = (a, b, t2) => Math.max(0, a * b - Math.max(0, a - 2 * t2) * Math.max(0, b - 2 * t2));
-    areaRoundTube = (d, t2) => Math.PI * t2 * Math.max(0, d - t2);
-    areaAngle = (a, b, t2) => Math.max(0, t2 * (a + b - t2));
-    kgPerM = (areaMm2) => Math.round(areaMm2 / 1e6 * RHO_STEEL * 1e4) / 1e4;
+  }
+});
+
+// api/weight-parser.ts
+var weight_parser_exports = {};
+__export(weight_parser_exports, {
+  parseWeightFromName: () => parseWeightFromName
+});
+function norm(s) {
+  return s.replace(/[хХ]/g, "x").replace(/(\d),(\d)/g, "$1.$2").toLowerCase().trim();
+}
+function inchToOd(text2) {
+  const frac = text2.match(/(\d+)\s*\/\s*(\d+)\s*"/);
+  if (frac) {
+    const v = Number(frac[1]) / Number(frac[2]);
+    const od = INCH_OD[String(Math.round(v * 1e3) / 1e3)];
+    if (od) return { od, label: `${frac[1]}/${frac[2]}"` };
+    return null;
+  }
+  const whole = text2.match(/(?:^|[^\d/.])(\d+)\s*"/);
+  if (whole) {
+    const od = INCH_OD[whole[1]];
+    if (od) return { od, label: `${whole[1]}"` };
+  }
+  return null;
+}
+function nums(s) {
+  return (s.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+}
+function parseWeightFromName(rawName, unit) {
+  const n = norm(rawName);
+  if (unit === "kg") {
+    return {
+      weightPerUnit: 1,
+      shape: "\u0421\u0435 \u0432\u043E\u0434\u0438 \u0432\u043E \u043A\u0438\u043B\u043E\u0433\u0440\u0430\u043C\u0438",
+      dims: "\u2014",
+      confidence: "high",
+      material: "\u2014",
+      materialKey: "steel",
+      materialExplicit: false
+    };
+  }
+  const det = detectDensity(rawName);
+  const rho = DENSITIES[det.key].value;
+  const matLabel = DENSITIES[det.key].label;
+  const nonSteel = det.explicit && det.key !== "steel";
+  const baseConfidence = nonSteel ? "medium" : "high";
+  const baseNote = nonSteel ? `\u041F\u0440\u0435\u043F\u043E\u0437\u043D\u0430\u0435\u043D \u043A\u0430\u043A\u043E ${matLabel.toLowerCase()} (${rho} \u043A\u0433/\u043C\xB3) \u2014 \u043F\u043E\u0442\u0432\u0440\u0434\u0438 \u043F\u0440\u0435\u0434 \u0437\u0430\u043F\u0438\u0448\u0443\u0432\u0430\u045A\u0435.` : void 0;
+  const ok = (r) => ({
+    ...r,
+    confidence: r.confidence === "medium" ? "medium" : baseConfidence,
+    note: r.note ?? baseNote,
+    material: matLabel,
+    materialKey: det.key,
+    materialExplicit: det.explicit
+  });
+  const isPerMeter = unit === "m";
+  const isPerPiece = unit === "pcs" || unit === "sheet";
+  const isPerM2 = unit === "m2";
+  if (/лим/.test(n)) {
+    const isRifel = /рифел/.test(n);
+    const triple = n.match(/(\d+(?:\.\d+)?)\s*x\s*(\d{3,4})\s*x\s*(\d{3,4})/);
+    if (triple) {
+      const t2 = Number(triple[1]), w = Number(triple[2]), l = Number(triple[3]);
+      if (t2 > 0 && t2 < 60 && w > 0 && l > 0) {
+        if (isPerPiece) {
+          return ok({
+            weightPerUnit: kgPerSheet(t2, w, l, rho),
+            shape: isRifel ? "\u0420\u0438\u0444\u0435\u043B \u043B\u0438\u043C \u2014 \u0446\u0435\u043B\u0430 \u0442\u0430\u0431\u043B\u0430" : "\u041B\u0438\u043C \u2014 \u0446\u0435\u043B\u0430 \u0442\u0430\u0431\u043B\u0430",
+            dims: `${t2}\xD7${w}\xD7${l} mm`,
+            confidence: isRifel ? "medium" : "high",
+            note: isRifel ? "\u0420\u0435\u0431\u0440\u0430\u0442\u0430 \u0434\u043E\u0434\u0430\u0432\u0430\u0430\u0442 \u0442\u0435\u0436\u0438\u043D\u0430 \u043F\u0440\u0435\u043A\u0443 \u0442\u0435\u043E\u0440\u0435\u0442\u0441\u043A\u0430\u0442\u0430 \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u0438 \u0441\u043E \u0444\u0430\u043A\u0442\u0443\u0440\u0430." : baseNote
+          });
+        }
+        if (isPerM2) {
+          return ok({
+            weightPerUnit: kgPerSquareMeter(t2, rho),
+            shape: isRifel ? "\u0420\u0438\u0444\u0435\u043B \u043B\u0438\u043C \u2014 \u043F\u043E m\xB2" : "\u041B\u0438\u043C \u2014 \u043F\u043E m\xB2",
+            dims: `\u0434\u0435\u0431\u0435\u043B\u0438\u043D\u0430 ${t2} mm`,
+            confidence: isRifel ? "medium" : "high",
+            note: isRifel ? "\u0420\u0435\u0431\u0440\u0430\u0442\u0430 \u0434\u043E\u0434\u0430\u0432\u0430\u0430\u0442 \u0442\u0435\u0436\u0438\u043D\u0430 \u043F\u0440\u0435\u043A\u0443 \u0442\u0435\u043E\u0440\u0435\u0442\u0441\u043A\u0430\u0442\u0430." : baseNote
+          });
+        }
+      }
+    }
+    if (isPerM2) {
+      const v = nums(n);
+      if (v.length >= 1 && v[0] > 0 && v[0] < 60) {
+        return ok({
+          weightPerUnit: kgPerSquareMeter(v[0], rho),
+          shape: "\u041B\u0438\u043C \u2014 \u043F\u043E m\xB2",
+          dims: `\u0434\u0435\u0431\u0435\u043B\u0438\u043D\u0430 ${v[0]} mm`,
+          confidence: "medium",
+          note: "\u0414\u0435\u0431\u0435\u043B\u0438\u043D\u0430\u0442\u0430 \u0435 \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u0430 \u043A\u0430\u043A\u043E \u043F\u0440\u0432 \u0431\u0440\u043E\u0458 \u0432\u043E \u0438\u043C\u0435\u0442\u043E \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u0438."
+        });
+      }
+    }
+    return null;
+  }
+  if (!isPerMeter) return null;
+  if (/цевка/.test(n)) {
+    const fi = n.match(/(?:фи|ф|ø)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/);
+    if (fi) {
+      const d = Number(fi[1]), t2 = Number(fi[2]);
+      if (d > t2 && t2 > 0) {
+        return ok({
+          weightPerUnit: kgPerMeter(areaRoundTube(d, t2), rho),
+          shape: "\u0422\u0440\u043A\u0430\u043B\u0435\u0437\u043D\u0430 \u0446\u0435\u0432\u043A\u0430",
+          dims: `\xD8${d}\xD7${t2} mm`,
+          confidence: "high"
+        });
+      }
+    }
+    const inch = inchToOd(n);
+    if (inch) {
+      const after = n.split('"')[1] ?? "";
+      const wallM = after.match(/x\s*(\d+(?:\.\d+)?)/);
+      if (wallM) {
+        const t2 = Number(wallM[1]);
+        if (t2 > 0 && t2 < inch.od / 2) {
+          return ok({
+            weightPerUnit: kgPerMeter(areaRoundTube(inch.od, t2), rho),
+            shape: "\u0422\u0440\u043A\u0430\u043B\u0435\u0437\u043D\u0430 \u0446\u0435\u0432\u043A\u0430 (\u0446\u043E\u043B\u043D\u0430)",
+            dims: `${inch.label} (\xD8${inch.od}) \xD7${t2} mm`,
+            confidence: "high"
+          });
+        }
+      }
+      return null;
+    }
+    return null;
+  }
+  if (/винкла|аголник/.test(n)) {
+    const v = nums(n);
+    if (v.length >= 3) {
+      const [a, b, t2] = v;
+      if (a > 0 && b > 0 && t2 > 0 && t2 < Math.min(a, b)) {
+        return ok({
+          weightPerUnit: kgPerMeter(areaAngle(a, b, t2), rho),
+          shape: "\u0410\u0433\u043E\u043B\u043D\u0438\u043A L",
+          dims: `${a}\xD7${b}\xD7${t2} mm`,
+          confidence: "high"
+        });
+      }
+    }
+    return null;
+  }
+  if (/правоаголен профил|квадратен профил|кутија/.test(n)) {
+    const v = nums(n);
+    if (v.length >= 3) {
+      const [a, b, t2] = v;
+      if (a > 0 && b > 0 && t2 > 0 && t2 < Math.min(a, b) / 2) {
+        return ok({
+          weightPerUnit: kgPerMeter(areaRectTube(a, b, t2), rho),
+          shape: /квадратен/.test(n) ? "\u041A\u0432\u0430\u0434\u0440\u0430\u0442\u043D\u0430 \u043A\u0443\u0442\u0438\u0458\u0430" : "\u041F\u0440\u0430\u0432\u043E\u0430\u0433\u043E\u043B\u043D\u0430 \u043A\u0443\u0442\u0438\u0458\u0430",
+          dims: `${a}\xD7${b}\xD7${t2} mm`,
+          confidence: "high"
+        });
+      }
+    }
+    return null;
+  }
+  if (/арматура|(?:^|\s)фи\s*\d/.test(n) && !/цевка/.test(n)) {
+    const m = n.match(/(?:фи|ф|ø)\s*(\d+(?:\.\d+)?)/);
+    if (m) {
+      const d = Number(m[1]);
+      if (d > 0 && d < 200) {
+        return ok({
+          weightPerUnit: kgPerMeter(areaRoundBar(d), rho),
+          shape: "\u0422\u0440\u043A\u0430\u043B\u0435\u0437\u043D\u0430 \u043F\u0440\u0430\u0447\u043A\u0430 (\u0430\u0440\u043C\u0430\u0442\u0443\u0440\u0430)",
+          dims: `\xD8${d} mm`,
+          confidence: "high"
+        });
+      }
+    }
+    return null;
+  }
+  if (/квадратно железо/.test(n)) {
+    const v = nums(n);
+    if (v.length >= 1 && v[0] > 0 && v[0] < 200) {
+      return ok({
+        weightPerUnit: kgPerMeter(areaSquareBar(v[0]), rho),
+        shape: "\u041A\u0432\u0430\u0434\u0440\u0430\u0442\u043D\u0430 \u043F\u0440\u0430\u0447\u043A\u0430",
+        dims: `${v[0]}\xD7${v[0]} mm`,
+        confidence: "high"
+      });
+    }
+    return null;
+  }
+  if (/трака|плоснат|флах/.test(n)) {
+    const v = nums(n);
+    if (v.length >= 2) {
+      const [b, t2] = v;
+      if (b > 0 && t2 > 0 && t2 <= b) {
+        return ok({
+          weightPerUnit: kgPerMeter(areaFlat(b, t2), rho),
+          shape: "\u041F\u043B\u043E\u0441\u043D\u0430\u0442\u043E \u0436\u0435\u043B\u0435\u0437\u043E",
+          dims: `${b}\xD7${t2} mm`,
+          confidence: "high"
+        });
+      }
+    }
+    return null;
+  }
+  return null;
+}
+var init_weight_parser = __esm({
+  "api/weight-parser.ts"() {
+    init_weight_geometry();
   }
 });
 
@@ -32576,6 +32620,8 @@ var storageRouter = createRouter({
         weightPerUnit: r.weightPerUnit,
         shape: r.shape,
         dims: r.dims,
+        material: r.material,
+        materialExplicit: r.materialExplicit,
         confidence: r.confidence,
         note: r.note ?? null
       });
@@ -32588,6 +32634,7 @@ var storageRouter = createRouter({
         all: all.length,
         recognized: recognized.length,
         medium: recognized.filter((r) => r.confidence === "medium").length,
+        nonSteel: recognized.filter((r) => r.materialExplicit).length,
         alreadyFilled: skipped.filter((s) => s.reason === "already").length,
         unparsed: skipped.filter((s) => s.reason === "unparsed").length
       }
@@ -38494,11 +38541,11 @@ var baseSelect = {
 };
 function remnantWeightKg(r) {
   if (r?.materialUnit !== "m") return 0;
-  const kgPerM2 = Number(r?.materialWeightPerUnit ?? 0);
+  const kgPerM = Number(r?.materialWeightPerUnit ?? 0);
   const lenM = Number(r?.lengthMm ?? 0) / 1e3;
   const qty = Number(r?.quantity ?? 1) || 1;
-  if (!Number.isFinite(kgPerM2) || kgPerM2 <= 0) return 0;
-  return Math.round(kgPerM2 * lenM * qty * 1e3) / 1e3;
+  if (!Number.isFinite(kgPerM) || kgPerM <= 0) return 0;
+  return Math.round(kgPerM * lenM * qty * 1e3) / 1e3;
 }
 function remnantValue(r) {
   if (r?.materialUnit !== "m") return 0;

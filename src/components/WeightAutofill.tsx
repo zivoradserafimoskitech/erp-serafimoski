@@ -106,6 +106,17 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                 </div>
               )}
 
+              {(data.totals.nonSteel ?? 0) > 0 && (
+                <div className="text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-4 py-2 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    {data.totals.nonSteel} {data.totals.nonSteel === 1 ? "материјал не е" : "материјали не се"} челик
+                    (алуминиум, INOX, бакар или месинг). Пресметани се со соодветна густина, но
+                    се оставени неоштиклирани за да ги провериш.
+                  </span>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative flex-1 min-w-[160px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -147,7 +158,14 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                         </TableCell>
                         <TableCell>
                           <div className="text-xs font-medium">{r.shape}</div>
-                          <div className="text-[11px] text-gray-500">{r.dims}</div>
+                          <div className="text-[11px] text-gray-500">
+                            {r.dims}
+                            {r.materialExplicit && (
+                              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 font-medium">
+                                {r.material}
+                              </span>
+                            )}
+                          </div>
                           {r.note && (
                             <div className="text-[11px] text-amber-700 flex items-start gap-1 mt-0.5">
                               <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />{r.note}

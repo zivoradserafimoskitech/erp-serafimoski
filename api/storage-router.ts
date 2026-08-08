@@ -149,6 +149,7 @@ export const storageRouter = createRouter({
           currentWeight: current,
           weightPerUnit: r.weightPerUnit,
           shape: r.shape, dims: r.dims,
+          material: r.material, materialExplicit: r.materialExplicit,
           confidence: r.confidence, note: r.note ?? null,
         });
       }
@@ -161,6 +162,7 @@ export const storageRouter = createRouter({
           all: all.length,
           recognized: recognized.length,
           medium: recognized.filter((r) => r.confidence === "medium").length,
+          nonSteel: recognized.filter((r) => r.materialExplicit).length,
           alreadyFilled: skipped.filter((s) => s.reason === "already").length,
           unparsed: skipped.filter((s) => s.reason === "unparsed").length,
         },

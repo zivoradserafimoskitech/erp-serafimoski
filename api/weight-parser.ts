@@ -1,45 +1,34 @@
 // Препознавање на димензии од името на материјалот → тежина по единица мера.
-// Работи само врз имињата од каталогот; ништо не се погодува „од око“.
+// Сите формули и густини доаѓаат од @contracts/weight-geometry — тука само парсирање.
 
-const RHO_STEEL = 7850; // кг/м³
+import {
+  DENSITIES, detectDensity, INCH_OD,
+  areaRoundBar, areaSquareBar, areaFlat, areaRectTube, areaRoundTube, areaAngle,
+  kgPerMeter, kgPerSquareMeter, kgPerSheet,
+  type DensityKey,
+} from "@contracts/weight-geometry";
 
 export type ParseResult = {
-  weightPerUnit: number;   // кг по единица мера на материјалот
-  shape: string;           // што препознал (за приказ)
-  dims: string;            // димензиите што ги прочитал
+  weightPerUnit: number;
+  shape: string;
+  dims: string;
   confidence: "high" | "medium";
-  note?: string;           // предупредување кога пресметката е приближна
+  material: string;
+  materialKey: DensityKey;
+  materialExplicit: boolean;
+  note?: string;
 };
 
 // ── Нормализација: кирилично х → x, децимална запирка → точка ──────────────
 function norm(s: string): string {
   return s
     .replace(/[хХ]/g, "x")
-    .replace(/[Х]/g, "x")
     .replace(/(\d),(\d)/g, "$1.$2")
     .toLowerCase()
     .trim();
 }
 
-// Надворешен дијаметар на цевка според цолови (EN 10255 / DIN 2440)
-const INCH_OD: Record<string, number> = {
-  "0.25": 13.5,   // 1/4"
-  "0.375": 17.2,  // 3/8"
-  "0.5": 21.3,    // 1/2"
-  "0.75": 26.9,   // 3/4"
-  "1": 33.7,      // 1"
-  "1.25": 42.4,   // 5/4"
-  "1.5": 48.3,    // 6/4"
-  "2": 60.3,      // 2"
-  "2.5": 76.1,    // 5/2"
-  "3": 88.9,      // 3"
-  "4": 114.3,     // 4"
-  "5": 139.7,     // 5"
-  "6": 168.3,     // 6"
-};
-
 function inchToOd(text: string): { od: number; label: string } | null {
-  // 3/8"  |  5/4"  |  1"  |  2"
   const frac = text.match(/(\d+)\s*\/\s*(\d+)\s*"/);
   if (frac) {
     const v = Number(frac[1]) / Number(frac[2]);
@@ -55,18 +44,6 @@ function inchToOd(text: string): { od: number; label: string } | null {
   return null;
 }
 
-// ── Геометриски формули: плоштина на пресек во mm² ─────────────────────────
-const areaRoundBar = (d: number) => Math.PI * Math.pow(d / 2, 2);
-const areaSquareBar = (a: number) => a * a;
-const areaFlat = (b: number, t: number) => b * t;
-const areaRectTube = (a: number, b: number, t: number) =>
-  Math.max(0, a * b - Math.max(0, a - 2 * t) * Math.max(0, b - 2 * t));
-const areaRoundTube = (d: number, t: number) => Math.PI * t * Math.max(0, d - t);
-const areaAngle = (a: number, b: number, t: number) => Math.max(0, t * (a + b - t));
-
-const kgPerM = (areaMm2: number) => Math.round((areaMm2 / 1e6) * RHO_STEEL * 10000) / 10000;
-
-// Сите броеви во низа (по нормализација)
 function nums(s: string): number[] {
   return (s.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
 }
@@ -75,82 +52,99 @@ function nums(s: string): number[] {
  * Обид за препознавање. Враќа null ако името не е доволно јасно —
  * подобро ништо отколку погрешна бројка.
  */
-export function parseWeightFromName(
-  rawName: string,
-  unit: string
-): ParseResult | null {
+export function parseWeightFromName(rawName: string, unit: string): ParseResult | null {
   const n = norm(rawName);
 
-  // Материјалот се води во кг → тежината по единица е секогаш 1
   if (unit === "kg") {
-    return { weightPerUnit: 1, shape: "Се води во килограми", dims: "—", confidence: "high" };
+    return {
+      weightPerUnit: 1, shape: "Се води во килограми", dims: "—",
+      confidence: "high", material: "—", materialKey: "steel", materialExplicit: false,
+    };
   }
+
+  // ── Кој материјал е? ──
+  const det = detectDensity(rawName);
+  const rho = DENSITIES[det.key].value;
+  const matLabel = DENSITIES[det.key].label;
+
+  const nonSteel = det.explicit && det.key !== "steel";
+  const baseConfidence: "high" | "medium" = nonSteel ? "medium" : "high";
+  const baseNote = nonSteel
+    ? `Препознаен како ${matLabel.toLowerCase()} (${rho} кг/м³) — потврди пред запишување.`
+    : undefined;
+
+  const ok = (
+    r: Omit<ParseResult, "material" | "materialKey" | "materialExplicit">
+  ): ParseResult => ({
+    ...r,
+    confidence: r.confidence === "medium" ? "medium" : baseConfidence,
+    note: r.note ?? baseNote,
+    material: matLabel,
+    materialKey: det.key,
+    materialExplicit: det.explicit,
+  });
 
   const isPerMeter = unit === "m";
   const isPerPiece = unit === "pcs" || unit === "sheet";
   const isPerM2 = unit === "m2";
 
-  // ══════ ЛИМ ══════ (дебелина x ширина x должина)
+  // ══════ ЛИМ ══════
   if (/лим/.test(n)) {
     const isRifel = /рифел/.test(n);
-    const v = nums(n.replace(/\d+\s*x\s*\d+\s*\)/g, "")); // отфрли „(50x20)“ шеми
-    // очекуваме барем 3 броја: t, W, L
     const triple = n.match(/(\d+(?:\.\d+)?)\s*x\s*(\d{3,4})\s*x\s*(\d{3,4})/);
     if (triple) {
-      const t = Number(triple[1]);
-      const w = Number(triple[2]);
-      const l = Number(triple[3]);
+      const t = Number(triple[1]), w = Number(triple[2]), l = Number(triple[3]);
       if (t > 0 && t < 60 && w > 0 && l > 0) {
         if (isPerPiece) {
-          const kg = Math.round(((t * w * l) / 1e9) * RHO_STEEL * 10000) / 10000;
-          return {
-            weightPerUnit: kg,
+          return ok({
+            weightPerUnit: kgPerSheet(t, w, l, rho),
             shape: isRifel ? "Рифел лим — цела табла" : "Лим — цела табла",
             dims: `${t}×${w}×${l} mm`,
             confidence: isRifel ? "medium" : "high",
-            note: isRifel ? "Ребрата додаваат тежина преку теоретската — провери со фактура." : undefined,
-          };
+            note: isRifel
+              ? "Ребрата додаваат тежина преку теоретската — провери со фактура."
+              : baseNote,
+          });
         }
         if (isPerM2) {
-          const kg = Math.round((t / 1000) * RHO_STEEL * 10000) / 10000;
-          return {
-            weightPerUnit: kg,
+          return ok({
+            weightPerUnit: kgPerSquareMeter(t, rho),
             shape: isRifel ? "Рифел лим — по m²" : "Лим — по m²",
             dims: `дебелина ${t} mm`,
             confidence: isRifel ? "medium" : "high",
-            note: isRifel ? "Ребрата додаваат тежина преку теоретската." : undefined,
-          };
+            note: isRifel ? "Ребрата додаваат тежина преку теоретската." : baseNote,
+          });
         }
       }
     }
-    // лим по m² каде во името стои само дебелина
-    if (isPerM2 && v.length >= 1 && v[0] > 0 && v[0] < 60) {
-      const kg = Math.round((v[0] / 1000) * RHO_STEEL * 10000) / 10000;
-      return {
-        weightPerUnit: kg, shape: "Лим — по m²",
-        dims: `дебелина ${v[0]} mm`, confidence: "medium",
-        note: "Дебелината е прочитана како прв број во името — провери.",
-      };
+    if (isPerM2) {
+      const v = nums(n);
+      if (v.length >= 1 && v[0] > 0 && v[0] < 60) {
+        return ok({
+          weightPerUnit: kgPerSquareMeter(v[0], rho),
+          shape: "Лим — по m²", dims: `дебелина ${v[0]} mm`,
+          confidence: "medium",
+          note: "Дебелината е прочитана како прв број во името — провери.",
+        });
+      }
     }
     return null;
   }
 
-  if (!isPerMeter) return null; // сè што следи има смисла само по метар
+  if (!isPerMeter) return null;
 
   // ══════ ЦЕВКА ══════
   if (/цевка/.test(n)) {
-    // фи 42 x 2
     const fi = n.match(/(?:фи|ф|ø)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/);
     if (fi) {
       const d = Number(fi[1]), t = Number(fi[2]);
       if (d > t && t > 0) {
-        return {
-          weightPerUnit: kgPerM(areaRoundTube(d, t)),
+        return ok({
+          weightPerUnit: kgPerMeter(areaRoundTube(d, t), rho),
           shape: "Тркалезна цевка", dims: `Ø${d}×${t} mm`, confidence: "high",
-        };
+        });
       }
     }
-    // цолови: 3/8"x1.2
     const inch = inchToOd(n);
     if (inch) {
       const after = n.split('"')[1] ?? "";
@@ -158,76 +152,72 @@ export function parseWeightFromName(
       if (wallM) {
         const t = Number(wallM[1]);
         if (t > 0 && t < inch.od / 2) {
-          return {
-            weightPerUnit: kgPerM(areaRoundTube(inch.od, t)),
+          return ok({
+            weightPerUnit: kgPerMeter(areaRoundTube(inch.od, t), rho),
             shape: "Тркалезна цевка (цолна)",
-            dims: `${inch.label} (Ø${inch.od}) ×${t} mm`,
-            confidence: "high",
-          };
+            dims: `${inch.label} (Ø${inch.od}) ×${t} mm`, confidence: "high",
+          });
         }
       }
-      return null; // цол без дебелина — не погодувам
+      return null;
     }
     return null;
   }
 
-  // ══════ ВИНКЛА (аголник) ══════
+  // ══════ ВИНКЛА ══════
   if (/винкла|аголник/.test(n)) {
     const v = nums(n);
     if (v.length >= 3) {
       const [a, b, t] = v;
       if (a > 0 && b > 0 && t > 0 && t < Math.min(a, b)) {
-        return {
-          weightPerUnit: kgPerM(areaAngle(a, b, t)),
+        return ok({
+          weightPerUnit: kgPerMeter(areaAngle(a, b, t), rho),
           shape: "Аголник L", dims: `${a}×${b}×${t} mm`, confidence: "high",
-        };
+        });
       }
     }
     return null;
   }
 
-  // ══════ ПРАВОАГОЛЕН / КВАДРАТЕН ПРОФИЛ (кутија) ══════
+  // ══════ КУТИЈА ══════
   if (/правоаголен профил|квадратен профил|кутија/.test(n)) {
     const v = nums(n);
     if (v.length >= 3) {
       const [a, b, t] = v;
       if (a > 0 && b > 0 && t > 0 && t < Math.min(a, b) / 2) {
-        return {
-          weightPerUnit: kgPerM(areaRectTube(a, b, t)),
+        return ok({
+          weightPerUnit: kgPerMeter(areaRectTube(a, b, t), rho),
           shape: /квадратен/.test(n) ? "Квадратна кутија" : "Правоаголна кутија",
           dims: `${a}×${b}×${t} mm`, confidence: "high",
-        };
+        });
       }
     }
     return null;
   }
 
-  // ══════ АРМАТУРА / ТРКАЛЕЗНО ЖЕЛЕЗО ══════
+  // ══════ АРМАТУРА / ТРКАЛЕЗНА ПРАЧКА ══════
   if (/арматура|(?:^|\s)фи\s*\d/.test(n) && !/цевка/.test(n)) {
     const m = n.match(/(?:фи|ф|ø)\s*(\d+(?:\.\d+)?)/);
     if (m) {
       const d = Number(m[1]);
       if (d > 0 && d < 200) {
-        return {
-          weightPerUnit: kgPerM(areaRoundBar(d)),
+        return ok({
+          weightPerUnit: kgPerMeter(areaRoundBar(d), rho),
           shape: "Тркалезна прачка (арматура)", dims: `Ø${d} mm`, confidence: "high",
-        };
+        });
       }
     }
     return null;
   }
 
-  // ══════ КВАДРАТНО ЖЕЛЕЗО (полн пресек) ══════
+  // ══════ КВАДРАТНО ЖЕЛЕЗО ══════
   if (/квадратно железо/.test(n)) {
     const v = nums(n);
-    if (v.length >= 1) {
-      const a = v[0];
-      if (a > 0 && a < 200) {
-        return {
-          weightPerUnit: kgPerM(areaSquareBar(a)),
-          shape: "Квадратна прачка", dims: `${a}×${a} mm`, confidence: "high",
-        };
-      }
+    if (v.length >= 1 && v[0] > 0 && v[0] < 200) {
+      return ok({
+        weightPerUnit: kgPerMeter(areaSquareBar(v[0]), rho),
+        shape: "Квадратна прачка", dims: `${v[0]}×${v[0]} mm`, confidence: "high",
+      });
     }
     return null;
   }
@@ -238,15 +228,14 @@ export function parseWeightFromName(
     if (v.length >= 2) {
       const [b, t] = v;
       if (b > 0 && t > 0 && t <= b) {
-        return {
-          weightPerUnit: kgPerM(areaFlat(b, t)),
+        return ok({
+          weightPerUnit: kgPerMeter(areaFlat(b, t), rho),
           shape: "Плоснато железо", dims: `${b}×${t} mm`, confidence: "high",
-        };
+        });
       }
     }
     return null;
   }
 
-  // Сè друго (ЗП профил, мрежи, жица, истегнат метал) — рачно.
   return null;
 }
