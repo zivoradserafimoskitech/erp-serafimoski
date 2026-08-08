@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, AlertTriangle, ArrowDownLeft, Package, Scissors, Pencil, Weight } from "lucide-react";
 import RemnantsTab from "@/components/RemnantsTab";
 import { WeightCalculator, lineWeightKg, unitMeta } from "@/components/WeightCalculator";
+import { WeightAutofill } from "@/components/WeightAutofill";
 
 const materialTypes: Record<string, string> = {
   steel_sheet: "Челичен лим", steel_profile: "Челичен профил", steel_bar: "Челична прачка",
@@ -262,6 +263,7 @@ export default function Storage() {
         <Button variant={showLowStock ? "default" : "outline"} onClick={() => setShowLowStock(!showLowStock)} className={showLowStock ? "bg-red-500 text-white hover:bg-red-600" : ""}>
           <AlertTriangle className="h-4 w-4 mr-2" />Ниски залихи
         </Button>
+        <WeightAutofill onDone={() => { utils.storage.materialList.invalidate(); utils.storage.storageStats.invalidate(); }} />
       </div>
 
       <Card>

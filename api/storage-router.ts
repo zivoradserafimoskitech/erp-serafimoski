@@ -121,6 +121,74 @@ export const storageRouter = createRouter({
       return { success: true };
     }),
 
+  // ===== АВТОМАТСКО ПОПОЛНУВАЊЕ НА ТЕЖИНИ =====
+  weightAutofillPreview: publicQuery
+    .input(z.object({ includeFilled: z.boolean().default(false) }).optional())
+    .query(async ({ input }) => {
+      const db = getDb();
+      const { parseWeightFromName } = await import("./weight-parser");
+      const all = await db.select().from(materials).where(eq(materials.isActive, "active"));
+
+      const recognized: any[] = [];
+      const skipped: any[] = [];
+
+      for (const m of all as any[]) {
+        const current = Number(m.weightPerUnit ?? 0);
+        const alreadyFilled = current > 0;
+        if (alreadyFilled && !input?.includeFilled) {
+          skipped.push({ id: m.id, code: m.code, name: m.name, unit: m.unit, reason: "already" });
+          continue;
+        }
+        const r = parseWeightFromName(m.name, m.unit);
+        if (!r || r.weightPerUnit <= 0) {
+          skipped.push({ id: m.id, code: m.code, name: m.name, unit: m.unit, reason: "unparsed" });
+          continue;
+        }
+        recognized.push({
+          id: m.id, code: m.code, name: m.name, unit: m.unit,
+          currentWeight: current,
+          weightPerUnit: r.weightPerUnit,
+          shape: r.shape, dims: r.dims,
+          confidence: r.confidence, note: r.note ?? null,
+        });
+      }
+
+      recognized.sort((a, b) => (a.confidence === b.confidence ? 0 : a.confidence === "medium" ? -1 : 1));
+      return {
+        recognized,
+        skipped,
+        totals: {
+          all: all.length,
+          recognized: recognized.length,
+          medium: recognized.filter((r) => r.confidence === "medium").length,
+          alreadyFilled: skipped.filter((s) => s.reason === "already").length,
+          unparsed: skipped.filter((s) => s.reason === "unparsed").length,
+        },
+      };
+    }),
+
+  weightAutofillApply: publicQuery
+    .input(z.object({
+      items: z.array(z.object({ id: z.number(), weightPerUnit: z.number() })).min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      let updated = 0;
+      for (const it of input.items) {
+        if (!(it.weightPerUnit > 0)) continue;
+        await db
+          .update(materials)
+          .set({ weightPerUnit: String(it.weightPerUnit), updatedAt: new Date() } as any)
+          .where(eq(materials.id, it.id));
+        updated++;
+      }
+      await logAudit({
+        action: "UPDATE", entityType: "material",
+        description: `Автоматски пополнети тежини за ${updated} материјали`,
+      }).catch(() => {});
+      return { success: true, updated };
+    }),
+
   materialDelete: publicQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
