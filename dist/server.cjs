@@ -8937,6 +8937,8 @@ var init_schema2 = __esm({
       lastPurchasePrice: decimal("last_purchase_price", { precision: 12, scale: 2 }).notNull().default("0"),
       // Тежина по единица мера: kg/m за профили, kg/m² за лим, kg/ком за парчиња
       weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
+      // Од кој материјал е: steel | stainless | aluminum | copper | brass
+      densityKey: varchar("density_key", { length: 20 }).default("steel"),
       location: varchar("location", { length: 100 }),
       isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -9594,7 +9596,7 @@ function inchToOd(text2) {
 function nums(s) {
   return (s.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
 }
-function parseWeightFromName(rawName, unit) {
+function parseWeightFromName(rawName, unit, densityKeyOverride) {
   const n = norm(rawName);
   if (unit === "kg") {
     return {
@@ -9604,22 +9606,26 @@ function parseWeightFromName(rawName, unit) {
       confidence: "high",
       material: "\u2014",
       materialKey: "steel",
-      materialExplicit: false
+      materialExplicit: false,
+      materialFromField: false
     };
   }
-  const det = detectDensity(rawName);
+  const override = densityKeyOverride && DENSITIES[densityKeyOverride] ? { key: densityKeyOverride, explicit: true, fromField: true } : null;
+  const det = override ?? { ...detectDensity(rawName), fromField: false };
   const rho = DENSITIES[det.key].value;
   const matLabel = DENSITIES[det.key].label;
-  const nonSteel = det.explicit && det.key !== "steel";
-  const baseConfidence = nonSteel ? "medium" : "high";
-  const baseNote = nonSteel ? `\u041F\u0440\u0435\u043F\u043E\u0437\u043D\u0430\u0435\u043D \u043A\u0430\u043A\u043E ${matLabel.toLowerCase()} (${rho} \u043A\u0433/\u043C\xB3) \u2014 \u043F\u043E\u0442\u0432\u0440\u0434\u0438 \u043F\u0440\u0435\u0434 \u0437\u0430\u043F\u0438\u0448\u0443\u0432\u0430\u045A\u0435.` : void 0;
+  const nonSteel = det.key !== "steel";
+  const needsCheck = nonSteel && !det.fromField;
+  const baseConfidence = needsCheck ? "medium" : "high";
+  const baseNote = needsCheck ? `\u041F\u043E\u0433\u043E\u0434\u0435\u043D \u043E\u0434 \u0438\u043C\u0435\u0442\u043E \u043A\u0430\u043A\u043E ${matLabel.toLowerCase()} (${rho} \u043A\u0433/\u043C\xB3) \u2014 \u043F\u043E\u0442\u0432\u0440\u0434\u0438 \u043F\u0440\u0435\u0434 \u0437\u0430\u043F\u0438\u0448\u0443\u0432\u0430\u045A\u0435.` : void 0;
   const ok = (r) => ({
     ...r,
     confidence: r.confidence === "medium" ? "medium" : baseConfidence,
     note: r.note ?? baseNote,
     material: matLabel,
     materialKey: det.key,
-    materialExplicit: det.explicit
+    materialExplicit: nonSteel,
+    materialFromField: det.fromField
   });
   const isPerMeter = unit === "m";
   const isPerPiece = unit === "pcs" || unit === "sheet";
@@ -11116,7 +11122,8 @@ function getInitSql() {
     // ===== Тежина по единица (kg/m, kg/m², kg/ком) =====
     `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
     `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "material_id" bigint`,
-    `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`
+    `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
+    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "density_key" varchar(20) DEFAULT 'steel'`
   ];
 }
 var init_init_db_sql = __esm({
@@ -32549,6 +32556,7 @@ var storageRouter = createRouter({
     avgCost: external_exports.string().default("0"),
     lastPurchasePrice: external_exports.string().default("0"),
     weightPerUnit: external_exports.string().optional(),
+    densityKey: external_exports.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
     location: external_exports.string().optional()
   })).mutation(async ({ input }) => {
     const db2 = getDb();
@@ -32582,6 +32590,7 @@ var storageRouter = createRouter({
     avgCost: external_exports.string().optional(),
     lastPurchasePrice: external_exports.string().optional(),
     weightPerUnit: external_exports.string().optional(),
+    densityKey: external_exports.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
     location: external_exports.string().optional(),
     isActive: external_exports.enum(["active", "inactive"]).optional()
   })).mutation(async ({ input }) => {
@@ -32606,7 +32615,7 @@ var storageRouter = createRouter({
         skipped.push({ id: m.id, code: m.code, name: m.name, unit: m.unit, reason: "already" });
         continue;
       }
-      const r = parseWeightFromName2(m.name, m.unit);
+      const r = parseWeightFromName2(m.name, m.unit, m.densityKey);
       if (!r || r.weightPerUnit <= 0) {
         skipped.push({ id: m.id, code: m.code, name: m.name, unit: m.unit, reason: "unparsed" });
         continue;
@@ -32621,7 +32630,9 @@ var storageRouter = createRouter({
         shape: r.shape,
         dims: r.dims,
         material: r.material,
+        materialKey: r.materialKey,
         materialExplicit: r.materialExplicit,
+        materialFromField: r.materialFromField,
         confidence: r.confidence,
         note: r.note ?? null
       });
@@ -32635,19 +32646,26 @@ var storageRouter = createRouter({
         recognized: recognized.length,
         medium: recognized.filter((r) => r.confidence === "medium").length,
         nonSteel: recognized.filter((r) => r.materialExplicit).length,
+        guessedMaterial: recognized.filter((r) => r.materialExplicit && !r.materialFromField).length,
         alreadyFilled: skipped.filter((s) => s.reason === "already").length,
         unparsed: skipped.filter((s) => s.reason === "unparsed").length
       }
     };
   }),
   weightAutofillApply: publicQuery.input(external_exports.object({
-    items: external_exports.array(external_exports.object({ id: external_exports.number(), weightPerUnit: external_exports.number() })).min(1)
+    items: external_exports.array(external_exports.object({
+      id: external_exports.number(),
+      weightPerUnit: external_exports.number(),
+      densityKey: external_exports.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional()
+    })).min(1)
   })).mutation(async ({ input }) => {
     const db2 = getDb();
     let updated = 0;
     for (const it of input.items) {
       if (!(it.weightPerUnit > 0)) continue;
-      await db2.update(materials).set({ weightPerUnit: String(it.weightPerUnit), updatedAt: /* @__PURE__ */ new Date() }).where(eq(materials.id, it.id));
+      const patch = { weightPerUnit: String(it.weightPerUnit), updatedAt: /* @__PURE__ */ new Date() };
+      if (it.densityKey) patch.densityKey = it.densityKey;
+      await db2.update(materials).set(patch).where(eq(materials.id, it.id));
       updated++;
     }
     await logAudit({

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, AlertTriangle, ArrowDownLeft, Package, Scissors, Pencil, Weight } from "lucide-react";
 import RemnantsTab from "@/components/RemnantsTab";
 import { WeightCalculator, lineWeightKg, unitMeta } from "@/components/WeightCalculator";
+import { DENSITIES } from "@contracts/weight-geometry";
 import { WeightAutofill } from "@/components/WeightAutofill";
 
 const materialTypes: Record<string, string> = {
@@ -41,7 +42,7 @@ export default function Storage() {
 
   const [form, setForm] = useState({
     name: "", code: "", type: "steel_sheet", unit: "kg",
-    description: "", minStock: "0", currentStock: "0", location: "", weightPerUnit: "0",
+    description: "", minStock: "0", currentStock: "0", location: "", weightPerUnit: "0", densityKey: "steel",
   });
 
   const [editOpen, setEditOpen] = useState(false);
@@ -67,7 +68,7 @@ export default function Storage() {
       utils.storage.materialList.invalidate();
       utils.storage.storageStats.invalidate();
       setDialogOpen(false);
-      setForm({ name: "", code: "", type: "steel_sheet", unit: "kg", description: "", minStock: "0", currentStock: "0", location: "", weightPerUnit: "0" });
+      setForm({ name: "", code: "", type: "steel_sheet", unit: "kg", description: "", minStock: "0", currentStock: "0", location: "", weightPerUnit: "0", densityKey: "steel" });
     },
   });
 
@@ -157,10 +158,24 @@ export default function Storage() {
                 const um = unitMeta(form.unit);
                 return (
                   <div className="space-y-2">
+                    {um.applicable && !um.locked && (
+                      <div className="space-y-1.5">
+                        <Label>Од кој материјал е</Label>
+                        <Select value={form.densityKey} onValueChange={(v) => setForm({ ...form, densityKey: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(DENSITIES).map(([k, d]) => (
+                              <SelectItem key={k} value={k}>{d.label} · {d.value} кг/м³</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <Label>{um.label}</Label>
                       {um.applicable && !um.locked && (
-                        <WeightCalculator onApply={(kg) => setForm({ ...form, weightPerUnit: String(kg) })} />
+                        <WeightCalculator defaultDensity={form.densityKey}
+                          onApply={(kg) => setForm({ ...form, weightPerUnit: String(kg) })} />
                       )}
                     </div>
                     <Input type="number" step="0.0001" disabled={um.locked}
@@ -286,7 +301,14 @@ export default function Storage() {
                   return (
                     <TableRow key={m.id} className={isLow ? "bg-red-50" : ""}>
                       <TableCell className="font-mono text-sm">{m.code}</TableCell>
-                      <TableCell className="font-medium">{m.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {m.name}
+                        {(m as any).densityKey && (m as any).densityKey !== "steel" && (
+                          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 font-medium align-middle">
+                            {DENSITIES[(m as any).densityKey]?.label ?? (m as any).densityKey}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell><Badge variant="outline">{materialTypes[m.type] || m.type}</Badge></TableCell>
                       <TableCell>
                         <span className={isLow ? "text-red-600 font-semibold" : ""}>{m.currentStock} {units[m.unit]}</span>
@@ -376,6 +398,7 @@ export default function Storage() {
                   unit: editForm.unit,
                   description: editForm.description ?? undefined,
                   minStock: String(editForm.minStock ?? "0"),
+                  densityKey: (editForm.densityKey ?? "steel") as any,
                   weightPerUnit: (() => { const um = unitMeta(editForm.unit); return um.locked ? (um.fixedValue ?? "0") : String(editForm.weightPerUnit ?? "0"); })(),
                   location: editForm.location ?? undefined,
                 });
@@ -408,12 +431,27 @@ export default function Storage() {
                 const val = um.locked ? (um.fixedValue ?? "0") : (editForm.weightPerUnit ?? "0");
                 return (
                   <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                    {um.applicable && !um.locked && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Од кој материјал е</Label>
+                        <Select value={editForm.densityKey ?? "steel"}
+                          onValueChange={(v) => setEditForm({ ...editForm, densityKey: v })}>
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(DENSITIES).map(([k, d]) => (
+                              <SelectItem key={k} value={k}>{d.label} · {d.value} кг/м³</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <Label className="flex items-center gap-1.5">
                         <Weight className="h-3.5 w-3.5 text-amber-600" />{um.label}
                       </Label>
                       {um.applicable && !um.locked && (
-                        <WeightCalculator onApply={(kg) => setEditForm({ ...editForm, weightPerUnit: String(kg) })} />
+                        <WeightCalculator defaultDensity={editForm.densityKey ?? "steel"}
+                          onApply={(kg) => setEditForm({ ...editForm, weightPerUnit: String(kg) })} />
                       )}
                     </div>
                     <Input type="number" step="0.0001" disabled={um.locked} value={val}

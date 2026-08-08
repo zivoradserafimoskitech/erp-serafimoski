@@ -92,13 +92,15 @@ const SHAPES: Shape[] = [
 export function WeightCalculator({
   onApply,
   buttonLabel = "Калкулатор",
+  defaultDensity = "steel",
 }: {
   onApply: (kgPerUnit: number, note: string) => void;
   buttonLabel?: string;
+  defaultDensity?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [shapeKey, setShapeKey] = useState("square_tube");
-  const [density, setDensity] = useState("steel");
+  const [density, setDensity] = useState(defaultDensity);
   const [vals, setVals] = useState<Record<string, string>>({});
 
   const shape = SHAPES.find((s) => s.key === shapeKey)!;
@@ -138,7 +140,8 @@ export function WeightCalculator({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button type="button" variant="outline" size="sm"
+        onClick={() => { setDensity(defaultDensity); setOpen(true); }}>
         <Calculator className="h-3.5 w-3.5 mr-1.5" />{buttonLabel}
       </Button>
 

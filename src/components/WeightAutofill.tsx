@@ -9,6 +9,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Wand2, AlertTriangle, Search } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { DENSITIES } from "@contracts/weight-geometry";
 
 const UNIT_MK: Record<string, string> = { kg: "кг", m: "м", m2: "м²", pcs: "ком", l: "л", sheet: "табла" };
 
@@ -18,6 +22,8 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
   const [checked, setChecked] = useState<Record<number, boolean>>({});
   const [q, setQ] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  // Рачно избран материјал по ред (го газѝ погодениот)
+  const [matOverride, setMatOverride] = useState<Record<number, string>>({});
 
   const { data, isLoading, refetch } = trpc.storage.weightAutofillPreview.useQuery(
     { includeFilled },
@@ -38,7 +44,17 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
     const next: Record<number, boolean> = {};
     for (const r of data.recognized) next[r.id] = r.confidence === "high";
     setChecked(next);
+    setMatOverride({});
   }, [data]);
+
+  // Тежината е линеарна со густината, па пресметката е обично скалирање.
+  const effective = (r: any) => {
+    const key = matOverride[r.id] ?? r.materialKey ?? "steel";
+    const base = DENSITIES[r.materialKey ?? "steel"]?.value ?? 7850;
+    const target = DENSITIES[key]?.value ?? base;
+    const w = Math.round((r.weightPerUnit * target) / base * 10000) / 10000;
+    return { key, weight: w, changed: key !== (r.materialKey ?? "steel") };
+  };
 
   const filtered = useMemo(() => {
     const list = data?.recognized ?? [];
@@ -60,7 +76,10 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
   const apply = () => {
     const items = (data?.recognized ?? [])
       .filter((r: any) => checked[r.id])
-      .map((r: any) => ({ id: r.id, weightPerUnit: r.weightPerUnit }));
+      .map((r: any) => {
+        const e = effective(r);
+        return { id: r.id, weightPerUnit: e.weight, densityKey: e.key as any };
+      });
     if (items.length === 0) return;
     applyMutation.mutate({ items });
   };
@@ -106,13 +125,13 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                 </div>
               )}
 
-              {(data.totals.nonSteel ?? 0) > 0 && (
+              {(data.totals.guessedMaterial ?? 0) > 0 && (
                 <div className="text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-4 py-2 flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>
-                    {data.totals.nonSteel} {data.totals.nonSteel === 1 ? "материјал не е" : "материјали не се"} челик
-                    (алуминиум, INOX, бакар или месинг). Пресметани се со соодветна густина, но
-                    се оставени неоштиклирани за да ги провериш.
+                    Кај {data.totals.guessedMaterial} {data.totals.guessedMaterial === 1 ? "материјал" : "материјали"} материјалот е погоден од името,
+                    не избран во картонот. Оставени се неоштиклирани. Можеш да го смениш во колоната
+                    „Материјал“ — тежината се пресметува веднаш.
                   </span>
                 </div>
               )}
@@ -138,12 +157,13 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                       <TableHead className="w-10"></TableHead>
                       <TableHead>Материјал</TableHead>
                       <TableHead>Препознато</TableHead>
+                      <TableHead className="w-40">Материјал</TableHead>
                       <TableHead className="text-right w-32">Тежина</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.length === 0 ? (
-                      <TableRow><TableCell colSpan={4} className="text-center py-10 text-gray-400">
+                      <TableRow><TableCell colSpan={5} className="text-center py-10 text-gray-400">
                         Нема што да се пополни
                       </TableCell></TableRow>
                     ) : filtered.map((r: any) => (
@@ -158,26 +178,60 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                         </TableCell>
                         <TableCell>
                           <div className="text-xs font-medium">{r.shape}</div>
-                          <div className="text-[11px] text-gray-500">
-                            {r.dims}
-                            {r.materialExplicit && (
-                              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 font-medium">
-                                {r.material}
-                              </span>
-                            )}
-                          </div>
-                          {r.note && (
+                          <div className="text-[11px] text-gray-500">{r.dims}</div>
+                          {r.note && !matOverride[r.id] && (
                             <div className="text-[11px] text-amber-700 flex items-start gap-1 mt-0.5">
                               <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />{r.note}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-bold">{r.weightPerUnit.toFixed(3)}</span>
-                          <span className="text-[11px] text-gray-400 ml-1">кг/{UNIT_MK[r.unit] ?? r.unit}</span>
-                          {r.currentWeight > 0 && (
-                            <div className="text-[11px] text-blue-600">беше {Number(r.currentWeight).toFixed(3)}</div>
+                        <TableCell>
+                          {r.unit === "kg" ? (
+                            <span className="text-[11px] text-gray-400">—</span>
+                          ) : (
+                            <>
+                              <Select
+                                value={matOverride[r.id] ?? r.materialKey ?? "steel"}
+                                onValueChange={(v) => {
+                                  setMatOverride({ ...matOverride, [r.id]: v });
+                                  setChecked({ ...checked, [r.id]: true });
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {Object.entries(DENSITIES).map(([k, d]) => (
+                                    <SelectItem key={k} value={k} className="text-xs">{d.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {r.materialFromField && (
+                                <div className="text-[10px] text-gray-400 mt-0.5">од картонот</div>
+                              )}
+                            </>
                           )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {(() => {
+                            const e = effective(r);
+                            return (
+                              <>
+                                <span className={`font-bold ${e.changed ? "text-orange-700" : ""}`}>
+                                  {e.weight.toFixed(3)}
+                                </span>
+                                <span className="text-[11px] text-gray-400 ml-1">кг/{UNIT_MK[r.unit] ?? r.unit}</span>
+                                {e.changed && (
+                                  <div className="text-[11px] text-gray-400">
+                                    беше {r.weightPerUnit.toFixed(3)} за {r.material.toLowerCase()}
+                                  </div>
+                                )}
+                                {r.currentWeight > 0 && !e.changed && (
+                                  <div className="text-[11px] text-blue-600">
+                                    беше {Number(r.currentWeight).toFixed(3)}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))}

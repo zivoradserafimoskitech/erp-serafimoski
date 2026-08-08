@@ -130,6 +130,8 @@ export const materials = pgTable("materials", {
   lastPurchasePrice: decimal("last_purchase_price", { precision: 12, scale: 2 }).notNull().default("0"),
   // Тежина по единица мера: kg/m за профили, kg/m² за лим, kg/ком за парчиња
   weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
+  // Од кој материјал е: steel | stainless | aluminum | copper | brass
+  densityKey: varchar("density_key", { length: 20 }).default("steel"),
   location: varchar("location", { length: 100 }),
   isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

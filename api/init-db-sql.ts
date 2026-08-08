@@ -1249,5 +1249,6 @@ export function getInitSql(): string[] {
     `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
     `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "material_id" bigint`,
     `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
+    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "density_key" varchar(20) DEFAULT 'steel'`,
   ];
 }

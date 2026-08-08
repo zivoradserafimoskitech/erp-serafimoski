@@ -15,7 +15,8 @@ export type ParseResult = {
   confidence: "high" | "medium";
   material: string;
   materialKey: DensityKey;
-  materialExplicit: boolean;
+  materialExplicit: boolean;   // не е челик
+  materialFromField: boolean;  // избран во картонот, не погоден од името
   note?: string;
 };
 
@@ -52,36 +53,49 @@ function nums(s: string): number[] {
  * Обид за препознавање. Враќа null ако името не е доволно јасно —
  * подобро ништо отколку погрешна бројка.
  */
-export function parseWeightFromName(rawName: string, unit: string): ParseResult | null {
+export function parseWeightFromName(
+  rawName: string,
+  unit: string,
+  densityKeyOverride?: string | null
+): ParseResult | null {
   const n = norm(rawName);
 
   if (unit === "kg") {
     return {
       weightPerUnit: 1, shape: "Се води во килограми", dims: "—",
-      confidence: "high", material: "—", materialKey: "steel", materialExplicit: false,
+      confidence: "high", material: "—", materialKey: "steel",
+      materialExplicit: false, materialFromField: false,
     };
   }
 
   // ── Кој материјал е? ──
-  const det = detectDensity(rawName);
+  // Предност има полето на самиот материјал; името се користи само како резерва.
+  const override =
+    densityKeyOverride && DENSITIES[densityKeyOverride]
+      ? { key: densityKeyOverride as DensityKey, explicit: true, fromField: true }
+      : null;
+  const det = override ?? { ...detectDensity(rawName), fromField: false };
   const rho = DENSITIES[det.key].value;
   const matLabel = DENSITIES[det.key].label;
 
-  const nonSteel = det.explicit && det.key !== "steel";
-  const baseConfidence: "high" | "medium" = nonSteel ? "medium" : "high";
-  const baseNote = nonSteel
-    ? `Препознаен како ${matLabel.toLowerCase()} (${rho} кг/м³) — потврди пред запишување.`
+  const nonSteel = det.key !== "steel";
+  // Ако материјалот е избран во картонот — тоа е одлука на човек, не погодување.
+  const needsCheck = nonSteel && !det.fromField;
+  const baseConfidence: "high" | "medium" = needsCheck ? "medium" : "high";
+  const baseNote = needsCheck
+    ? `Погоден од името како ${matLabel.toLowerCase()} (${rho} кг/м³) — потврди пред запишување.`
     : undefined;
 
   const ok = (
-    r: Omit<ParseResult, "material" | "materialKey" | "materialExplicit">
+    r: Omit<ParseResult, "material" | "materialKey" | "materialExplicit" | "materialFromField">
   ): ParseResult => ({
     ...r,
     confidence: r.confidence === "medium" ? "medium" : baseConfidence,
     note: r.note ?? baseNote,
     material: matLabel,
     materialKey: det.key,
-    materialExplicit: det.explicit,
+    materialExplicit: nonSteel,
+    materialFromField: det.fromField,
   });
 
   const isPerMeter = unit === "m";

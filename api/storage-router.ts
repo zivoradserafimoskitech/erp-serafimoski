@@ -84,6 +84,7 @@ export const storageRouter = createRouter({
       avgCost: z.string().default("0"),
       lastPurchasePrice: z.string().default("0"),
       weightPerUnit: z.string().optional(),
+      densityKey: z.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
       location: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -110,6 +111,7 @@ export const storageRouter = createRouter({
       avgCost: z.string().optional(),
       lastPurchasePrice: z.string().optional(),
       weightPerUnit: z.string().optional(),
+      densityKey: z.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
       location: z.string().optional(),
       isActive: z.enum(["active", "inactive"]).optional(),
     }))
@@ -139,7 +141,7 @@ export const storageRouter = createRouter({
           skipped.push({ id: m.id, code: m.code, name: m.name, unit: m.unit, reason: "already" });
           continue;
         }
-        const r = parseWeightFromName(m.name, m.unit);
+        const r = parseWeightFromName(m.name, m.unit, m.densityKey);
         if (!r || r.weightPerUnit <= 0) {
           skipped.push({ id: m.id, code: m.code, name: m.name, unit: m.unit, reason: "unparsed" });
           continue;
@@ -149,7 +151,8 @@ export const storageRouter = createRouter({
           currentWeight: current,
           weightPerUnit: r.weightPerUnit,
           shape: r.shape, dims: r.dims,
-          material: r.material, materialExplicit: r.materialExplicit,
+          material: r.material, materialKey: r.materialKey,
+          materialExplicit: r.materialExplicit, materialFromField: r.materialFromField,
           confidence: r.confidence, note: r.note ?? null,
         });
       }
@@ -163,6 +166,7 @@ export const storageRouter = createRouter({
           recognized: recognized.length,
           medium: recognized.filter((r) => r.confidence === "medium").length,
           nonSteel: recognized.filter((r) => r.materialExplicit).length,
+          guessedMaterial: recognized.filter((r) => r.materialExplicit && !r.materialFromField).length,
           alreadyFilled: skipped.filter((s) => s.reason === "already").length,
           unparsed: skipped.filter((s) => s.reason === "unparsed").length,
         },
@@ -171,17 +175,20 @@ export const storageRouter = createRouter({
 
   weightAutofillApply: publicQuery
     .input(z.object({
-      items: z.array(z.object({ id: z.number(), weightPerUnit: z.number() })).min(1),
+      items: z.array(z.object({
+        id: z.number(),
+        weightPerUnit: z.number(),
+        densityKey: z.enum(["steel", "stainless", "aluminum", "copper", "brass"]).optional(),
+      })).min(1),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
       let updated = 0;
       for (const it of input.items) {
         if (!(it.weightPerUnit > 0)) continue;
-        await db
-          .update(materials)
-          .set({ weightPerUnit: String(it.weightPerUnit), updatedAt: new Date() } as any)
-          .where(eq(materials.id, it.id));
+        const patch: any = { weightPerUnit: String(it.weightPerUnit), updatedAt: new Date() };
+        if (it.densityKey) patch.densityKey = it.densityKey;
+        await db.update(materials).set(patch).where(eq(materials.id, it.id));
         updated++;
       }
       await logAudit({
