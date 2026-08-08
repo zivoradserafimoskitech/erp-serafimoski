@@ -108,7 +108,7 @@ export default function Accounting() {
   const [incItemForm, setIncItemForm] = useState({ description: "", quantity: "1", unit: "кг", unitPrice: "", vatRate: "18" });
   const [recForm, setRecForm] = useState({ receiptNumber: "", supplierId: "", receiptDate: "", totalAmount: "0", notes: "" });
   const [dnForm, setDnForm] = useState({ dnNumber: "", customerId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" });
-  const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string; productId?: number; itemType?: "product" | "material" | "manual" }[]>([]);
+  const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string; productId?: number; materialId?: number; weightPerUnit?: number; itemType?: "product" | "material" | "manual" }[]>([]);
   const { data: materialsData } = trpc.storage.materialList.useQuery({});
   const [reportPeriod, setReportPeriod] = useState({ startDate: "", endDate: "" });
 
@@ -522,7 +522,7 @@ export default function Accounting() {
               <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нов испратник</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нов испратник</DialogTitle></DialogHeader>
-                <form onSubmit={(e) => { e.preventDefault(); createDN.mutate({ ...dnForm, customerId: parseInt(dnForm.customerId), issueDate: dnForm.issueDate, deliveryDate: dnForm.deliveryDate || undefined, items: dnItems } as any); }} className="space-y-3">
+                <form onSubmit={(e) => { e.preventDefault(); createDN.mutate({ ...dnForm, customerId: parseInt(dnForm.customerId), issueDate: dnForm.issueDate, deliveryDate: dnForm.deliveryDate || undefined, items: dnItems.map(it => ({ description: it.description, quantity: it.quantity, unit: it.unit, productId: it.productId, materialId: it.materialId, itemType: it.itemType, weightKg: ((it.weightPerUnit ?? 0) * (Number(it.quantity) || 0)).toFixed(3) })) } as any); }} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Број *</Label><Input value={dnForm.dnNumber} onChange={(e) => setDnForm({ ...dnForm, dnNumber: e.target.value })} required /></div>
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={dnForm.customerId} onValueChange={(v) => setDnForm({ ...dnForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
@@ -535,7 +535,7 @@ export default function Accounting() {
                     <p className="text-xs font-semibold">Ставки за испорака</p>
                     <div className="grid grid-cols-2 gap-2">
                       <MaterialPicker tile={{ icon: "🔩", label: "Материјал од магацин" }} title="Избери материјал" materials={materialsData as any} value={null}
-                        onSelect={(mm: any) => setDnItems([...dnItems, { description: mm.name, quantity: "1", unit: mm.unit ?? "pcs", itemType: "material" }])} />
+                        onSelect={(mm: any) => setDnItems([...dnItems, { description: mm.name, quantity: "1", unit: mm.unit ?? "pcs", materialId: mm.id, weightPerUnit: Number(mm.weightPerUnit ?? 0) || 0, itemType: "material" }])} />
                       <MaterialPicker tile={{ icon: "📦", label: "Готов производ" }} title="Избери готов производ" value={null}
                         materials={fgAggregated as any}
                         onSelect={(f: any) => setDnItems([...dnItems, { description: f.cleanName ?? f.name, quantity: "1", unit: f.unit ?? "ком", productId: f.id, itemType: "product" }])} />
@@ -544,10 +544,25 @@ export default function Accounting() {
                       <div key={i} className="grid grid-cols-[1fr_5rem_3rem_2rem] gap-2 items-center bg-white border rounded px-2 py-1">
                         <span className="text-xs truncate">{it.description}</span>
                         <Input className="h-7 text-xs" type="number" step="0.001" value={it.quantity} onChange={e => setDnItems(dnItems.map((x, j) => j === i ? { ...x, quantity: e.target.value } : x))} />
-                        <span className="text-xs text-gray-500">{it.unit}</span>
+                        <span className="text-xs text-gray-500">
+                          {it.unit}
+                          {(it.weightPerUnit ?? 0) > 0 && (
+                            <span className="block text-[10px] text-amber-600 leading-none">
+                              {((it.weightPerUnit ?? 0) * (Number(it.quantity) || 0)).toFixed(1)} кг
+                            </span>
+                          )}
+                        </span>
                         <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => setDnItems(dnItems.filter((_, j) => j !== i))}>×</Button>
                       </div>
                     ))}
+                    {dnItems.some(it => (it.weightPerUnit ?? 0) > 0) && (
+                      <div className="flex justify-between text-xs font-semibold border-t pt-2 mt-1">
+                        <span>Вкупна тежина</span>
+                        <span className="text-amber-700">
+                          {dnItems.reduce((a, it) => a + (it.weightPerUnit ?? 0) * (Number(it.quantity) || 0), 0).toFixed(2)} кг
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createDN.isPending}>{createDN.isPending ? "Зачувување..." : "Креирај испратник"}</Button>
                 </form>

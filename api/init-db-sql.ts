@@ -1244,5 +1244,10 @@ export function getInitSql(): string[] {
     // ===== Параметри за кроење =====
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "cut_kerf_mm" numeric(6, 1) DEFAULT '2'`,
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "min_remnant_mm" numeric(8, 1) DEFAULT '300'`,
+
+    // ===== Тежина по единица (kg/m, kg/m², kg/ком) =====
+    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
+    `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "material_id" bigint`,
+    `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
   ];
 }

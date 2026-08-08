@@ -83,6 +83,7 @@ export const storageRouter = createRouter({
       currentStock: z.string().default("0"),
       avgCost: z.string().default("0"),
       lastPurchasePrice: z.string().default("0"),
+      weightPerUnit: z.string().optional(),
       location: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -106,13 +107,17 @@ export const storageRouter = createRouter({
       unit: z.enum(["kg", "m", "m2", "pcs", "l", "sheet", "hour", "m_cut", "bend"]).optional(),
       description: z.string().optional(),
       minStock: z.string().optional(),
+      avgCost: z.string().optional(),
+      lastPurchasePrice: z.string().optional(),
+      weightPerUnit: z.string().optional(),
       location: z.string().optional(),
       isActive: z.enum(["active", "inactive"]).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...data } = input;
-      await db.update(materials).set(data).where(eq(materials.id, id));
+      await db.update(materials).set({ ...data, updatedAt: new Date() } as any).where(eq(materials.id, id));
+      await logAudit({ action: "UPDATE", entityType: "material", entityId: id, description: `Изменет материјал #${id}` }).catch(() => {});
       return { success: true };
     }),
 

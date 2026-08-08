@@ -128,6 +128,8 @@ export const materials = pgTable("materials", {
   currentStock: decimal("current_stock", { precision: 12, scale: 3 }).notNull().default("0"),
   avgCost: decimal("avg_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   lastPurchasePrice: decimal("last_purchase_price", { precision: 12, scale: 2 }).notNull().default("0"),
+  // Тежина по единица мера: kg/m за профили, kg/m² за лим, kg/ком за парчиња
+  weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
   location: varchar("location", { length: 100 }),
   isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -669,6 +671,8 @@ export const documentItems = pgTable("document_items", {
   vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
   productId: bigint("product_id", { mode: "number", unsigned: true }),
   serviceId: bigint("service_id", { mode: "number", unsigned: true }),
+  materialId: bigint("material_id", { mode: "number", unsigned: true }),
+  weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
   itemType: varchar("item_type", { length: 50 }).notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

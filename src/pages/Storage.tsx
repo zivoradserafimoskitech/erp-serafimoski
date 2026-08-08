@@ -15,8 +15,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, AlertTriangle, ArrowDownLeft, Package, Scissors } from "lucide-react";
+import { Search, Plus, AlertTriangle, ArrowDownLeft, Package, Scissors, Pencil, Weight } from "lucide-react";
 import RemnantsTab from "@/components/RemnantsTab";
+import { WeightCalculator, lineWeightKg } from "@/components/WeightCalculator";
 
 const materialTypes: Record<string, string> = {
   steel_sheet: "Челичен лим", steel_profile: "Челичен профил", steel_bar: "Челична прачка",
@@ -39,8 +40,11 @@ export default function Storage() {
 
   const [form, setForm] = useState({
     name: "", code: "", type: "steel_sheet", unit: "kg",
-    description: "", minStock: "0", currentStock: "0", location: "",
+    description: "", minStock: "0", currentStock: "0", location: "", weightPerUnit: "0",
   });
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<any>(null);
 
   const [txForm, setTxForm] = useState({
     type: "receipt" as "receipt" | "issue" | "adjustment" | "return" | "scrap",
@@ -62,7 +66,7 @@ export default function Storage() {
       utils.storage.materialList.invalidate();
       utils.storage.storageStats.invalidate();
       setDialogOpen(false);
-      setForm({ name: "", code: "", type: "steel_sheet", unit: "kg", description: "", minStock: "0", currentStock: "0", location: "" });
+      setForm({ name: "", code: "", type: "steel_sheet", unit: "kg", description: "", minStock: "0", currentStock: "0", location: "", weightPerUnit: "0" });
     },
   });
 
@@ -70,6 +74,15 @@ export default function Storage() {
     onSuccess: () => {
       utils.storage.materialList.invalidate();
       utils.storage.storageStats.invalidate();
+    },
+  });
+
+  const updateMutation = trpc.storage.materialUpdate.useMutation({
+    onSuccess: () => {
+      utils.storage.materialList.invalidate();
+      utils.storage.storageStats.invalidate();
+      setEditOpen(false);
+      setEditForm(null);
     },
   });
 
@@ -137,6 +150,14 @@ export default function Storage() {
                 <div className="space-y-2"><Label>Минимална залиха</Label><Input type="number" step="0.001" value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Почетна залиха</Label><Input type="number" step="0.001" value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: e.target.value })} /></div>
               </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Тежина по единица ({units[form.unit] ?? form.unit})</Label>
+                  <WeightCalculator onApply={(kg) => setForm({ ...form, weightPerUnit: String(kg) })} />
+                </div>
+                <Input type="number" step="0.0001" value={form.weightPerUnit} onChange={(e) => setForm({ ...form, weightPerUnit: e.target.value })} placeholder="0.000" />
+                <p className="text-[11px] text-gray-400">кг/м за профили, кг/м² за лим, кг/ком за парчиња. Остави 0 ако не е применливо.</p>
+              </div>
               <div className="space-y-2"><Label>Локација во склад</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="на пр. Ред 3, Полица Б" /></div>
               <div className="space-y-2"><Label>Опис</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
               <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createMutation.isPending}>
@@ -189,7 +210,7 @@ export default function Storage() {
       )}
 
       {mainTab === "materials" && (<>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="bg-blue-50 p-2.5 rounded-lg"><Package className="h-5 w-5 text-blue-600" /></div>
           <div><p className="text-sm text-gray-500">Вкупно материјали</p><p className="text-xl font-bold">{stats?.totalItems ?? 0}</p></div>
@@ -201,6 +222,16 @@ export default function Storage() {
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="bg-emerald-50 p-2.5 rounded-lg"><Package className="h-5 w-5 text-emerald-600" /></div>
           <div><p className="text-sm text-gray-500">Вкупно количина</p><p className="text-xl font-bold">{stats?.totalValue ?? 0}</p></div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="bg-slate-100 p-2.5 rounded-lg"><Weight className="h-5 w-5 text-slate-600" /></div>
+          <div>
+            <p className="text-sm text-gray-500">Тежина на залиха</p>
+            <p className="text-xl font-bold">
+              {(materials ?? []).reduce((a, m: any) => a + lineWeightKg(m.weightPerUnit, m.currentStock), 0)
+                .toLocaleString("mk-MK", { maximumFractionDigits: 0 })} <span className="text-sm font-semibold text-gray-400">кг</span>
+            </p>
+          </div>
         </CardContent></Card>
       </div>
 
@@ -227,14 +258,14 @@ export default function Storage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Код</TableHead><TableHead>Назив</TableHead><TableHead>Тип</TableHead>
-                <TableHead>Залиха</TableHead><TableHead>Прос.цена</TableHead><TableHead>Мин.</TableHead><TableHead>Локација</TableHead><TableHead>Акции</TableHead>
+                <TableHead>Залиха</TableHead><TableHead className="text-right">Тежина</TableHead><TableHead>Прос.цена</TableHead><TableHead>Мин.</TableHead><TableHead>Локација</TableHead><TableHead>Акции</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>
               ) : !materials || materials.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Нема материјали</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-gray-400">Нема материјали</TableCell></TableRow>
               ) : (
                 materials.map((m) => {
                   const isLow = parseFloat(m.currentStock) <= parseFloat(m.minStock);
@@ -247,6 +278,17 @@ export default function Storage() {
                         <span className={isLow ? "text-red-600 font-semibold" : ""}>{m.currentStock} {units[m.unit]}</span>
                         {isLow && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-red-500" />}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {Number((m as any).weightPerUnit ?? 0) > 0 ? (
+                          <>
+                            <span className="font-medium">{Number((m as any).weightPerUnit).toFixed(3)}</span>
+                            <span className="text-[11px] text-gray-400 ml-1">кг/{units[m.unit] ?? m.unit}</span>
+                            <div className="text-[11px] text-gray-400">
+                              вкупно {lineWeightKg((m as any).weightPerUnit, m.currentStock).toLocaleString("mk-MK")} кг
+                            </div>
+                          </>
+                        ) : <span className="text-gray-300">—</span>}
+                      </TableCell>
                       <TableCell className="text-gray-500">{m.avgCost} ден</TableCell>
                       <TableCell className="text-gray-500">{m.minStock} {units[m.unit]}</TableCell>
                           <TableCell className="text-gray-500">{m.location || "-"}</TableCell>
@@ -254,6 +296,9 @@ export default function Storage() {
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" onClick={() => { setSelectedMaterial(m.id); setTxDialogOpen(true); }}>
                             <ArrowDownLeft className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="outline" title="Измени" onClick={() => { setEditForm({ ...m }); setEditOpen(true); }}>
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button size="sm" variant="outline" className="text-red-500 hover:text-red-600" onClick={() => { if (confirm("Дали сте сигурни?")) deleteMutation.mutate({ id: m.id }); }}>
                             ×
@@ -298,6 +343,81 @@ export default function Storage() {
               {txMutation.isPending ? "Зачувување..." : "Зачувај трансакција"}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Дијалог: измени материјал */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Измени материјал</DialogTitle></DialogHeader>
+          {editForm && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateMutation.mutate({
+                  id: editForm.id,
+                  name: editForm.name,
+                  code: editForm.code,
+                  type: editForm.type,
+                  unit: editForm.unit,
+                  description: editForm.description ?? undefined,
+                  minStock: String(editForm.minStock ?? "0"),
+                  weightPerUnit: String(editForm.weightPerUnit ?? "0"),
+                  location: editForm.location ?? undefined,
+                });
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Назив *</Label><Input value={editForm.name ?? ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Код *</Label><Input value={editForm.code ?? ""} onChange={(e) => setEditForm({ ...editForm, code: e.target.value })} required /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Тип</Label>
+                  <Select value={editForm.type} onValueChange={(v) => setEditForm({ ...editForm, type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(materialTypes).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Единица мера</Label>
+                  <Select value={editForm.unit} onValueChange={(v) => setEditForm({ ...editForm, unit: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(units).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-amber-600" />Тежина по единица (кг/{units[editForm.unit] ?? editForm.unit})</Label>
+                  <WeightCalculator onApply={(kg) => setEditForm({ ...editForm, weightPerUnit: String(kg) })} />
+                </div>
+                <Input type="number" step="0.0001" value={editForm.weightPerUnit ?? "0"}
+                  onChange={(e) => setEditForm({ ...editForm, weightPerUnit: e.target.value })} />
+                {Number(editForm.weightPerUnit ?? 0) > 0 && (
+                  <p className="text-[11px] text-gray-500">
+                    Тековна залиха {editForm.currentStock} {units[editForm.unit] ?? editForm.unit} ={" "}
+                    <b>{lineWeightKg(editForm.weightPerUnit, editForm.currentStock).toLocaleString("mk-MK")} кг</b>
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Минимална залиха</Label><Input type="number" step="0.001" value={editForm.minStock ?? "0"} onChange={(e) => setEditForm({ ...editForm, minStock: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Локација во склад</Label><Input value={editForm.location ?? ""} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} /></div>
+              </div>
+              <div className="space-y-2"><Label>Опис</Label><Textarea value={editForm.description ?? ""} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>Откажи</Button>
+                <Button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? "Зачувување..." : "Зачувај"}
+                </Button>
+              </div>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

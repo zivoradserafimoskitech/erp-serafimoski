@@ -206,9 +206,12 @@ export function printDeliveryNote(dn: any, settings: any) {
   const s = settings ?? {};
   const c = dn?.customer ?? {};
   const items: any[] = dn?.items ?? [];
+  const totalWeight = items.reduce((a, it) => a + (Number(it.weightKg ?? 0) || 0), 0);
+  const hasWeight = totalWeight > 0;
   const rows = items.map((it, i) => `<tr>
     <td class="c">${i + 1}</td><td>${esc(it.description)}</td>
     <td class="c">${esc(it.unit ?? "")}</td><td class="r"><b>${den(it.quantity)}</b></td>
+    ${hasWeight ? `<td class="r">${Number(it.weightKg ?? 0) > 0 ? den(it.weightKg) : "—"}</td>` : ""}
     <td>${esc(it.notes ?? "")}</td></tr>`).join("");
 
   const body = `
@@ -231,8 +234,12 @@ export function printDeliveryNote(dn: any, settings: any) {
   </div>
   <table class="t"><thead><tr>
     <th class="c" style="width:26px">#</th><th>Опис на стока</th>
-    <th class="c" style="width:44px">ЕМ</th><th class="r" style="width:76px">Количина</th><th style="width:120px">Забелешка</th>
-  </tr></thead><tbody>${rows || `<tr><td colspan="5" class="c" style="padding:14px;color:#999">Нема ставки</td></tr>`}</tbody></table>
+    <th class="c" style="width:44px">ЕМ</th><th class="r" style="width:76px">Количина</th>
+    ${hasWeight ? `<th class="r" style="width:72px">Тежина (кг)</th>` : ""}
+    <th style="width:120px">Забелешка</th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="${hasWeight ? 6 : 5}" class="c" style="padding:14px;color:#999">Нема ставки</td></tr>`}</tbody></table>
+  ${hasWeight ? `<div class="totals"><div class="row" style="border-top:2px solid var(--dark);font-weight:700;padding-top:6px">
+      <span>Вкупна тежина</span><span>${den(totalWeight)} кг</span></div></div>` : ""}
   <div class="box">Стоката е испорачана комплетна и неоштетена. Примачот со потпис ја потврдува испораката.${dn?.notes ? "<br><b>Забелешка:</b> " + esc(dn.notes) : ""}</div>
   <div class="sigs"><div class="sig"><div class="line">Издал</div></div><div class="sig"><div class="line">Превезол</div></div><div class="sig"><div class="line">Примил (потпис и печат)</div></div></div>
   ${footer(s)}`;

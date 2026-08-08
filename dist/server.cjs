@@ -8935,6 +8935,8 @@ var init_schema2 = __esm({
       currentStock: decimal("current_stock", { precision: 12, scale: 3 }).notNull().default("0"),
       avgCost: decimal("avg_cost", { precision: 12, scale: 2 }).notNull().default("0"),
       lastPurchasePrice: decimal("last_purchase_price", { precision: 12, scale: 2 }).notNull().default("0"),
+      // Тежина по единица мера: kg/m за профили, kg/m² за лим, kg/ком за парчиња
+      weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
       location: varchar("location", { length: 100 }),
       isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -9350,6 +9352,8 @@ var init_schema2 = __esm({
       vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
       productId: bigint4("product_id", { mode: "number", unsigned: true }),
       serviceId: bigint4("service_id", { mode: "number", unsigned: true }),
+      materialId: bigint4("material_id", { mode: "number", unsigned: true }),
+      weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
       itemType: varchar("item_type", { length: 50 }).notNull(),
       notes: text("notes"),
       createdAt: timestamp("created_at").defaultNow().notNull()
@@ -10835,7 +10839,11 @@ function getInitSql() {
     `CREATE INDEX IF NOT EXISTS "material_remnants_status_idx" ON "material_remnants" ("status")`,
     // ===== Параметри за кроење =====
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "cut_kerf_mm" numeric(6, 1) DEFAULT '2'`,
-    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "min_remnant_mm" numeric(8, 1) DEFAULT '300'`
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "min_remnant_mm" numeric(8, 1) DEFAULT '300'`,
+    // ===== Тежина по единица (kg/m, kg/m², kg/ком) =====
+    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
+    `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "material_id" bigint`,
+    `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`
   ];
 }
 var init_init_db_sql = __esm({
@@ -32267,6 +32275,7 @@ var storageRouter = createRouter({
     currentStock: external_exports.string().default("0"),
     avgCost: external_exports.string().default("0"),
     lastPurchasePrice: external_exports.string().default("0"),
+    weightPerUnit: external_exports.string().optional(),
     location: external_exports.string().optional()
   })).mutation(async ({ input }) => {
     const db2 = getDb();
@@ -32297,12 +32306,17 @@ var storageRouter = createRouter({
     unit: external_exports.enum(["kg", "m", "m2", "pcs", "l", "sheet", "hour", "m_cut", "bend"]).optional(),
     description: external_exports.string().optional(),
     minStock: external_exports.string().optional(),
+    avgCost: external_exports.string().optional(),
+    lastPurchasePrice: external_exports.string().optional(),
+    weightPerUnit: external_exports.string().optional(),
     location: external_exports.string().optional(),
     isActive: external_exports.enum(["active", "inactive"]).optional()
   })).mutation(async ({ input }) => {
     const db2 = getDb();
     const { id, ...data } = input;
-    await db2.update(materials).set(data).where(eq(materials.id, id));
+    await db2.update(materials).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(materials.id, id));
+    await logAudit({ action: "UPDATE", entityType: "material", entityId: id, description: `\u0418\u0437\u043C\u0435\u043D\u0435\u0442 \u043C\u0430\u0442\u0435\u0440\u0438\u0458\u0430\u043B #${id}` }).catch(() => {
+    });
     return { success: true };
   }),
   materialDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
@@ -35718,6 +35732,8 @@ var accountingRouter = createRouter({
       totalPrice: external_exports.string().default("0"),
       notes: external_exports.string().optional(),
       productId: external_exports.number().optional(),
+      materialId: external_exports.number().optional(),
+      weightKg: external_exports.string().optional(),
       itemType: external_exports.enum(["product", "material", "manual"]).default("manual")
     })).optional()
   })).mutation(async ({ input }) => {

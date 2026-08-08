@@ -494,6 +494,8 @@ export const accountingRouter = createRouter({
         totalPrice: z.string().default("0"),
         notes: z.string().optional(),
         productId: z.number().optional(),
+        materialId: z.number().optional(),
+        weightKg: z.string().optional(),
         itemType: z.enum(["product", "material", "manual"]).default("manual"),
       })).optional(),
     }))
