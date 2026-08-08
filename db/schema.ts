@@ -599,6 +599,8 @@ export const quotationItems = pgTable("quotation_items", {
   totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default("0"),
   totalCost: decimal("total_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+  weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
+  weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
   notes: text("notes"),
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

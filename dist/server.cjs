@@ -9294,6 +9294,8 @@ var init_schema2 = __esm({
       totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default("0"),
       totalCost: decimal("total_cost", { precision: 12, scale: 2 }).notNull().default("0"),
       vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+      weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
+      weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
       notes: text("notes"),
       sortOrder: integer2("sort_order").default(0).notNull(),
       createdAt: timestamp("created_at").defaultNow().notNull()
@@ -11123,7 +11125,9 @@ function getInitSql() {
     `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
     `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "material_id" bigint`,
     `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
-    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "density_key" varchar(20) DEFAULT 'steel'`
+    `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "density_key" varchar(20) DEFAULT 'steel'`,
+    `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
+    `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`
   ];
 }
 var init_init_db_sql = __esm({
@@ -32935,9 +32939,28 @@ var productionRouter = createRouter({
       notes: workOrderMaterials.notes,
       materialName: materials.name,
       materialCode: materials.code,
-      materialUnit: materials.unit
+      materialUnit: materials.unit,
+      materialWeightPerUnit: materials.weightPerUnit
     }).from(workOrderMaterials).leftJoin(materials, eq(workOrderMaterials.materialId, materials.id)).where(eq(workOrderMaterials.workOrderId, input.id));
-    return { ...wo[0], orderNumber, operations: ops, materials: mats };
+    const matsWithWeight = mats.map((m) => ({
+      ...m,
+      weightKg: Math.round(
+        (Number(m.materialWeightPerUnit ?? 0) || 0) * (Number(m.quantity ?? 0) || 0) * 1e3
+      ) / 1e3
+    }));
+    const plannedKg = matsWithWeight.filter((m) => m.isActual !== "actual").reduce((a, m) => a + m.weightKg, 0);
+    const actualKg = matsWithWeight.filter((m) => m.isActual === "actual").reduce((a, m) => a + m.weightKg, 0);
+    return {
+      ...wo[0],
+      orderNumber,
+      operations: ops,
+      materials: matsWithWeight,
+      weightSummary: {
+        plannedKg: Math.round(plannedKg * 1e3) / 1e3,
+        actualKg: Math.round(actualKg * 1e3) / 1e3,
+        diffKg: Math.round((actualKg - plannedKg) * 1e3) / 1e3
+      }
+    };
   }),
   workOrderCreate: publicQuery.input(external_exports.object({
     woNumber: external_exports.string().min(1),
@@ -36679,7 +36702,10 @@ var quotationRouter = createRouter({
       type: materials.type,
       unit: materials.unit,
       currentStock: materials.currentStock,
-      avgCost: materials.avgCost
+      avgCost: materials.avgCost,
+      lastPurchasePrice: materials.lastPurchasePrice,
+      weightPerUnit: materials.weightPerUnit,
+      densityKey: materials.densityKey
     }).from(materials).where(eq(materials.isActive, "active")).orderBy(materials.name);
     if (input?.search) {
       const s = input.search.toLowerCase();
@@ -36874,6 +36900,8 @@ var quotationRouter = createRouter({
       totalPrice: external_exports.string(),
       totalCost: external_exports.string().default("0"),
       vatRate: external_exports.string().default("18"),
+      weightPerUnit: external_exports.string().optional(),
+      weightKg: external_exports.string().optional(),
       notes: external_exports.string().optional(),
       sortOrder: external_exports.number().default(0)
     })).optional()
@@ -36930,6 +36958,8 @@ var quotationRouter = createRouter({
       totalPrice: external_exports.string(),
       totalCost: external_exports.string().default("0"),
       vatRate: external_exports.string().default("18"),
+      weightPerUnit: external_exports.string().optional(),
+      weightKg: external_exports.string().optional(),
       notes: external_exports.string().optional(),
       sortOrder: external_exports.number().default(0)
     })).optional()

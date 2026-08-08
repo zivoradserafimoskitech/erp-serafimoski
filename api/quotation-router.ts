@@ -133,6 +133,8 @@ export const quotationRouter = createRouter({
       let result = await db.select({
         id: materials.id, name: materials.name, code: materials.code,
         type: materials.type, unit: materials.unit, currentStock: materials.currentStock, avgCost: materials.avgCost,
+        lastPurchasePrice: materials.lastPurchasePrice,
+        weightPerUnit: materials.weightPerUnit, densityKey: materials.densityKey,
       }).from(materials).where(eq(materials.isActive, "active")).orderBy(materials.name);
       if (input?.search) {
         const s = input.search.toLowerCase();
@@ -333,6 +335,8 @@ export const quotationRouter = createRouter({
         totalPrice: z.string(),
         totalCost: z.string().default("0"),
         vatRate: z.string().default("18"),
+        weightPerUnit: z.string().optional(),
+        weightKg: z.string().optional(),
         notes: z.string().optional(),
         sortOrder: z.number().default(0),
       })).optional(),
@@ -394,6 +398,8 @@ export const quotationRouter = createRouter({
         totalPrice: z.string(),
         totalCost: z.string().default("0"),
         vatRate: z.string().default("18"),
+        weightPerUnit: z.string().optional(),
+        weightKg: z.string().optional(),
         notes: z.string().optional(),
         sortOrder: z.number().default(0),
       })).optional(),

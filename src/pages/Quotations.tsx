@@ -92,6 +92,7 @@ export default function Quotations() {
     itemType: "material" | "service" | "product"; referenceId: number | null;
     description: string; quantity: string; unit: string; unitPrice: string;
     totalPrice: string; notes: string; sortOrder: number;
+    weightPerUnit?: string; weightKg?: string;
   }>>([]);
 
   const [svcForm, setSvcForm] = useState({ name: "", code: "", type: "laser_cutting" as keyof typeof svcTypes, unit: "m2" as keyof typeof svcUnits, description: "", saleRate: "0", costRate: "0" });
@@ -184,16 +185,23 @@ export default function Quotations() {
       itemType: i.itemType, referenceId: i.referenceId ?? null, description: i.description,
       quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, totalPrice: i.totalPrice,
       notes: i.notes ?? "", sortOrder: i.sortOrder ?? 0,
+      weightPerUnit: String(i.weightPerUnit ?? "0"), weightKg: String(i.weightKg ?? "0"),
     })));
     setEditingId(qDetail.id);
     setDetailOpen(false);
     setQDialog(true);
   };
 
-  const addItem = (type: "material" | "service" | "product", refId: number | null, desc: string, unit: string, price: string) => {
+  const addItem = (
+    type: "material" | "service" | "product",
+    refId: number | null, desc: string, unit: string, price: string,
+    weightPerUnit?: string
+  ) => {
+    const w = Number(weightPerUnit ?? 0) || 0;
     const newItem = {
       itemType: type, referenceId: refId, description: desc, quantity: "1",
       unit, unitPrice: price, totalPrice: price, notes: "", sortOrder: qItems.length,
+      weightPerUnit: String(w), weightKg: (w * 1).toFixed(3),
     };
     setQItems([...qItems, newItem]);
   };
@@ -205,6 +213,8 @@ export default function Quotations() {
       const q = parseFloat(items[idx].quantity) || 0;
       const p = parseFloat(items[idx].unitPrice) || 0;
       items[idx].totalPrice = (q * p).toFixed(2);
+      const w = parseFloat(items[idx].weightPerUnit ?? "0") || 0;
+      items[idx].weightKg = (q * w).toFixed(3);
     }
     setQItems(items);
   };
@@ -294,7 +304,7 @@ export default function Quotations() {
                     <h4 className="font-semibold text-sm">Додади ставки во понуда</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <MaterialPicker tile={{ icon: "🔩", label: "Материјал" }} title="Избери материјал" materials={materialsData as any} value={null}
-                        onSelect={(m: any) => addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0"))} />
+                        onSelect={(m: any) => addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0"), String(m.weightPerUnit ?? "0"))} />
                       <MaterialPicker tile={{ icon: "⚙️", label: "Услуга" }} title="Избери услуга" value={null}
                         materials={servicesData?.map(sv => ({ id: sv.id, code: sv.code, name: sv.name, unit: svcUnits[sv.unit] || sv.unit, lastPurchasePrice: sv.saleRate })) as any}
                         onSelect={(sv: any) => addItem("service", sv.id, sv.name, sv.unit, String(sv.lastPurchasePrice ?? "0"))} />
@@ -311,22 +321,34 @@ export default function Quotations() {
                     {/* Items table */}
                     {qItems.length > 0 && (
                       <div className="space-y-2">
-                        <div className="hidden md:grid md:grid-cols-[3rem_1fr_5.5rem_3rem_6.5rem_6rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
-                          <span>Тип</span><span>Опис</span><span>Кол.</span><span>ЕМ</span><span>Цена</span><span className="text-right">Вкупно</span><span></span>
+                        <div className="hidden md:grid md:grid-cols-[3rem_1fr_5.5rem_3rem_6.5rem_4.5rem_6rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
+                          <span>Тип</span><span>Опис</span><span>Кол.</span><span>ЕМ</span><span>Цена</span><span className="text-right">Тежина</span><span className="text-right">Вкупно</span><span></span>
                         </div>
                         <div className="space-y-1.5">
                           {qItems.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-[3rem_1fr_5.5rem_3rem_6.5rem_6rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
+                            <div key={idx} className="grid grid-cols-[3rem_1fr_5.5rem_3rem_6.5rem_4.5rem_6rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
                               <Badge variant="outline" className="justify-center text-[10px]">{item.itemType === "material" ? "Мат" : item.itemType === "service" ? "Усл" : "Прд"}</Badge>
                               <Input className="h-8 text-xs min-w-0" value={item.description} onChange={e => updateItem(idx, "description", e.target.value)} />
                               <Input className="h-8 text-xs" type="number" step="0.001" value={item.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
                               <span className="text-xs text-gray-500 text-center">{item.unit}</span>
                               <Input className="h-8 text-xs" type="number" step="0.01" value={item.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                              <span className="text-[11px] text-right whitespace-nowrap text-gray-500">
+                                {Number(item.weightKg ?? 0) > 0 ? `${Number(item.weightKg).toFixed(1)} кг` : "—"}
+                              </span>
                               <span className="font-medium text-xs text-right whitespace-nowrap">{Number(item.totalPrice).toLocaleString("mk-MK")}</span>
                               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(idx)}>×</Button>
                             </div>
                           ))}
                         </div>
+                        {qItems.some(i => Number(i.weightKg ?? 0) > 0) && (
+                          <div className="flex justify-end text-sm">
+                            <span className="text-gray-500">
+                              Вкупна тежина: <b className="text-gray-800">
+                                {qItems.reduce((a, i) => a + (Number(i.weightKg ?? 0) || 0), 0).toFixed(2)} кг
+                              </b>
+                            </span>
+                          </div>
+                        )}
                         <div className="flex justify-end gap-4 text-sm">
                           <span className="text-gray-500">Нето: <b>{calcTotals().subtotal}</b> {qForm.currency}</span>
                           <span className="text-gray-500">ДДВ ({qForm.vatRate}%): <b>{calcTotals().vatAmount}</b></span>

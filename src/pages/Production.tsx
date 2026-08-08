@@ -358,6 +358,34 @@ export default function Production() {
                 </TabsContent>
 
                 <TabsContent value="materials" className="space-y-4">
+                  {woDetail.weightSummary && (woDetail.weightSummary.plannedKg > 0 || woDetail.weightSummary.actualKg > 0) && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="text-[11px] text-gray-500">Планирано</div>
+                        <div className="text-lg font-bold">{woDetail.weightSummary.plannedKg.toLocaleString("mk-MK")} <span className="text-xs text-gray-400">кг</span></div>
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                        <div className="text-[11px] text-emerald-700">Реално потрошено</div>
+                        <div className="text-lg font-bold text-emerald-800">{woDetail.weightSummary.actualKg.toLocaleString("mk-MK")} <span className="text-xs text-emerald-600">кг</span></div>
+                      </div>
+                      <div className={`rounded-lg border px-3 py-2 ${
+                        woDetail.weightSummary.diffKg > 0
+                          ? "border-red-200 bg-red-50"
+                          : woDetail.weightSummary.diffKg < 0
+                          ? "border-blue-200 bg-blue-50"
+                          : "border-gray-200 bg-gray-50"
+                      }`}>
+                        <div className="text-[11px] text-gray-500">Разлика</div>
+                        <div className={`text-lg font-bold ${
+                          woDetail.weightSummary.diffKg > 0 ? "text-red-700"
+                            : woDetail.weightSummary.diffKg < 0 ? "text-blue-700" : ""
+                        }`}>
+                          {woDetail.weightSummary.diffKg > 0 ? "+" : ""}
+                          {woDetail.weightSummary.diffKg.toLocaleString("mk-MK")} <span className="text-xs text-gray-400">кг</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {(!woDetail.materials || woDetail.materials.length === 0) ? (<p className="text-gray-400 text-sm">Нема материјали</p>) : (
                     <div className="space-y-2">
                       {woDetail.materials.map((wm: any) => (
@@ -368,6 +396,9 @@ export default function Production() {
                             <span className="text-gray-400 text-xs ml-2">{wm.quantity} {wm.materialUnit}</span>
                             <span className="text-blue-500 text-xs ml-2">@ {wm.unitCost} ден</span>
                             <span className="font-semibold text-xs ml-2">= {wm.totalCost} ден</span>
+                            {Number(wm.weightKg ?? 0) > 0 && (
+                              <span className="text-slate-600 text-xs ml-2 font-medium">{Number(wm.weightKg).toFixed(1)} кг</span>
+                            )}
                             <Badge className={wm.isActual === "actual" ? "bg-emerald-100 text-emerald-800 ml-2" : "bg-gray-100 text-gray-600 ml-2"}>
                               {wm.isActual === "actual" ? "Реално" : "Планирано"}
                             </Badge>

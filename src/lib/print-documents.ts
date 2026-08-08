@@ -161,10 +161,13 @@ export function printWorkOrder(wo: any, settings: any) {
   const mats: any[] = wo?.materials ?? [];
   const ops: any[] = wo?.operations ?? [];
 
+  const ws = wo?.weightSummary ?? null;
+  const hasKg = mats.some((m) => Number(m.weightKg ?? 0) > 0);
   const matRows = mats.map((m, i) => `<tr>
     <td class="c">${i + 1}</td><td>${esc(m.materialCode ?? "")}</td><td>${esc(m.materialName ?? "—")}</td>
     <td class="c">${esc(m.materialUnit ?? "")}</td><td class="r">${den(m.quantity)}</td>
-    <td class="c">${m.isActual ? "Реално" : "Планирано"}</td></tr>`).join("");
+    ${hasKg ? `<td class="r">${Number(m.weightKg ?? 0) > 0 ? den(m.weightKg) : "—"}</td>` : ""}
+    <td class="c">${m.isActual === "actual" ? "Реално" : "Планирано"}</td></tr>`).join("");
 
   const opRows = ops.map((o) => `<tr>
     <td class="c">${o.sequence ?? ""}</td><td>${esc(OP_MK[o.operation] ?? o.operation)}</td>
@@ -188,8 +191,16 @@ export function printWorkOrder(wo: any, settings: any) {
   <div class="stitle">Материјали</div>
   <table class="t"><thead><tr>
     <th class="c" style="width:26px">#</th><th style="width:70px">Код</th><th>Материјал</th>
-    <th class="c" style="width:40px">ЕМ</th><th class="r" style="width:70px">Количина</th><th class="c" style="width:70px">Тип</th>
-  </tr></thead><tbody>${matRows || `<tr><td colspan="6" class="c" style="padding:12px;color:#999">Нема материјали</td></tr>`}</tbody></table>
+    <th class="c" style="width:40px">ЕМ</th><th class="r" style="width:70px">Количина</th>
+    ${hasKg ? `<th class="r" style="width:64px">Тежина (кг)</th>` : ""}
+    <th class="c" style="width:70px">Тип</th>
+  </tr></thead><tbody>${matRows || `<tr><td colspan="${hasKg ? 7 : 6}" class="c" style="padding:12px;color:#999">Нема материјали</td></tr>`}</tbody></table>
+  ${ws && (ws.plannedKg > 0 || ws.actualKg > 0) ? `<div class="totals" style="width:76mm">
+      <div class="row"><span>Планирано</span><b>${den(ws.plannedKg)} кг</b></div>
+      <div class="row"><span>Реално потрошено</span><b>${den(ws.actualKg)} кг</b></div>
+      <div class="row" style="border-top:1.5px solid var(--dark);font-weight:700;padding-top:5px">
+        <span>Разлика</span><span>${ws.diffKg > 0 ? "+" : ""}${den(ws.diffKg)} кг</span></div>
+    </div>` : ""}
   <div class="stitle">Операции</div>
   <table class="t"><thead><tr>
     <th class="c" style="width:30px">Ред</th><th style="width:120px">Операција</th><th>Опис</th>
@@ -253,9 +264,13 @@ export function printQuotation(q: any, settings: any) {
   const items: any[] = q?.items ?? [];
   const vatRate = Number(q?.vatRate ?? s?.defaultVatRate ?? 18);
   const logo = "/logo.png?v=2";
+  const totalKg = items.reduce((a, it) => a + (Number(it.weightKg ?? 0) || 0), 0);
+  const hasKg = totalKg > 0;
   const rows = items.map((it, i) => `<tr>
     <td class="c dim">${String(i + 1).padStart(2, "0")}</td><td class="desc">${esc(it.description)}</td><td class="c dim">${esc(it.unit ?? "")}</td>
-    <td class="r">${den(it.quantity)}</td><td class="r">${den(it.unitPrice)}</td>
+    <td class="r">${den(it.quantity)}</td>
+    ${hasKg ? `<td class="r dim">${Number(it.weightKg ?? 0) > 0 ? den(it.weightKg) : "—"}</td>` : ""}
+    <td class="r">${den(it.unitPrice)}</td>
     <td class="r"><b>${den(it.totalPrice)}</b></td></tr>`).join("");
 
   const html = `<!doctype html>
@@ -348,10 +363,13 @@ export function printQuotation(q: any, settings: any) {
   </div>
   <table class="t"><thead><tr>
     <th class="c" style="width:28px">#</th><th>Опис</th><th class="c" style="width:44px">ЕМ</th>
-    <th class="r" style="width:62px">Кол.</th><th class="r" style="width:82px">Цена (ден.)</th>
+    <th class="r" style="width:62px">Кол.</th>
+    ${hasKg ? `<th class="r" style="width:62px">Тежина (кг)</th>` : ""}
+    <th class="r" style="width:82px">Цена (ден.)</th>
     <th class="r" style="width:92px">Вкупно (ден.)</th>
-  </tr></thead><tbody>${rows || `<tr><td colspan="6" class="c" style="padding:16px;color:#999">Нема ставки</td></tr>`}</tbody></table>
+  </tr></thead><tbody>${rows || `<tr><td colspan="${hasKg ? 7 : 6}" class="c" style="padding:16px;color:#999">Нема ставки</td></tr>`}</tbody></table>
   <div class="sum-wrap"><div class="sum">
+    ${hasKg ? `<div class="row"><span>Вкупна тежина:</span><b>${den(totalKg)} кг</b></div>` : ""}
     <div class="row"><span>Основица:</span><b>${den(q?.subtotal)} ден.</b></div>
     <div class="row"><span>ДДВ (${vatRate}%):</span><b>${den(q?.vatAmount)} ден.</b></div>
     <div class="grand"><small>ВКУПНО</small><span>${den(q?.totalAmount)} ден.</span></div>
@@ -374,9 +392,12 @@ export function printRequisition(wo: any, settings: any) {
   const s = settings ?? {};
   const mats: any[] = wo?.materials ?? [];
   const trbNumber = String(wo?.woNumber ?? "").replace(/^РН/, "ТРБ") || "ТРБ";
+  const totalKg = mats.reduce((a, m) => a + (Number(m.weightKg ?? 0) || 0), 0);
+  const hasKg = totalKg > 0;
   const rows = mats.map((m, i) => `<tr>
     <td class="c">${i + 1}</td><td>${esc(m.materialCode ?? "")}</td><td>${esc(m.materialName ?? "—")}</td>
     <td class="c">${esc(m.materialUnit ?? "")}</td><td class="r"><b>${den(m.quantity)}</b></td>
+    ${hasKg ? `<td class="r">${Number(m.weightKg ?? 0) > 0 ? den(m.weightKg) : "—"}</td>` : ""}
     <td class="c" style="width:70px;border-bottom:1px solid #ccc"></td>
     <td style="width:90px"></td></tr>`).join("");
 
@@ -394,8 +415,11 @@ export function printRequisition(wo: any, settings: any) {
   <table class="t"><thead><tr>
     <th class="c" style="width:26px">#</th><th style="width:64px">Код</th><th>Материјал</th>
     <th class="c" style="width:40px">ЕМ</th><th class="r" style="width:72px">Побарано</th>
+    ${hasKg ? `<th class="r" style="width:64px">Тежина (кг)</th>` : ""}
     <th class="c" style="width:70px">Издадено</th><th style="width:90px">Забелешка</th>
-  </tr></thead><tbody>${rows || `<tr><td colspan="7" class="c" style="padding:12px;color:#999">Нема материјали на налогот — додај ги прво во деталите</td></tr>`}</tbody></table>
+  </tr></thead><tbody>${rows || `<tr><td colspan="${hasKg ? 8 : 7}" class="c" style="padding:12px;color:#999">Нема материјали на налогот — додај ги прво во деталите</td></tr>`}</tbody></table>
+  ${hasKg ? `<div class="totals"><div class="row" style="border-top:2px solid var(--dark);font-weight:700;padding-top:6px">
+      <span>Вкупна тежина</span><span>${den(totalKg)} кг</span></div></div>` : ""}
   <div class="sigs"><div class="sig"><div class="line">Побарал</div></div><div class="sig"><div class="line">Одобрил</div></div><div class="sig"><div class="line">Издал (магационер)</div></div><div class="sig"><div class="line">Примил</div></div></div>
   ${footer(s)}`;
   openPrint(shell(`Требовање ${trbNumber}`, "#3a72b8", body));

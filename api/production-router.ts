@@ -58,11 +58,32 @@ export const productionRouter = createRouter({
           unitCost: workOrderMaterials.unitCost, totalCost: workOrderMaterials.totalCost,
           isActual: workOrderMaterials.isActual, notes: workOrderMaterials.notes,
           materialName: materials.name, materialCode: materials.code, materialUnit: materials.unit,
+          materialWeightPerUnit: materials.weightPerUnit,
         })
         .from(workOrderMaterials)
         .leftJoin(materials, eq(workOrderMaterials.materialId, materials.id))
         .where(eq(workOrderMaterials.workOrderId, input.id));
-      return { ...wo[0], orderNumber, operations: ops, materials: mats };
+      const matsWithWeight = (mats as any[]).map((m) => ({
+        ...m,
+        weightKg:
+          Math.round(
+            (Number(m.materialWeightPerUnit ?? 0) || 0) * (Number(m.quantity ?? 0) || 0) * 1000
+          ) / 1000,
+      }));
+      const plannedKg = matsWithWeight
+        .filter((m) => m.isActual !== "actual")
+        .reduce((a, m) => a + m.weightKg, 0);
+      const actualKg = matsWithWeight
+        .filter((m) => m.isActual === "actual")
+        .reduce((a, m) => a + m.weightKg, 0);
+      return {
+        ...wo[0], orderNumber, operations: ops, materials: matsWithWeight,
+        weightSummary: {
+          plannedKg: Math.round(plannedKg * 1000) / 1000,
+          actualKg: Math.round(actualKg * 1000) / 1000,
+          diffKg: Math.round((actualKg - plannedKg) * 1000) / 1000,
+        },
+      };
     }),
 
   workOrderCreate: publicQuery
