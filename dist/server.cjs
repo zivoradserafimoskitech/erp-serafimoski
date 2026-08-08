@@ -9088,6 +9088,8 @@ var init_schema2 = __esm({
       material: varchar("material", { length: 255 }),
       dimensions: varchar("dimensions", { length: 255 }),
       productId: bigint4("product_id", { mode: "number", unsigned: true }),
+      weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
+      weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
       notes: text("notes"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
@@ -9296,6 +9298,9 @@ var init_schema2 = __esm({
       vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
       weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
       weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
+      // Ценење: "unit" = по единица мера, "kg" = внесена е цена по килограм
+      priceMode: varchar("price_mode", { length: 10 }).default("unit"),
+      pricePerKg: decimal("price_per_kg", { precision: 12, scale: 4 }).default("0"),
       notes: text("notes"),
       sortOrder: integer2("sort_order").default(0).notNull(),
       createdAt: timestamp("created_at").defaultNow().notNull()
@@ -11127,7 +11132,11 @@ function getInitSql() {
     `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
     `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "density_key" varchar(20) DEFAULT 'steel'`,
     `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
-    `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`
+    `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
+    `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
+    `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "weight_kg" numeric(12, 3) DEFAULT '0'`,
+    `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_mode" varchar(10) DEFAULT 'unit'`,
+    `ALTER TABLE "quotation_items" ADD COLUMN IF NOT EXISTS "price_per_kg" numeric(12, 4) DEFAULT '0'`
   ];
 }
 var init_init_db_sql = __esm({
@@ -33219,6 +33228,22 @@ var productionRouter = createRouter({
     const customerId = ordRes[0].customerId;
     const fgRows = (await db2.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.workOrderId, input.workOrderId))).filter((f) => (parseFloat(String(f.quantity ?? "0")) || 0) > 0);
     if (fgRows.length === 0) throw new Error("\u041D\u0435\u043C\u0430 \u0437\u0430\u043B\u0438\u0445\u0430 \u043D\u0430 \u0433\u043E\u0442\u043E\u0432 \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434 \u043E\u0434 \u043E\u0432\u043E\u0458 \u043D\u0430\u043B\u043E\u0433 \u2014 \u0438\u043B\u0438 \u043D\u0435 \u0435 \u0437\u0430\u0432\u0435\u0434\u0435\u043D\u0430, \u0438\u043B\u0438 \u0432\u0435\u045C\u0435 \u0435 \u0438\u0441\u043F\u043E\u0440\u0430\u0447\u0430\u043D\u0430");
+    const woMats = await db2.select({
+      quantity: workOrderMaterials.quantity,
+      isActual: workOrderMaterials.isActual,
+      weightPerUnit: materials.weightPerUnit
+    }).from(workOrderMaterials).leftJoin(materials, eq(workOrderMaterials.materialId, materials.id)).where(eq(workOrderMaterials.workOrderId, input.workOrderId));
+    const kgOf = (rows) => rows.reduce(
+      (a, m) => a + (Number(m.weightPerUnit ?? 0) || 0) * (Number(m.quantity ?? 0) || 0),
+      0
+    );
+    const actualRows = woMats.filter((m) => m.isActual === "actual");
+    const totalMaterialKg = actualRows.length > 0 ? kgOf(actualRows) : kgOf(woMats);
+    const totalProducedQty = fgRows.reduce(
+      (a, f) => a + (parseFloat(String(f.quantity ?? "0")) || 0),
+      0
+    );
+    const kgPerPiece = totalProducedQty > 0 ? totalMaterialKg / totalProducedQty : 0;
     const { getNextDocNumber: getNextDocNumber2, bumpDocCounter: bumpDocCounter2 } = await Promise.resolve().then(() => (init_counters_helper(), counters_helper_exports));
     const dnNumber = await getNextDocNumber2("deliveryNote");
     await bumpDocCounter2("deliveryNote", dnNumber).catch(() => {
@@ -33231,7 +33256,7 @@ var productionRouter = createRouter({
       status: "issued",
       issueDate: today,
       totalItems: fgRows.length,
-      notes: `\u041E\u0434 \u0440\u0430\u0431\u043E\u0442\u0435\u043D \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}`
+      notes: totalMaterialKg > 0 ? `\u041E\u0434 \u0440\u0430\u0431\u043E\u0442\u0435\u043D \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber} \xB7 \u0432\u043A\u0443\u043F\u043D\u0430 \u0442\u0435\u0436\u0438\u043D\u0430 ${totalMaterialKg.toFixed(1)} \u043A\u0433` : `\u041E\u0434 \u0440\u0430\u0431\u043E\u0442\u0435\u043D \u043D\u0430\u043B\u043E\u0433 ${wo.woNumber}`
     });
     const dnId = Number(dnRes[0].insertId);
     for (const fg of fgRows) {
@@ -33247,7 +33272,8 @@ var productionRouter = createRouter({
         totalPrice: "0",
         vatRate: "0",
         productId: fg.productId,
-        itemType: "product"
+        itemType: "product",
+        weightKg: (kgPerPiece * qty).toFixed(3)
       });
       await db2.update(finishedGoodsStock).set({ quantity: "0.000", updatedAt: /* @__PURE__ */ new Date() }).where(eq(finishedGoodsStock.id, fg.id));
     }
@@ -36902,6 +36928,8 @@ var quotationRouter = createRouter({
       vatRate: external_exports.string().default("18"),
       weightPerUnit: external_exports.string().optional(),
       weightKg: external_exports.string().optional(),
+      priceMode: external_exports.enum(["unit", "kg"]).optional(),
+      pricePerKg: external_exports.string().optional(),
       notes: external_exports.string().optional(),
       sortOrder: external_exports.number().default(0)
     })).optional()
@@ -36960,6 +36988,8 @@ var quotationRouter = createRouter({
       vatRate: external_exports.string().default("18"),
       weightPerUnit: external_exports.string().optional(),
       weightKg: external_exports.string().optional(),
+      priceMode: external_exports.enum(["unit", "kg"]).optional(),
+      pricePerKg: external_exports.string().optional(),
       notes: external_exports.string().optional(),
       sortOrder: external_exports.number().default(0)
     })).optional()
@@ -37048,6 +37078,8 @@ var quotationRouter = createRouter({
         marginAmount: (parseFloat(i.totalPrice) - parseFloat(i.totalCost)).toFixed(2),
         material: i.itemType === "material" ? i.description : null,
         productId: i.referenceId,
+        weightPerUnit: i.weightPerUnit ?? "0",
+        weightKg: i.weightKg ?? "0",
         notes: i.notes
       })));
     }

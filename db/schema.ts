@@ -329,6 +329,8 @@ export const orderItems = pgTable("order_items", {
   material: varchar("material", { length: 255 }),
   dimensions: varchar("dimensions", { length: 255 }),
   productId: bigint("product_id", { mode: "number", unsigned: true }),
+  weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
+  weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -601,6 +603,9 @@ export const quotationItems = pgTable("quotation_items", {
   vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
   weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
   weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
+  // Ценење: "unit" = по единица мера, "kg" = внесена е цена по килограм
+  priceMode: varchar("price_mode", { length: 10 }).default("unit"),
+  pricePerKg: decimal("price_per_kg", { precision: 12, scale: 4 }).default("0"),
   notes: text("notes"),
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

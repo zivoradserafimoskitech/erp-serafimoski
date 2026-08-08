@@ -270,7 +270,11 @@ export function printQuotation(q: any, settings: any) {
     <td class="c dim">${String(i + 1).padStart(2, "0")}</td><td class="desc">${esc(it.description)}</td><td class="c dim">${esc(it.unit ?? "")}</td>
     <td class="r">${den(it.quantity)}</td>
     ${hasKg ? `<td class="r dim">${Number(it.weightKg ?? 0) > 0 ? den(it.weightKg) : "—"}</td>` : ""}
-    <td class="r">${den(it.unitPrice)}</td>
+    <td class="r">${den(it.unitPrice)}${
+      it.priceMode === "kg" && Number(it.pricePerKg ?? 0) > 0
+        ? `<div style="font-size:8px;color:#888;font-weight:400">${den(it.pricePerKg)} ден/кг</div>`
+        : ""
+    }</td>
     <td class="r"><b>${den(it.totalPrice)}</b></td></tr>`).join("");
 
   const html = `<!doctype html>

@@ -337,6 +337,8 @@ export const quotationRouter = createRouter({
         vatRate: z.string().default("18"),
         weightPerUnit: z.string().optional(),
         weightKg: z.string().optional(),
+        priceMode: z.enum(["unit", "kg"]).optional(),
+        pricePerKg: z.string().optional(),
         notes: z.string().optional(),
         sortOrder: z.number().default(0),
       })).optional(),
@@ -400,6 +402,8 @@ export const quotationRouter = createRouter({
         vatRate: z.string().default("18"),
         weightPerUnit: z.string().optional(),
         weightKg: z.string().optional(),
+        priceMode: z.enum(["unit", "kg"]).optional(),
+        pricePerKg: z.string().optional(),
         notes: z.string().optional(),
         sortOrder: z.number().default(0),
       })).optional(),
@@ -504,6 +508,8 @@ export const quotationRouter = createRouter({
           marginAmount: (parseFloat(i.totalPrice) - parseFloat(i.totalCost)).toFixed(2),
           material: i.itemType === "material" ? i.description : null,
           productId: i.referenceId,
+          weightPerUnit: i.weightPerUnit ?? "0",
+          weightKg: i.weightKg ?? "0",
           notes: i.notes,
         })));
       }

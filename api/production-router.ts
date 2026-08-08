@@ -368,6 +368,32 @@ export const productionRouter = createRouter({
         .filter(f => (parseFloat(String(f.quantity ?? "0")) || 0) > 0);
       if (fgRows.length === 0) throw new Error("Нема залиха на готов производ од овој налог — или не е заведена, или веќе е испорачана");
 
+      // Тежината на готовиот производ = потрошениот материјал на овој налог.
+      // Ако има реално потрошено — тоа е вистината; инаку планираното.
+      const woMats = await db
+        .select({
+          quantity: workOrderMaterials.quantity,
+          isActual: workOrderMaterials.isActual,
+          weightPerUnit: materials.weightPerUnit,
+        })
+        .from(workOrderMaterials)
+        .leftJoin(materials, eq(workOrderMaterials.materialId, materials.id))
+        .where(eq(workOrderMaterials.workOrderId, input.workOrderId));
+
+      const kgOf = (rows: any[]) =>
+        rows.reduce(
+          (a, m) => a + (Number(m.weightPerUnit ?? 0) || 0) * (Number(m.quantity ?? 0) || 0),
+          0
+        );
+      const actualRows = woMats.filter((m: any) => m.isActual === "actual");
+      const totalMaterialKg = actualRows.length > 0 ? kgOf(actualRows) : kgOf(woMats as any[]);
+      const totalProducedQty = fgRows.reduce(
+        (a, f) => a + (parseFloat(String(f.quantity ?? "0")) || 0),
+        0
+      );
+      // Тежина по едно парче готов производ
+      const kgPerPiece = totalProducedQty > 0 ? totalMaterialKg / totalProducedQty : 0;
+
       const { getNextDocNumber, bumpDocCounter } = await import("./counters-helper");
       const dnNumber = await getNextDocNumber("deliveryNote");
       await bumpDocCounter("deliveryNote", dnNumber).catch(() => {});
@@ -377,7 +403,9 @@ export const productionRouter = createRouter({
         dnNumber, customerId, orderId: wo.orderId,
         status: "issued", issueDate: today,
         totalItems: fgRows.length,
-        notes: `Од работен налог ${wo.woNumber}`,
+        notes: totalMaterialKg > 0
+          ? `Од работен налог ${wo.woNumber} · вкупна тежина ${totalMaterialKg.toFixed(1)} кг`
+          : `Од работен налог ${wo.woNumber}`,
       } as any);
       const dnId = Number(dnRes[0].insertId);
 
@@ -391,6 +419,7 @@ export const productionRouter = createRouter({
           quantity: qty.toFixed(3), unit: prod?.unit ?? "ком",
           unitPrice: "0", totalPrice: "0", vatRate: "0",
           productId: fg.productId, itemType: "product",
+          weightKg: (kgPerPiece * qty).toFixed(3),
         } as any);
         await db.update(finishedGoodsStock)
           .set({ quantity: "0.000", updatedAt: new Date() } as any)

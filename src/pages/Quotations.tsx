@@ -93,6 +93,7 @@ export default function Quotations() {
     description: string; quantity: string; unit: string; unitPrice: string;
     totalPrice: string; notes: string; sortOrder: number;
     weightPerUnit?: string; weightKg?: string;
+    priceMode?: "unit" | "kg"; pricePerKg?: string;
   }>>([]);
 
   const [svcForm, setSvcForm] = useState({ name: "", code: "", type: "laser_cutting" as keyof typeof svcTypes, unit: "m2" as keyof typeof svcUnits, description: "", saleRate: "0", costRate: "0" });
@@ -186,6 +187,8 @@ export default function Quotations() {
       quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, totalPrice: i.totalPrice,
       notes: i.notes ?? "", sortOrder: i.sortOrder ?? 0,
       weightPerUnit: String(i.weightPerUnit ?? "0"), weightKg: String(i.weightKg ?? "0"),
+      priceMode: (i.priceMode === "kg" ? "kg" : "unit") as "unit" | "kg",
+      pricePerKg: String(i.pricePerKg ?? "0"),
     })));
     setEditingId(qDetail.id);
     setDetailOpen(false);
@@ -202,6 +205,8 @@ export default function Quotations() {
       itemType: type, referenceId: refId, description: desc, quantity: "1",
       unit, unitPrice: price, totalPrice: price, notes: "", sortOrder: qItems.length,
       weightPerUnit: String(w), weightKg: (w * 1).toFixed(3),
+      priceMode: "unit" as "unit" | "kg",
+      pricePerKg: w > 0 ? ((Number(price) || 0) / w).toFixed(4) : "0",
     };
     setQItems([...qItems, newItem]);
   };
@@ -209,14 +214,35 @@ export default function Quotations() {
   const updateItem = (idx: number, field: string, value: string) => {
     const items = [...qItems];
     (items[idx] as any)[field] = value;
-    if (field === "quantity" || field === "unitPrice") {
-      const q = parseFloat(items[idx].quantity) || 0;
-      const p = parseFloat(items[idx].unitPrice) || 0;
-      items[idx].totalPrice = (q * p).toFixed(2);
-      const w = parseFloat(items[idx].weightPerUnit ?? "0") || 0;
-      items[idx].weightKg = (q * w).toFixed(3);
+
+    if (field === "quantity" || field === "unitPrice" || field === "pricePerKg" || field === "priceMode") {
+      const it = items[idx];
+      const q = parseFloat(it.quantity) || 0;
+      const w = parseFloat(it.weightPerUnit ?? "0") || 0;
+
+      it.weightKg = (q * w).toFixed(3);
+
+      if (it.priceMode === "kg" && w > 0) {
+        // Цената доаѓа од килограмите: ден/кг × кг/единица = ден/единица
+        const perKg = parseFloat(it.pricePerKg ?? "0") || 0;
+        it.unitPrice = (perKg * w).toFixed(2);
+      } else if (w > 0) {
+        // Обратно: од цена по единица изведи колку испаѓа по килограм
+        const p = parseFloat(it.unitPrice) || 0;
+        it.pricePerKg = (p / w).toFixed(4);
+      }
+
+      const p2 = parseFloat(it.unitPrice) || 0;
+      it.totalPrice = (q * p2).toFixed(2);
     }
     setQItems(items);
+  };
+
+  const togglePriceMode = (idx: number) => {
+    const it = qItems[idx];
+    const w = parseFloat(it.weightPerUnit ?? "0") || 0;
+    if (w <= 0) return;
+    updateItem(idx, "priceMode", it.priceMode === "kg" ? "unit" : "kg");
   };
 
   const removeItem = (idx: number) => setQItems(qItems.filter((_, i) => i !== idx));
@@ -321,17 +347,41 @@ export default function Quotations() {
                     {/* Items table */}
                     {qItems.length > 0 && (
                       <div className="space-y-2">
-                        <div className="hidden md:grid md:grid-cols-[3rem_1fr_5.5rem_3rem_6.5rem_4.5rem_6rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
+                        <div className="hidden md:grid md:grid-cols-[3rem_1fr_5rem_2.5rem_8.5rem_4.5rem_6rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
                           <span>Тип</span><span>Опис</span><span>Кол.</span><span>ЕМ</span><span>Цена</span><span className="text-right">Тежина</span><span className="text-right">Вкупно</span><span></span>
                         </div>
                         <div className="space-y-1.5">
                           {qItems.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-[3rem_1fr_5.5rem_3rem_6.5rem_4.5rem_6rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
+                            <div key={idx} className="grid grid-cols-[3rem_1fr_5rem_2.5rem_8.5rem_4.5rem_6rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
                               <Badge variant="outline" className="justify-center text-[10px]">{item.itemType === "material" ? "Мат" : item.itemType === "service" ? "Усл" : "Прд"}</Badge>
                               <Input className="h-8 text-xs min-w-0" value={item.description} onChange={e => updateItem(idx, "description", e.target.value)} />
                               <Input className="h-8 text-xs" type="number" step="0.001" value={item.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
                               <span className="text-xs text-gray-500 text-center">{item.unit}</span>
-                              <Input className="h-8 text-xs" type="number" step="0.01" value={item.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                              <div className="flex items-center gap-1">
+                                <div className="flex-1 min-w-0">
+                                  <Input className="h-8 text-xs" type="number" step="0.01"
+                                    value={item.priceMode === "kg" ? (item.pricePerKg ?? "0") : item.unitPrice}
+                                    onChange={e => updateItem(idx, item.priceMode === "kg" ? "pricePerKg" : "unitPrice", e.target.value)} />
+                                  {Number(item.weightPerUnit ?? 0) > 0 && (
+                                    <div className="text-[10px] leading-tight text-gray-400 px-1">
+                                      {item.priceMode === "kg"
+                                        ? `= ${Number(item.unitPrice).toFixed(2)} ден/${item.unit}`
+                                        : `= ${Number(item.pricePerKg ?? 0).toFixed(2)} ден/кг`}
+                                    </div>
+                                  )}
+                                </div>
+                                {Number(item.weightPerUnit ?? 0) > 0 && (
+                                  <button type="button" onClick={() => togglePriceMode(idx)}
+                                    title={item.priceMode === "kg" ? "Цена по килограм — кликни за по единица" : "Цена по единица — кликни за по килограм"}
+                                    className={`shrink-0 h-8 px-1.5 rounded border text-[10px] font-semibold ${
+                                      item.priceMode === "kg"
+                                        ? "bg-amber-100 border-amber-300 text-amber-800"
+                                        : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"
+                                    }`}>
+                                    {item.priceMode === "kg" ? "кг" : item.unit}
+                                  </button>
+                                )}
+                              </div>
                               <span className="text-[11px] text-right whitespace-nowrap text-gray-500">
                                 {Number(item.weightKg ?? 0) > 0 ? `${Number(item.weightKg).toFixed(1)} кг` : "—"}
                               </span>
