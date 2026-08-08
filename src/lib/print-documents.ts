@@ -581,6 +581,7 @@ export function printRemnantLabels(remnants: any[], settings: any) {
   const list = Array.isArray(remnants) ? remnants : [remnants];
   if (list.length === 0) return;
 
+  const totalKg = list.reduce((a, r) => a + (Number(r.weightKg ?? 0) || 0), 0);
   const cards = list
     .map((r) => {
       const lenM = (Number(r.lengthMm ?? 0) / 1000).toFixed(3);
@@ -593,7 +594,9 @@ export function printRemnantLabels(remnants: any[], settings: any) {
         <div class="lbl-mat">${esc(r.materialName ?? "")}</div>
         <div class="lbl-sub">${esc(r.materialCode ?? "")}</div>
         <div class="lbl-len">${esc(Number(r.lengthMm ?? 0).toFixed(0))} <small>mm</small></div>
-        <div class="lbl-sub">${lenM} m${(r.quantity ?? 1) > 1 ? ` · ${r.quantity} ком` : ""}</div>
+        <div class="lbl-sub">${lenM} m${(r.quantity ?? 1) > 1 ? ` · ${r.quantity} ком` : ""}${
+          Number(r.weightKg ?? 0) > 0 ? ` · <b>${Number(r.weightKg).toFixed(1)} кг</b>` : ""
+        }</div>
         <div class="lbl-foot">${r.location ? "📍 " + esc(r.location) : "&nbsp;"}</div>
       </div>`;
     })
@@ -619,7 +622,9 @@ export function printRemnantLabels(remnants: any[], settings: any) {
   .lbl-foot { font-size:7.5px; color:#555; margin-top:1.5mm; border-top:1px dotted #ddd; padding-top:1.5mm; }
   @media print { body { padding:0; } }
 </style></head><body>
-  <h1>Етикети за остатоци · ${list.length} ${list.length === 1 ? "парче" : "парчиња"}</h1>
+  <h1>Етикети за остатоци · ${list.length} ${list.length === 1 ? "парче" : "парчиња"}${
+    totalKg > 0 ? ` · вкупно ${totalKg.toFixed(1)} кг` : ""
+  }</h1>
   <div class="sheet">${cards}</div>
 <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
 </body></html>`;

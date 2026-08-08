@@ -219,3 +219,54 @@ export function lineWeightKg(weightPerUnit: any, quantity: any): number {
   if (!Number.isFinite(w) || !Number.isFinite(q)) return 0;
   return Math.round(w * q * 1000) / 1000;
 }
+
+// ── Значење на полето „тежина по единица“ според мерната единица ──────────
+export type UnitMeta = {
+  applicable: boolean;   // дали полето воопшто има смисла
+  locked: boolean;       // дали вредноста е фиксна (kg → 1)
+  fixedValue?: string;
+  label: string;         // етикета на полето
+  hint: string;          // објаснување под полето
+  shortLabel: string;    // за табела: „кг/м“
+};
+
+export function unitMeta(unit: string): UnitMeta {
+  switch (unit) {
+    case "m":
+      return {
+        applicable: true, locked: false,
+        label: "Тежина по метар (кг/м)",
+        hint: "Колку тежи 1 метар од профилот. Користи го калкулаторот ако не ја знаеш.",
+        shortLabel: "кг/м",
+      };
+    case "m2":
+      return {
+        applicable: true, locked: false,
+        label: "Тежина по м² (кг/м²)",
+        hint: "Колку тежи 1 м² лим. За челик: дебелина во mm × 7.85.",
+        shortLabel: "кг/м²",
+      };
+    case "pcs":
+    case "sheet":
+      return {
+        applicable: true, locked: false,
+        label: `Тежина по ${unit === "sheet" ? "табла" : "парче"} (кг)`,
+        hint: "Колку тежи едно парче. За профил купен на должина: должина во m × кг/м.",
+        shortLabel: unit === "sheet" ? "кг/табла" : "кг/ком",
+      };
+    case "kg":
+      return {
+        applicable: true, locked: true, fixedValue: "1",
+        label: "Тежина по единица (кг/кг)",
+        hint: "Материјалот веќе се води во килограми — вредноста е секогаш 1.",
+        shortLabel: "кг/кг",
+      };
+    default:
+      return {
+        applicable: false, locked: true, fixedValue: "0",
+        label: "Тежина по единица",
+        hint: "Не е применливо за оваа мерна единица.",
+        shortLabel: "—",
+      };
+  }
+}

@@ -17,7 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, AlertTriangle, ArrowDownLeft, Package, Scissors, Pencil, Weight } from "lucide-react";
 import RemnantsTab from "@/components/RemnantsTab";
-import { WeightCalculator, lineWeightKg } from "@/components/WeightCalculator";
+import { WeightCalculator, lineWeightKg, unitMeta } from "@/components/WeightCalculator";
 
 const materialTypes: Record<string, string> = {
   steel_sheet: "Челичен лим", steel_profile: "Челичен профил", steel_bar: "Челична прачка",
@@ -97,7 +97,9 @@ export default function Storage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate(form as any);
+    const um = unitMeta(form.unit);
+    const weightPerUnit = um.locked ? (um.fixedValue ?? "0") : (form.weightPerUnit || "0");
+    createMutation.mutate({ ...form, weightPerUnit } as any);
   };
 
   const handleTxSubmit = (e: React.FormEvent) => {
@@ -150,14 +152,24 @@ export default function Storage() {
                 <div className="space-y-2"><Label>Минимална залиха</Label><Input type="number" step="0.001" value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Почетна залиха</Label><Input type="number" step="0.001" value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: e.target.value })} /></div>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Тежина по единица ({units[form.unit] ?? form.unit})</Label>
-                  <WeightCalculator onApply={(kg) => setForm({ ...form, weightPerUnit: String(kg) })} />
-                </div>
-                <Input type="number" step="0.0001" value={form.weightPerUnit} onChange={(e) => setForm({ ...form, weightPerUnit: e.target.value })} placeholder="0.000" />
-                <p className="text-[11px] text-gray-400">кг/м за профили, кг/м² за лим, кг/ком за парчиња. Остави 0 ако не е применливо.</p>
-              </div>
+              {(() => {
+                const um = unitMeta(form.unit);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>{um.label}</Label>
+                      {um.applicable && !um.locked && (
+                        <WeightCalculator onApply={(kg) => setForm({ ...form, weightPerUnit: String(kg) })} />
+                      )}
+                    </div>
+                    <Input type="number" step="0.0001" disabled={um.locked}
+                      value={um.locked ? (um.fixedValue ?? "0") : form.weightPerUnit}
+                      onChange={(e) => setForm({ ...form, weightPerUnit: e.target.value })}
+                      placeholder="0.000" />
+                    <p className="text-[11px] text-gray-400">{um.hint}</p>
+                  </div>
+                );
+              })()}
               <div className="space-y-2"><Label>Локација во склад</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="на пр. Ред 3, Полица Б" /></div>
               <div className="space-y-2"><Label>Опис</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
               <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createMutation.isPending}>
@@ -282,7 +294,7 @@ export default function Storage() {
                         {Number((m as any).weightPerUnit ?? 0) > 0 ? (
                           <>
                             <span className="font-medium">{Number((m as any).weightPerUnit).toFixed(3)}</span>
-                            <span className="text-[11px] text-gray-400 ml-1">кг/{units[m.unit] ?? m.unit}</span>
+                            <span className="text-[11px] text-gray-400 ml-1">{unitMeta(m.unit).shortLabel}</span>
                             <div className="text-[11px] text-gray-400">
                               вкупно {lineWeightKg((m as any).weightPerUnit, m.currentStock).toLocaleString("mk-MK")} кг
                             </div>
@@ -362,7 +374,7 @@ export default function Storage() {
                   unit: editForm.unit,
                   description: editForm.description ?? undefined,
                   minStock: String(editForm.minStock ?? "0"),
-                  weightPerUnit: String(editForm.weightPerUnit ?? "0"),
+                  weightPerUnit: (() => { const um = unitMeta(editForm.unit); return um.locked ? (um.fixedValue ?? "0") : String(editForm.weightPerUnit ?? "0"); })(),
                   location: editForm.location ?? undefined,
                 });
               }}
@@ -389,20 +401,31 @@ export default function Storage() {
                 </div>
               </div>
 
-              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-                <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-amber-600" />Тежина по единица (кг/{units[editForm.unit] ?? editForm.unit})</Label>
-                  <WeightCalculator onApply={(kg) => setEditForm({ ...editForm, weightPerUnit: String(kg) })} />
-                </div>
-                <Input type="number" step="0.0001" value={editForm.weightPerUnit ?? "0"}
-                  onChange={(e) => setEditForm({ ...editForm, weightPerUnit: e.target.value })} />
-                {Number(editForm.weightPerUnit ?? 0) > 0 && (
-                  <p className="text-[11px] text-gray-500">
-                    Тековна залиха {editForm.currentStock} {units[editForm.unit] ?? editForm.unit} ={" "}
-                    <b>{lineWeightKg(editForm.weightPerUnit, editForm.currentStock).toLocaleString("mk-MK")} кг</b>
-                  </p>
-                )}
-              </div>
+              {(() => {
+                const um = unitMeta(editForm.unit);
+                const val = um.locked ? (um.fixedValue ?? "0") : (editForm.weightPerUnit ?? "0");
+                return (
+                  <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-1.5">
+                        <Weight className="h-3.5 w-3.5 text-amber-600" />{um.label}
+                      </Label>
+                      {um.applicable && !um.locked && (
+                        <WeightCalculator onApply={(kg) => setEditForm({ ...editForm, weightPerUnit: String(kg) })} />
+                      )}
+                    </div>
+                    <Input type="number" step="0.0001" disabled={um.locked} value={val}
+                      onChange={(e) => setEditForm({ ...editForm, weightPerUnit: e.target.value })} />
+                    <p className="text-[11px] text-gray-400">{um.hint}</p>
+                    {Number(val) > 0 && (
+                      <p className="text-[11px] text-gray-600 border-t border-amber-200 pt-1.5">
+                        Тековна залиха {editForm.currentStock} {units[editForm.unit] ?? editForm.unit} ={" "}
+                        <b>{lineWeightKg(val, editForm.currentStock).toLocaleString("mk-MK")} кг</b>
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Минимална залиха</Label><Input type="number" step="0.001" value={editForm.minStock ?? "0"} onChange={(e) => setEditForm({ ...editForm, minStock: e.target.value })} /></div>

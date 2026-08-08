@@ -18,7 +18,7 @@ import {
 import { MaterialPicker } from "@/components/MaterialPicker";
 import { printRemnantLabels } from "@/lib/print-documents";
 import {
-  Search, Plus, Ruler, Printer, Scissors, Trash2, RotateCcw, Settings2, Layers,
+  Search, Plus, Ruler, Printer, Scissors, Trash2, RotateCcw, Settings2, Weight, Coins,
 } from "lucide-react";
 
 const STATUS_MK: Record<string, string> = {
@@ -34,6 +34,7 @@ export default function RemnantsTab() {
   const [statusFilter, setStatusFilter] = useState<"available" | "used" | "scrapped" | "all">("available");
   const [materialFilter, setMaterialFilter] = useState<number | null>(null);
   const [minLen, setMinLen] = useState("");
+  const [minKg, setMinKg] = useState("");
 
   const [newOpen, setNewOpen] = useState(false);
   const [useOpen, setUseOpen] = useState(false);
@@ -61,6 +62,7 @@ export default function RemnantsTab() {
     status: statusFilter,
     materialId: materialFilter ?? undefined,
     minLengthMm: minLen ? Number(minLen) : undefined,
+    minWeightKg: minKg ? Number(minKg) : undefined,
   });
 
   const invalidateAll = () => {
@@ -163,14 +165,31 @@ export default function RemnantsTab() {
           <div><p className="text-sm text-gray-500">Вкупна должина</p><p className="text-xl font-bold">{stats?.totalMeters ?? 0} м</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="bg-emerald-50 p-2.5 rounded-lg"><Layers className="h-5 w-5 text-emerald-600" /></div>
-          <div><p className="text-sm text-gray-500">Различни материјали</p><p className="text-xl font-bold">{stats?.materialsWith ?? 0}</p></div>
+          <div className="bg-slate-100 p-2.5 rounded-lg"><Weight className="h-5 w-5 text-slate-600" /></div>
+          <div>
+            <p className="text-sm text-gray-500">Тежина</p>
+            <p className="text-xl font-bold">
+              {(stats?.totalWeightKg ?? 0).toLocaleString("mk-MK")} <span className="text-sm font-semibold text-gray-400">кг</span>
+            </p>
+          </div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="bg-gray-100 p-2.5 rounded-lg"><RotateCcw className="h-5 w-5 text-gray-500" /></div>
-          <div><p className="text-sm text-gray-500">Искористени</p><p className="text-xl font-bold text-gray-600">{stats?.usedCount ?? 0}</p></div>
+          <div className="bg-emerald-50 p-2.5 rounded-lg"><Coins className="h-5 w-5 text-emerald-600" /></div>
+          <div>
+            <p className="text-sm text-gray-500">Приближна вредност</p>
+            <p className="text-xl font-bold text-emerald-700">
+              {(stats?.totalValue ?? 0).toLocaleString("mk-MK")} <span className="text-sm font-semibold text-gray-400">ден</span>
+            </p>
+          </div>
         </CardContent></Card>
       </div>
+
+      {(stats?.unweighable ?? 0) > 0 && (
+        <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2">
+          {stats?.unweighable} {stats?.unweighable === 1 ? "остаток нема" : "остатоци немаат"} пресметана тежина —
+          материјалот или не се води во метри, или нема внесена тежина по метар во каталогот.
+        </div>
+      )}
 
       {lastResult && (
         <div className="flex items-center justify-between bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-2.5">
@@ -203,7 +222,8 @@ export default function RemnantsTab() {
             ))}
           </SelectContent>
         </Select>
-        <Input type="number" placeholder="Мин. mm" value={minLen} onChange={(e) => setMinLen(e.target.value)} className="w-28" />
+        <Input type="number" placeholder="Мин. mm" value={minLen} onChange={(e) => setMinLen(e.target.value)} className="w-24" />
+        <Input type="number" placeholder="Мин. кг" value={minKg} onChange={(e) => setMinKg(e.target.value)} className="w-24" />
         <Button variant="outline" onClick={printAll} title="Печати етикети за достапните">
           <Printer className="h-4 w-4 mr-2" />Етикети
         </Button>
@@ -224,6 +244,7 @@ export default function RemnantsTab() {
                 <TableHead className="w-32">Код</TableHead>
                 <TableHead>Материјал</TableHead>
                 <TableHead className="w-28 text-right">Должина</TableHead>
+                <TableHead className="w-24 text-right">Тежина</TableHead>
                 <TableHead className="w-16 text-center">Кол.</TableHead>
                 <TableHead className="w-36">Локација</TableHead>
                 <TableHead className="w-28">Статус</TableHead>
@@ -232,9 +253,9 @@ export default function RemnantsTab() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>
               ) : !remnants || remnants.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-10 text-gray-400">
+                <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400">
                   Нема евидентирани остатоци. Кликни „Нов остаток“ по секое сечење.
                 </TableCell></TableRow>
               ) : (
@@ -249,6 +270,19 @@ export default function RemnantsTab() {
                       <span className="font-bold">{Number(r.lengthMm).toFixed(0)}</span>
                       <span className="text-xs text-gray-400 ml-1">mm</span>
                       <div className="text-[11px] text-gray-400">{(Number(r.lengthMm) / 1000).toFixed(2)} м</div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {Number(r.weightKg ?? 0) > 0 ? (
+                        <>
+                          <span className="font-medium">{Number(r.weightKg).toFixed(1)}</span>
+                          <span className="text-xs text-gray-400 ml-1">кг</span>
+                          {Number(r.estValue ?? 0) > 0 && (
+                            <div className="text-[11px] text-emerald-600">
+                              ≈ {Number(r.estValue).toLocaleString("mk-MK")} ден
+                            </div>
+                          )}
+                        </>
+                      ) : <span className="text-gray-300">—</span>}
                     </TableCell>
                     <TableCell className="text-center">{r.quantity ?? 1}</TableCell>
                     <TableCell className="text-sm text-gray-600">{r.location || "—"}</TableCell>
@@ -356,7 +390,10 @@ export default function RemnantsTab() {
             <form onSubmit={handleUse} className="space-y-4">
               <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm">
                 <div className="font-medium">{selected.materialName}</div>
-                <div className="text-gray-500">Расположиво: <b>{Number(selected.lengthMm).toFixed(0)} mm</b></div>
+                <div className="text-gray-500">
+                  Расположиво: <b>{Number(selected.lengthMm).toFixed(0)} mm</b>
+                  {Number(selected.weightKg ?? 0) > 0 && <> · <b>{Number(selected.weightKg).toFixed(1)} кг</b></>}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Искористена должина (mm) *</Label>

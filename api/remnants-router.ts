@@ -56,8 +56,31 @@ const baseSelect = {
   materialName: materials.name,
   materialCode: materials.code,
   materialType: materials.type,
+  materialUnit: materials.unit,
+  materialWeightPerUnit: materials.weightPerUnit,
+  materialAvgCost: materials.avgCost,
   warehouseName: warehouses.name,
 };
+
+// Тежина на остаток во кг — важи само кога материјалот се води во метри,
+// зашто тогаш weightPerUnit значи кг/м.
+function remnantWeightKg(r: any): number {
+  if (r?.materialUnit !== "m") return 0;
+  const kgPerM = Number(r?.materialWeightPerUnit ?? 0);
+  const lenM = Number(r?.lengthMm ?? 0) / 1000;
+  const qty = Number(r?.quantity ?? 1) || 1;
+  if (!Number.isFinite(kgPerM) || kgPerM <= 0) return 0;
+  return Math.round(kgPerM * lenM * qty * 1000) / 1000;
+}
+
+// Приближна вредност: просечната цена е по единица мера, кај "m" значи ден/м.
+function remnantValue(r: any): number {
+  if (r?.materialUnit !== "m") return 0;
+  const cost = Number(r?.materialAvgCost ?? 0);
+  if (!Number.isFinite(cost) || cost <= 0) return 0;
+  const lenM = (Number(r?.lengthMm ?? 0) / 1000) * (Number(r?.quantity ?? 1) || 1);
+  return Math.round(cost * lenM * 100) / 100;
+}
 
 export const remnantsRouter = createRouter({
   // ===== ЛИСТА =====
@@ -69,6 +92,7 @@ export const remnantsRouter = createRouter({
           materialId: z.number().optional(),
           status: z.enum(["available", "used", "scrapped", "all"]).optional(),
           minLengthMm: z.number().optional(),
+          minWeightKg: z.number().optional(),
         })
         .optional()
     )
@@ -81,11 +105,16 @@ export const remnantsRouter = createRouter({
         .leftJoin(warehouses, eq(materialRemnants.warehouseId, warehouses.id))
         .orderBy(desc(materialRemnants.createdAt));
 
-      let out = rows;
+      let out: any[] = rows.map((r: any) => ({
+        ...r,
+        weightKg: remnantWeightKg(r),
+        estValue: remnantValue(r),
+      }));
       const status = input?.status ?? "available";
       if (status !== "all") out = out.filter((r) => r.status === status);
       if (input?.materialId) out = out.filter((r) => r.materialId === input.materialId);
       if (input?.minLengthMm) out = out.filter((r) => Number(r.lengthMm) >= input.minLengthMm!);
+      if (input?.minWeightKg) out = out.filter((r) => Number(r.weightKg) >= input.minWeightKg!);
       if (input?.search) {
         const s = input.search.trim().toLowerCase();
         out = out.filter(
@@ -117,8 +146,9 @@ export const remnantsRouter = createRouter({
         );
       const min = input.minLengthMm ?? 0;
       return rows
-        .filter((r) => Number(r.lengthMm) >= min)
-        .sort((a, b) => Number(a.lengthMm) - Number(b.lengthMm)); // најмал доволен прв
+        .filter((r: any) => Number(r.lengthMm) >= min)
+        .map((r: any) => ({ ...r, weightKg: remnantWeightKg(r), estValue: remnantValue(r) }))
+        .sort((a: any, b: any) => Number(a.lengthMm) - Number(b.lengthMm)); // најмал доволен прв
     }),
 
   // ===== СТАТИСТИКА =====
@@ -130,19 +160,33 @@ export const remnantsRouter = createRouter({
         lengthMm: materialRemnants.lengthMm,
         quantity: materialRemnants.quantity,
         status: materialRemnants.status,
+        materialUnit: materials.unit,
+        materialWeightPerUnit: materials.weightPerUnit,
+        materialAvgCost: materials.avgCost,
       })
-      .from(materialRemnants);
+      .from(materialRemnants)
+      .leftJoin(materials, eq(materialRemnants.materialId, materials.id));
 
-    const available = rows.filter((r) => r.status === "available");
-    const totalPieces = available.reduce((a, r) => a + (r.quantity ?? 1), 0);
+    const available = rows.filter((r: any) => r.status === "available");
+    const totalPieces = available.reduce((a: number, r: any) => a + (r.quantity ?? 1), 0);
     const totalMeters =
-      available.reduce((a, r) => a + Number(r.lengthMm) * (r.quantity ?? 1), 0) / 1000;
-    const materialsWith = new Set(available.map((r) => r.materialId)).size;
+      available.reduce((a: number, r: any) => a + Number(r.lengthMm) * (r.quantity ?? 1), 0) / 1000;
+    const materialsWith = new Set(available.map((r: any) => r.materialId)).size;
+
+    const totalWeightKg = available.reduce((a: number, r: any) => a + remnantWeightKg(r), 0);
+    const totalValue = available.reduce((a: number, r: any) => a + remnantValue(r), 0);
+    // Колку од достапните остатоци воопшто можат да се измерат (материјал во метри со внесена тежина)
+    const weighable = available.filter((r: any) => remnantWeightKg(r) > 0).length;
+
     return {
       totalPieces,
       totalMeters: Math.round(totalMeters * 100) / 100,
       materialsWith,
-      usedCount: rows.filter((r) => r.status === "used").length,
+      usedCount: rows.filter((r: any) => r.status === "used").length,
+      totalWeightKg: Math.round(totalWeightKg * 10) / 10,
+      totalValue: Math.round(totalValue),
+      weighable,
+      unweighable: available.length - weighable,
     };
   }),
 
