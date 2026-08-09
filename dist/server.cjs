@@ -9069,6 +9069,7 @@ __export(schema_exports, {
   overhead: () => overhead,
   parsedInvoices: () => parsedInvoices,
   parsedReceiptItems: () => parsedReceiptItems,
+  paymentAllocations: () => paymentAllocations,
   productComponents: () => productComponents,
   products: () => products,
   purchaseOrderItems: () => purchaseOrderItems,
@@ -9089,7 +9090,7 @@ __export(schema_exports, {
   workOrderOperations: () => workOrderOperations,
   workOrders: () => workOrders
 });
-var companySettings, fixedAssets, depreciationEntries, bankStatements, bankTransactions, appUsers, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
+var companySettings, paymentAllocations, fixedAssets, depreciationEntries, bankStatements, bankTransactions, appUsers, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_pg_core();
@@ -9119,6 +9120,17 @@ var init_schema2 = __esm({
       minRemnantMm: decimal("min_remnant_mm", { precision: 8, scale: 1 }).default("300"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    paymentAllocations = pgTable("payment_allocations", {
+      id: serial("id").primaryKey(),
+      txId: bigint4("tx_id", { mode: "number", unsigned: true }).notNull(),
+      docType: varchar("doc_type", { length: 30 }).notNull(),
+      // invoice | incoming_invoice
+      docId: bigint4("doc_id", { mode: "number", unsigned: true }).notNull(),
+      docRef: varchar("doc_ref", { length: 120 }),
+      amount: decimal("amount", { precision: 16, scale: 2 }).notNull().default("0"),
+      note: text("note"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
     });
     fixedAssets = pgTable("fixed_assets", {
       id: serial("id").primaryKey(),
@@ -13535,7 +13547,20 @@ function getInitSql() {
 	"posted_at" timestamp DEFAULT now() NOT NULL,
 	"note" text
 );`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS "depr_asset_year_uq" ON "depreciation_entries" ("asset_id", "year")`
+    `CREATE UNIQUE INDEX IF NOT EXISTS "depr_asset_year_uq" ON "depreciation_entries" ("asset_id", "year")`,
+    // ===== РАСПРЕДЕЛБА НА УПЛАТИ =====
+    `CREATE TABLE IF NOT EXISTS "payment_allocations" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"tx_id" bigint NOT NULL,
+	"doc_type" varchar(30) NOT NULL,
+	"doc_id" bigint NOT NULL,
+	"doc_ref" varchar(120),
+	"amount" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"note" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE INDEX IF NOT EXISTS "pay_alloc_tx_idx" ON "payment_allocations" ("tx_id")`,
+    `CREATE INDEX IF NOT EXISTS "pay_alloc_doc_idx" ON "payment_allocations" ("doc_type", "doc_id")`
   ];
 }
 var init_init_db_sql = __esm({
@@ -23198,7 +23223,7 @@ function handleCatchall(proms, input, payload, ctx, def, inst) {
     }
     const r = _catchall.run({ value: input[key], issues: [] }, ctx);
     if (r instanceof Promise) {
-      proms.push(r.then((r2) => handlePropertyResult(r2, payload, key, input, isOptionalIn, isOptionalOut)));
+      proms.push(r.then((r3) => handlePropertyResult(r3, payload, key, input, isOptionalIn, isOptionalOut)));
     } else {
       handlePropertyResult(r, payload, key, input, isOptionalIn, isOptionalOut);
     }
@@ -23270,7 +23295,7 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
       const isOptionalOut = el._zod.optout === "optional";
       const r = el._zod.run({ value: input[key], issues: [] }, ctx);
       if (r instanceof Promise) {
-        proms.push(r.then((r2) => handlePropertyResult(r2, payload, key, input, isOptionalIn, isOptionalOut)));
+        proms.push(r.then((r3) => handlePropertyResult(r3, payload, key, input, isOptionalIn, isOptionalOut)));
       } else {
         handlePropertyResult(r, payload, key, input, isOptionalIn, isOptionalOut);
       }
@@ -24549,7 +24574,7 @@ var $ZodCustom = /* @__PURE__ */ $constructor("$ZodCustom", (inst, def) => {
     const input = payload.value;
     const r = def.fn(input);
     if (r instanceof Promise) {
-      return r.then((r2) => handleRefineResult(r2, payload, input, inst));
+      return r.then((r3) => handleRefineResult(r3, payload, input, inst));
     }
     handleRefineResult(r, payload, input, inst);
     return;
@@ -40559,6 +40584,47 @@ function extractInvoiceRefs(text2) {
   return Array.from(found);
 }
 var norm2 = (s) => String(s ?? "").toUpperCase().replace(/[^0-9A-ZА-ЯЀ-ӿ]/g, "");
+var r2 = (v) => Math.round(v * 100) / 100;
+async function paidOf(docType, docId) {
+  const db2 = getDb();
+  const rows = await db2.select().from(paymentAllocations);
+  return r2(rows.filter((a) => a.docType === docType && a.docId === docId).reduce((s, a) => s + Number(a.amount), 0));
+}
+async function refreshDocStatus(docType, docId) {
+  const db2 = getDb();
+  const paid = await paidOf(docType, docId);
+  if (docType === "invoice") {
+    const inv = (await db2.select().from(invoices).where(eq(invoices.id, docId)))[0];
+    if (!inv) return;
+    const total = Number(inv.totalAmount);
+    const status = paid <= 5e-3 ? "pending" : paid >= total - 5e-3 ? "paid" : "partial";
+    await db2.update(invoices).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq(invoices.id, docId));
+  } else {
+    const inv = (await db2.select().from(incomingInvoices).where(eq(incomingInvoices.id, docId)))[0];
+    if (!inv) return;
+    const total = Number(inv.totalAmount);
+    const status = paid <= 5e-3 ? "pending" : paid >= total - 5e-3 ? "paid" : "partial";
+    await db2.update(incomingInvoices).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq(incomingInvoices.id, docId));
+  }
+}
+async function refreshTxStatus(txId) {
+  const db2 = getDb();
+  const t2 = (await db2.select().from(bankTransactions).where(eq(bankTransactions.id, txId)))[0];
+  if (!t2) return;
+  if (t2.matchStatus === "ignored") return;
+  const rows = await db2.select().from(paymentAllocations).where(eq(paymentAllocations.txId, txId));
+  const allocated = r2(rows.reduce((s, a) => s + Number(a.amount), 0));
+  const amount = Number(t2.amount);
+  const status = allocated <= 5e-3 ? "unmatched" : allocated >= amount - 5e-3 ? "matched" : "partial";
+  const ref = rows.map((a) => a.docRef).filter(Boolean).join(", ").slice(0, 120);
+  await db2.update(bankTransactions).set({
+    matchStatus: status,
+    matchedRef: ref || null,
+    matchedType: rows[0]?.docType ?? null,
+    matchedId: rows.length === 1 ? rows[0].docId : null,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(eq(bankTransactions.id, txId));
+}
 var bankRouter = createRouter({
   // ═══════════ УВОЗ ═══════════
   bankImport: publicQuery.input(
@@ -40664,7 +40730,7 @@ var bankRouter = createRouter({
   // ═══════════ ПРЕГЛЕД ═══════════
   bankTxList: publicQuery.input(
     external_exports.object({
-      status: external_exports.enum(["all", "unmatched", "matched", "ignored"]).optional(),
+      status: external_exports.enum(["all", "unmatched", "partial", "matched", "ignored", "open"]).optional(),
       direction: external_exports.enum(["all", "in", "out"]).optional(),
       search: external_exports.string().optional(),
       from: external_exports.string().optional(),
@@ -40674,8 +40740,9 @@ var bankRouter = createRouter({
     const db2 = getDb();
     const rows = await db2.select().from(bankTransactions).orderBy(desc(bankTransactions.txDate), desc(bankTransactions.id));
     let out = rows;
-    const st = input?.status ?? "unmatched";
-    if (st !== "all") out = out.filter((r) => r.matchStatus === st);
+    const st = input?.status ?? "open";
+    if (st === "open") out = out.filter((r) => r.matchStatus === "unmatched" || r.matchStatus === "partial");
+    else if (st !== "all") out = out.filter((r) => r.matchStatus === st);
     if (input?.direction && input.direction !== "all") out = out.filter((r) => r.direction === input.direction);
     if (input?.from) out = out.filter((r) => String(r.txDate) >= input.from);
     if (input?.to) out = out.filter((r) => String(r.txDate) <= input.to);
@@ -40691,11 +40758,12 @@ var bankRouter = createRouter({
     const db2 = getDb();
     const rows = await db2.select().from(bankTransactions);
     const sts = await db2.select().from(bankStatements);
-    const unmatched = rows.filter((r) => r.matchStatus === "unmatched");
+    const unmatched = rows.filter((r) => r.matchStatus === "unmatched" || r.matchStatus === "partial");
     return {
       statements: sts.length,
       transactions: rows.length,
       unmatched: unmatched.length,
+      partial: rows.filter((r) => r.matchStatus === "partial").length,
       matched: rows.filter((r) => r.matchStatus === "matched").length,
       unmatchedIn: unmatched.filter((r) => r.direction === "in").reduce((a, r) => a + Number(r.amount), 0),
       unmatchedOut: unmatched.filter((r) => r.direction === "out").reduce((a, r) => a + Number(r.amount), 0),
@@ -40798,46 +40866,149 @@ var bankRouter = createRouter({
     cands.sort((a, b) => b.score - a.score);
     return { candidates: cands.slice(0, 8), refs: extractInvoiceRefs(t2.purpose ?? "") };
   }),
-  // ═══════════ ПОВРЗУВАЊЕ ═══════════
-  bankMatch: publicQuery.input(external_exports.object({
-    txId: external_exports.number(),
-    type: external_exports.enum(["invoice", "incoming_invoice"]),
-    targetId: external_exports.number(),
-    markPaid: external_exports.boolean().default(true)
-  })).mutation(async ({ input }) => {
+  // ═══════════ РАСПРЕДЕЛБА НА УПЛАТА ═══════════
+  /** Отворени ставки (фактури со остаток) за партнерот на дадена трансакција */
+  bankOpenDocs: publicQuery.input(external_exports.object({ txId: external_exports.number(), search: external_exports.string().optional() })).query(async ({ input }) => {
     const db2 = getDb();
-    let ref = "";
-    if (input.type === "invoice") {
-      const inv = (await db2.select().from(invoices).where(eq(invoices.id, input.targetId)))[0];
-      ref = inv?.invoiceNumber ?? "";
-      if (input.markPaid && inv) {
-        await db2.update(invoices).set({ status: "paid", updatedAt: /* @__PURE__ */ new Date() }).where(eq(invoices.id, input.targetId));
+    const t2 = (await db2.select().from(bankTransactions).where(eq(bankTransactions.id, input.txId)))[0];
+    if (!t2) return { docs: [], allocated: 0, remaining: 0, refs: [] };
+    const isIn = t2.direction === "in";
+    const allocs = await db2.select().from(paymentAllocations);
+    const paidMap = /* @__PURE__ */ new Map();
+    for (const a of allocs) {
+      const k = `${a.docType}|${a.docId}`;
+      paidMap.set(k, (paidMap.get(k) ?? 0) + Number(a.amount));
+    }
+    const refs = extractInvoiceRefs(t2.purpose ?? "").map(norm2);
+    const docs = [];
+    if (isIn) {
+      const invs = await db2.select().from(invoices);
+      const custs = await db2.select().from(customers);
+      const cmap = new Map(custs.map((c) => [c.id, c]));
+      for (const inv of invs) {
+        const total = Number(inv.totalAmount);
+        const paid = paidMap.get(`invoice|${inv.id}`) ?? 0;
+        const open = r2(total - paid);
+        if (open <= 5e-3) continue;
+        const c = cmap.get(inv.customerId);
+        const inPurpose = refs.some((rf) => norm2(inv.invoiceNumber).includes(rf) || rf.includes(norm2(inv.invoiceNumber)));
+        const nameHit = !!(c && t2.counterpartyName && norm2(c.name).slice(0, 10) && norm2(t2.counterpartyName).includes(norm2(c.name).slice(0, 10)));
+        docs.push({
+          docType: "invoice",
+          docId: inv.id,
+          ref: inv.invoiceNumber,
+          partnerName: c?.name ?? "",
+          total,
+          paid: r2(paid),
+          open,
+          date: inv.issueDate,
+          dueDate: inv.dueDate,
+          inPurpose,
+          nameHit,
+          score: (inPurpose ? 60 : 0) + (nameHit ? 30 : 0) + (Math.abs(open - Number(t2.amount)) < 0.01 ? 20 : 0)
+        });
       }
     } else {
-      const inv = (await db2.select().from(incomingInvoices).where(eq(incomingInvoices.id, input.targetId)))[0];
-      ref = inv?.supplierInvoiceNumber ?? "";
-      if (input.markPaid && inv) {
-        await db2.update(incomingInvoices).set({ status: "paid", updatedAt: /* @__PURE__ */ new Date() }).where(eq(incomingInvoices.id, input.targetId));
+      const invs = await db2.select().from(incomingInvoices);
+      const sups = await db2.select().from(suppliers);
+      const smap = new Map(sups.map((x) => [x.id, x]));
+      for (const inv of invs) {
+        const total = Number(inv.totalAmount);
+        const paid = paidMap.get(`incoming_invoice|${inv.id}`) ?? 0;
+        const open = r2(total - paid);
+        if (open <= 5e-3) continue;
+        const sup = smap.get(inv.supplierId);
+        const inPurpose = refs.some((rf) => norm2(inv.supplierInvoiceNumber).includes(rf) || rf.includes(norm2(inv.supplierInvoiceNumber)));
+        const nameHit = !!(sup && t2.counterpartyName && norm2(sup.name).slice(0, 10) && norm2(t2.counterpartyName).includes(norm2(sup.name).slice(0, 10)));
+        docs.push({
+          docType: "incoming_invoice",
+          docId: inv.id,
+          ref: inv.supplierInvoiceNumber,
+          partnerName: sup?.name ?? "",
+          total,
+          paid: r2(paid),
+          open,
+          date: inv.issueDate ?? inv.receivedDate,
+          dueDate: inv.dueDate,
+          inPurpose,
+          nameHit,
+          score: (inPurpose ? 60 : 0) + (nameHit ? 30 : 0) + (Math.abs(open - Number(t2.amount)) < 0.01 ? 20 : 0)
+        });
       }
     }
-    await db2.update(bankTransactions).set({
-      matchStatus: "matched",
-      matchedType: input.type,
-      matchedId: input.targetId,
-      matchedRef: ref,
-      updatedAt: /* @__PURE__ */ new Date()
-    }).where(eq(bankTransactions.id, input.txId));
-    return { success: true, ref };
+    if (input?.search) {
+      const q = input.search.toLowerCase();
+      for (let i = docs.length - 1; i >= 0; i--) {
+        const d = docs[i];
+        if (!`${d.ref} ${d.partnerName}`.toLowerCase().includes(q)) docs.splice(i, 1);
+      }
+    }
+    docs.sort((a, b) => b.score - a.score || String(a.date ?? "").localeCompare(String(b.date ?? "")));
+    const mine = allocs.filter((a) => a.txId === input.txId);
+    const allocated = r2(mine.reduce((x, a) => x + Number(a.amount), 0));
+    return {
+      docs: docs.slice(0, 60),
+      allocated,
+      remaining: r2(Number(t2.amount) - allocated),
+      refs: extractInvoiceRefs(t2.purpose ?? "")
+    };
+  }),
+  bankAllocationsOf: publicQuery.input(external_exports.object({ txId: external_exports.number() })).query(async ({ input }) => {
+    const db2 = getDb();
+    return await db2.select().from(paymentAllocations).where(eq(paymentAllocations.txId, input.txId));
+  }),
+  /** Ја запишува целата распределба за една ставка (ги заменува постојните) */
+  bankAllocate: publicQuery.input(external_exports.object({
+    txId: external_exports.number(),
+    lines: external_exports.array(external_exports.object({
+      docType: external_exports.enum(["invoice", "incoming_invoice"]),
+      docId: external_exports.number(),
+      docRef: external_exports.string().optional(),
+      amount: external_exports.number()
+    }))
+  })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const t2 = (await db2.select().from(bankTransactions).where(eq(bankTransactions.id, input.txId)))[0];
+    if (!t2) throw new Error("\u0421\u0442\u0430\u0432\u043A\u0430\u0442\u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
+    const sum2 = r2(input.lines.reduce((s, l) => s + l.amount, 0));
+    if (sum2 > Number(t2.amount) + 5e-3) {
+      throw new Error(`\u0420\u0430\u0441\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u043E ${sum2.toFixed(2)} \u043D\u0430\u0434 \u0438\u0437\u043D\u043E\u0441\u043E\u0442 \u043D\u0430 \u0443\u043F\u043B\u0430\u0442\u0430\u0442\u0430 ${Number(t2.amount).toFixed(2)}`);
+    }
+    const before = await db2.select().from(paymentAllocations).where(eq(paymentAllocations.txId, input.txId));
+    await db2.delete(paymentAllocations).where(eq(paymentAllocations.txId, input.txId));
+    for (const l of input.lines) {
+      if (!(l.amount > 0)) continue;
+      await db2.insert(paymentAllocations).values({
+        txId: input.txId,
+        docType: l.docType,
+        docId: l.docId,
+        docRef: l.docRef ?? null,
+        amount: String(r2(l.amount))
+      });
+    }
+    const touched = /* @__PURE__ */ new Set();
+    for (const b of before) touched.add(`${b.docType}|${b.docId}`);
+    for (const l of input.lines) touched.add(`${l.docType}|${l.docId}`);
+    for (const key of touched) {
+      const [dt, di] = key.split("|");
+      await refreshDocStatus(dt, Number(di));
+    }
+    await refreshTxStatus(input.txId);
+    await logAudit({
+      action: "UPDATE",
+      entityType: "bank_transaction",
+      entityId: input.txId,
+      description: `\u0420\u0430\u0441\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0430 \u0443\u043F\u043B\u0430\u0442\u0430: ${input.lines.length} \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0438, ${sum2.toFixed(2)} \u0434\u0435\u043D`
+    }).catch(() => {
+    });
+    return { success: true, allocated: sum2, remaining: r2(Number(t2.amount) - sum2) };
   }),
   bankUnmatch: publicQuery.input(external_exports.object({ txId: external_exports.number() })).mutation(async ({ input }) => {
     const db2 = getDb();
-    await db2.update(bankTransactions).set({
-      matchStatus: "unmatched",
-      matchedType: null,
-      matchedId: null,
-      matchedRef: null,
-      updatedAt: /* @__PURE__ */ new Date()
-    }).where(eq(bankTransactions.id, input.txId));
+    const before = await db2.select().from(paymentAllocations).where(eq(paymentAllocations.txId, input.txId));
+    await db2.delete(paymentAllocations).where(eq(paymentAllocations.txId, input.txId));
+    for (const b of before) await refreshDocStatus(b.docType, b.docId);
+    await refreshTxStatus(input.txId);
     return { success: true };
   }),
   bankIgnore: publicQuery.input(external_exports.object({ txId: external_exports.number(), note: external_exports.string().optional() })).mutation(async ({ input }) => {
@@ -40849,22 +41020,99 @@ var bankRouter = createRouter({
     }).where(eq(bankTransactions.id, input.txId));
     return { success: true };
   }),
-  /** Автоматско поврзување на сите каде предлогот е убедлив */
-  bankAutoMatch: publicQuery.input(external_exports.object({ minScore: external_exports.number().default(85) }).optional()).mutation(async ({ input, ctx }) => {
+  /** Отворени ставки по партнер — „колку му должиме на МЕТАЛ-НЕТ" */
+  openItemsByPartner: publicQuery.input(external_exports.object({ side: external_exports.enum(["customers", "suppliers"]).default("suppliers") }).optional()).query(async ({ input }) => {
     const db2 = getDb();
-    const minScore = input?.minScore ?? 85;
-    const rows = await db2.select().from(bankTransactions).where(eq(bankTransactions.matchStatus, "unmatched"));
+    const side = input?.side ?? "suppliers";
+    const allocs = await db2.select().from(paymentAllocations);
+    const paidMap = /* @__PURE__ */ new Map();
+    for (const a of allocs) {
+      const k = `${a.docType}|${a.docId}`;
+      paidMap.set(k, (paidMap.get(k) ?? 0) + Number(a.amount));
+    }
+    const groups = /* @__PURE__ */ new Map();
+    if (side === "suppliers") {
+      const invs = await db2.select().from(incomingInvoices);
+      const sups = await db2.select().from(suppliers);
+      const smap = new Map(sups.map((x) => [x.id, x.name]));
+      for (const inv of invs) {
+        const open = r2(Number(inv.totalAmount) - (paidMap.get(`incoming_invoice|${inv.id}`) ?? 0));
+        if (open <= 5e-3) continue;
+        const name2 = smap.get(inv.supplierId) ?? "\u2014";
+        const g = groups.get(name2) ?? { partner: name2, count: 0, open: 0, oldest: null, docs: [] };
+        g.count++;
+        g.open = r2(g.open + open);
+        const d = String(inv.issueDate ?? inv.receivedDate ?? "");
+        if (!g.oldest || d < g.oldest) g.oldest = d;
+        g.docs.push({ ref: inv.supplierInvoiceNumber, total: Number(inv.totalAmount), open, date: d, dueDate: inv.dueDate });
+        groups.set(name2, g);
+      }
+    } else {
+      const invs = await db2.select().from(invoices);
+      const custs = await db2.select().from(customers);
+      const cmap = new Map(custs.map((x) => [x.id, x.name]));
+      for (const inv of invs) {
+        const open = r2(Number(inv.totalAmount) - (paidMap.get(`invoice|${inv.id}`) ?? 0));
+        if (open <= 5e-3) continue;
+        const name2 = cmap.get(inv.customerId) ?? "\u2014";
+        const g = groups.get(name2) ?? { partner: name2, count: 0, open: 0, oldest: null, docs: [] };
+        g.count++;
+        g.open = r2(g.open + open);
+        const d = String(inv.issueDate ?? "");
+        if (!g.oldest || d < g.oldest) g.oldest = d;
+        g.docs.push({ ref: inv.invoiceNumber, total: Number(inv.totalAmount), open, date: d, dueDate: inv.dueDate });
+        groups.set(name2, g);
+      }
+    }
+    const list = Array.from(groups.values()).sort((a, b) => b.open - a.open);
+    for (const g of list) g.docs.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    return { side, groups: list, total: r2(list.reduce((s, g) => s + g.open, 0)) };
+  }),
+  /**
+   * Автоматска распределба таму каде нема двоумење:
+   *  - целта на дознаката именува фактури и нивниот отворен збир е точно колку уплатата
+   *  - или една единствена фактура со точно тој отворен износ
+   */
+  bankAutoMatch: publicQuery.input(external_exports.object({ minScore: external_exports.number().default(85) }).optional()).mutation(async ({ ctx }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(bankTransactions);
+    const open = rows.filter((t2) => t2.matchStatus === "unmatched");
     const caller = bankRouter.createCaller(ctx);
-    let matched = 0;
-    for (const t2 of rows) {
-      const s = await caller.bankSuggest({ txId: t2.id });
-      const best = s.candidates?.[0];
-      if (best && best.score >= minScore) {
-        await caller.bankMatch({ txId: t2.id, type: best.type, targetId: best.id, markPaid: true });
+    let matched = 0, partial2 = 0;
+    for (const t2 of open) {
+      const { docs } = await caller.bankOpenDocs({ txId: t2.id });
+      const amount = Number(t2.amount);
+      if (!docs || docs.length === 0) continue;
+      const named = docs.filter((d) => d.inPurpose);
+      if (named.length > 0) {
+        const sum2 = r2(named.reduce((x, d) => x + d.open, 0));
+        if (Math.abs(sum2 - amount) < 0.01) {
+          await caller.bankAllocate({
+            txId: t2.id,
+            lines: named.map((d) => ({ docType: d.docType, docId: d.docId, docRef: d.ref, amount: d.open }))
+          });
+          matched++;
+          continue;
+        }
+        if (named.length === 1 && amount < named[0].open) {
+          await caller.bankAllocate({
+            txId: t2.id,
+            lines: [{ docType: named[0].docType, docId: named[0].docId, docRef: named[0].ref, amount }]
+          });
+          partial2++;
+          continue;
+        }
+      }
+      const exact = docs.filter((d) => Math.abs(d.open - amount) < 0.01 && d.nameHit);
+      if (exact.length === 1) {
+        await caller.bankAllocate({
+          txId: t2.id,
+          lines: [{ docType: exact[0].docType, docId: exact[0].docId, docRef: exact[0].ref, amount }]
+        });
         matched++;
       }
     }
-    return { success: true, matched, checked: rows.length };
+    return { success: true, matched, partial: partial2, checked: open.length };
   })
 });
 

@@ -1399,5 +1399,19 @@ export function getInitSql(): string[] {
 	"note" text
 );`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "depr_asset_year_uq" ON "depreciation_entries" ("asset_id", "year")`,
+
+    // ===== РАСПРЕДЕЛБА НА УПЛАТИ =====
+    `CREATE TABLE IF NOT EXISTS "payment_allocations" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"tx_id" bigint NOT NULL,
+	"doc_type" varchar(30) NOT NULL,
+	"doc_id" bigint NOT NULL,
+	"doc_ref" varchar(120),
+	"amount" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"note" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE INDEX IF NOT EXISTS "pay_alloc_tx_idx" ON "payment_allocations" ("tx_id")`,
+    `CREATE INDEX IF NOT EXISTS "pay_alloc_doc_idx" ON "payment_allocations" ("doc_type", "doc_id")`,
   ];
 }

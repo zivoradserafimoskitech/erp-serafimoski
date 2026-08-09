@@ -43,6 +43,22 @@ export const companySettings = pgTable("company_settings", {
 export type CompanySetting = typeof companySettings.$inferSelect;
 
 // ============= USERS =============
+// ============= РАСПРЕДЕЛБА НА УПЛАТИ =============
+// Една банкарска ставка може да покрие повеќе фактури,
+// и една фактура може да се плати од повеќе уплати.
+export const paymentAllocations = pgTable("payment_allocations", {
+  id: serial("id").primaryKey(),
+  txId: bigint("tx_id", { mode: "number", unsigned: true }).notNull(),
+  docType: varchar("doc_type", { length: 30 }).notNull(), // invoice | incoming_invoice
+  docId: bigint("doc_id", { mode: "number", unsigned: true }).notNull(),
+  docRef: varchar("doc_ref", { length: 120 }),
+  amount: decimal("amount", { precision: 16, scale: 2 }).notNull().default("0"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type PaymentAllocation = typeof paymentAllocations.$inferSelect;
+
 // ============= ОСНОВНИ СРЕДСТВА =============
 export const fixedAssets = pgTable("fixed_assets", {
   id: serial("id").primaryKey(),
