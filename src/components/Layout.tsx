@@ -64,8 +64,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <div className="flex items-center">
-            <img src="/logo.png?v=3" alt="Serafimoski Tech" className="h-10 w-auto object-contain" />
+          <div className="flex items-center min-w-0 flex-1 mr-2">
+            <img src="/logo.png?v=3" alt="Serafimoski Tech"
+              className="w-full max-w-[180px] h-auto object-contain" />
           </div>
           <button
             className="lg:hidden text-slate-400 hover:text-white"
