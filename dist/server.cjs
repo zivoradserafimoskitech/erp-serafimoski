@@ -39675,30 +39675,31 @@ app.get("/api/test-db", async (c) => {
     return c.json({ db: "error", message: e.message }, 500);
   }
 });
+async function runMigrations() {
+  const { getInitSql: getInitSql2 } = await Promise.resolve().then(() => (init_init_db_sql(), init_db_sql_exports));
+  const { Pool: Pool4 } = await import("pg");
+  const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
+  const pool3 = new Pool4({ connectionString: process.env.DATABASE_URL, ssl });
+  const statements = getInitSql2();
+  let created = 0, skipped = 0;
+  const errors = [];
+  for (const stmt of statements) {
+    try {
+      await pool3.query(stmt);
+      created++;
+    } catch (e) {
+      if (["42P07", "42710", "42701"].includes(e.code)) skipped++;
+      else errors.push(`${e.code}: ${String(e.message).slice(0, 160)}`);
+    }
+  }
+  await pool3.end();
+  return { created, skipped, errors };
+}
 app.get("/api/init-db", async (c) => {
   try {
-    const { getInitSql: getInitSql2 } = await Promise.resolve().then(() => (init_init_db_sql(), init_db_sql_exports));
-    const { Pool: Pool4 } = await import("pg");
-    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
-    const pool3 = new Pool4({
-      connectionString: process.env.DATABASE_URL,
-      ssl
-    });
-    const statements = getInitSql2();
-    let created = 0, skipped = 0;
-    const errors = [];
-    for (const stmt of statements) {
-      try {
-        await pool3.query(stmt);
-        created++;
-      } catch (e) {
-        if (["42P07", "42710", "42701"].includes(e.code)) skipped++;
-        else errors.push(`${e.code}: ${e.message.slice(0, 120)}`);
-      }
-    }
-    await pool3.end();
-    if (errors.length) return c.json({ status: "partial", created, skipped, errors }, 500);
-    return c.json({ status: "tables created", count: statements.length });
+    const r = await runMigrations();
+    if (r.errors.length) return c.json({ status: "partial", ...r }, 500);
+    return c.json({ status: "tables created", created: r.created, skipped: r.skipped });
   } catch (e) {
     return c.json({ status: "error", message: e.message }, 500);
   }
@@ -39920,6 +39921,18 @@ app.get("*", async (c) => {
 });
 serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   console.log(`[BOOT] Server on 0.0.0.0:${port}`);
+  if (process.env.SKIP_AUTO_MIGRATE === "true") {
+    console.log("[MIGRATE] \u041F\u0440\u0435\u0441\u043A\u043E\u043A\u043D\u0430\u0442\u043E (SKIP_AUTO_MIGRATE=true)");
+    return;
+  }
+  runMigrations().then((r) => {
+    if (r.errors.length) {
+      console.error(`[MIGRATE] ${r.created} \u0438\u0437\u0432\u0440\u0448\u0435\u043D\u0438, ${r.skipped} \u043F\u0440\u0435\u0441\u043A\u043E\u043A\u043D\u0430\u0442\u0438, ${r.errors.length} \u0413\u0420\u0415\u0428\u041A\u0418:`);
+      for (const e of r.errors) console.error(`[MIGRATE]   ${e}`);
+    } else {
+      console.log(`[MIGRATE] \u0428\u0435\u043C\u0430\u0442\u0430 \u0435 \u0443\u0441\u043E\u0433\u043B\u0430\u0441\u0435\u043D\u0430 \u2014 ${r.created} \u0438\u0437\u0432\u0440\u0448\u0435\u043D\u0438, ${r.skipped} \u043F\u0440\u0435\u0441\u043A\u043E\u043A\u043D\u0430\u0442\u0438`);
+    }
+  }).catch((e) => console.error("[MIGRATE] \u041D\u0435 \u0443\u0441\u043F\u0435\u0430:", e?.message ?? e));
 });
 /*! Bundled license information:
 

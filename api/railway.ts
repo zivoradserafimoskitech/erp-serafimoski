@@ -44,31 +44,35 @@ app.get("/api/test-db", async (c) => {
 });
 
 // 3. Init database tables (SQL method — reliable in production)
+type MigrationResult = { created: number; skipped: number; errors: string[] };
+
+async function runMigrations(): Promise<MigrationResult> {
+  const { getInitSql } = await import("./init-db-sql");
+  const { Pool } = await import("pg");
+  const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl });
+  const statements: string[] = getInitSql();
+  let created = 0, skipped = 0;
+  const errors: string[] = [];
+  for (const stmt of statements) {
+    try {
+      await pool.query(stmt);
+      created++;
+    } catch (e: any) {
+      // 42P07 duplicate_table, 42710 duplicate_object, 42701 duplicate_column — веќе постои
+      if (["42P07", "42710", "42701"].includes(e.code)) skipped++;
+      else errors.push(`${e.code}: ${String(e.message).slice(0, 160)}`);
+    }
+  }
+  await pool.end();
+  return { created, skipped, errors };
+}
+
 app.get("/api/init-db", async (c) => {
   try {
-    const { getInitSql } = await import("./init-db-sql");
-    const { Pool } = await import("pg");
-    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
-    const pool = new Pool({ 
-      connectionString: process.env.DATABASE_URL,
-      ssl
-    });
-    const statements: string[] = getInitSql();
-    let created = 0, skipped = 0;
-    const errors: string[] = [];
-    for (const stmt of statements) {
-      try {
-        await pool.query(stmt);
-        created++;
-      } catch (e: any) {
-        // 42P07 duplicate_table, 42710 duplicate_object, 42701 duplicate_column — веќе постои, прескокни
-        if (["42P07", "42710", "42701"].includes(e.code)) skipped++;
-        else errors.push(`${e.code}: ${e.message.slice(0, 120)}`);
-      }
-    }
-    await pool.end();
-    if (errors.length) return c.json({ status: "partial", created, skipped, errors }, 500);
-    return c.json({ status: "tables created", count: statements.length });
+    const r = await runMigrations();
+    if (r.errors.length) return c.json({ status: "partial", ...r }, 500);
+    return c.json({ status: "tables created", created: r.created, skipped: r.skipped });
   } catch (e: any) {
     return c.json({ status: "error", message: e.message }, 500);
   }
@@ -318,4 +322,22 @@ app.get("*", async (c) => {
 
 serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   console.log(`[BOOT] Server on 0.0.0.0:${port}`);
+
+  // Шемата се усогласува сама при секое подигање.
+  // Сите изрази се IF NOT EXISTS / ADD COLUMN IF NOT EXISTS, па повторувањето е безопасно.
+  // Не смее да го сруши серверот — ако падне, апликацијата работи, само пишува во логот.
+  if (process.env.SKIP_AUTO_MIGRATE === "true") {
+    console.log("[MIGRATE] Прескокнато (SKIP_AUTO_MIGRATE=true)");
+    return;
+  }
+  runMigrations()
+    .then((r) => {
+      if (r.errors.length) {
+        console.error(`[MIGRATE] ${r.created} извршени, ${r.skipped} прескокнати, ${r.errors.length} ГРЕШКИ:`);
+        for (const e of r.errors) console.error(`[MIGRATE]   ${e}`);
+      } else {
+        console.log(`[MIGRATE] Шемата е усогласена — ${r.created} извршени, ${r.skipped} прескокнати`);
+      }
+    })
+    .catch((e) => console.error("[MIGRATE] Не успеа:", e?.message ?? e));
 });
