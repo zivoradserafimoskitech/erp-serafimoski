@@ -62,7 +62,7 @@ function shell(title: string, accent: string, body: string) {
 }
 
 function header(s: any, docTitle: string, docNum: string, metaHtml: string) {
-  const logo = "/logo.png?v=2";
+  const logo = "/logo-black.png?v=1";
   return `<div class="head">
     <div class="co">
       <img src="${esc(logo)}" alt="" onerror="this.style.display='none'">
@@ -279,7 +279,7 @@ export function printQuotation(q: any, settings: any) {
   const c = q?.customer ?? {};
   const items: any[] = q?.items ?? [];
   const vatRate = Number(q?.vatRate ?? s?.defaultVatRate ?? 18);
-  const logo = "/logo.png?v=2";
+  const logo = "/logo-black.png?v=1";
   const totalKg = items.reduce((a, it) => a + (Number(it.weightKg ?? 0) || 0), 0);
   const hasKg = totalKg > 0;
   const rows = items.map((it, i) => `<tr>
@@ -482,7 +482,7 @@ export function printReceipt(rc: any, settings: any) {
 // ══════════════ ИЗВЕШТАЈ ЗА СМЕТКОВОДИТЕЛ ══════════════
 export function printAccountantReport(rep: any, period: { startDate: string; endDate: string }, settings: any) {
   const s = settings ?? {};
-  const logo = "/logo.png?v=2";
+  const logo = "/logo-black.png?v=1";
   const outItems: any[] = rep?.outgoing?.items ?? [];
   const incItems: any[] = rep?.incoming?.items ?? [];
   const rcList: any[] = rep?.receiptsList ?? [];
@@ -756,7 +756,7 @@ export function printCertificateStatement(dn: any, certs: any[], settings: any) 
       <small>${esc(settings?.address ?? "")}${settings?.city ? ", " + esc(settings.city) : ""}<br>
       ЕДБ ${esc(settings?.edb ?? "—")}${settings?.phone ? " · тел. " + esc(settings.phone) : ""}</small>
     </div>
-    ${settings?.logoUrl ? `<img class="logo" src="${esc(settings.logoUrl)}">` : ""}
+    <img class="logo" src="${esc(settings?.logoUrl || "/logo-black.png?v=1")}">
   </div>
 
   <h1>Изјава за вградени материјали</h1>
