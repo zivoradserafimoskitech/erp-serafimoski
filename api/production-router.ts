@@ -52,13 +52,20 @@ export const productionRouter = createRouter({
       if (!wo[0]) return null;
       const opsRaw = await db.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
 
-      // Сесии од скенирање на подот
-      const tLogs = await db
-        .select()
-        .from(operationTimeLogs)
-        .where(eq(operationTimeLogs.workOrderId, input.id));
+      // Сесии од скенирање на подот.
+      // Ако табелата уште не постои (не е пуштен /api/init-db), приказот
+      // мора да продолжи да работи — само без сесии.
+      let tLogs: any[] = [];
+      try {
+        tLogs = (await db
+          .select()
+          .from(operationTimeLogs)
+          .where(eq(operationTimeLogs.workOrderId, input.id))) as any[];
+      } catch (e) {
+        console.warn("operation_time_logs недостапна — пушти /api/init-db", e);
+      }
       const logsByOp = new Map<number, any[]>();
-      for (const l of tLogs as any[]) {
+      for (const l of tLogs) {
         const arr = logsByOp.get(l.operationId) ?? [];
         arr.push(l);
         logsByOp.set(l.operationId, arr);
@@ -114,7 +121,7 @@ export const productionRouter = createRouter({
         runningOps: runningOps.length,
         allDone: allOps.length > 0 && doneOps.length === allOps.length,
         totalLoggedMinutes: Math.round(allOps.reduce((a, o) => a + (o.loggedMinutes ?? 0), 0)),
-        timeLogs: (tLogs as any[])
+        timeLogs: tLogs
           .slice()
           .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
       };
@@ -368,13 +375,18 @@ export const productionRouter = createRouter({
         .where(eq(workOrderOperations.workOrderId, input.id))
         .orderBy(workOrderOperations.sequence);
 
-      const logs = await db
-        .select()
-        .from(operationTimeLogs)
-        .where(eq(operationTimeLogs.workOrderId, input.id));
+      let logs: any[] = [];
+      try {
+        logs = (await db
+          .select()
+          .from(operationTimeLogs)
+          .where(eq(operationTimeLogs.workOrderId, input.id))) as any[];
+      } catch (e) {
+        console.warn("operation_time_logs недостапна — пушти /api/init-db", e);
+      }
 
       const byOp = new Map<number, any[]>();
-      for (const l of logs as any[]) {
+      for (const l of logs) {
         const arr = byOp.get(l.operationId) ?? [];
         arr.push(l);
         byOp.set(l.operationId, arr);

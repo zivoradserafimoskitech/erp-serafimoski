@@ -33034,7 +33034,12 @@ var productionRouter = createRouter({
     }
     if (!wo[0]) return null;
     const opsRaw = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
-    const tLogs = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.workOrderId, input.id));
+    let tLogs = [];
+    try {
+      tLogs = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.workOrderId, input.id));
+    } catch (e) {
+      console.warn("operation_time_logs \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u043F\u043D\u0430 \u2014 \u043F\u0443\u0448\u0442\u0438 /api/init-db", e);
+    }
     const logsByOp = /* @__PURE__ */ new Map();
     for (const l of tLogs) {
       const arr = logsByOp.get(l.operationId) ?? [];
@@ -33320,7 +33325,12 @@ var productionRouter = createRouter({
     const wo = await db2.select().from(workOrders).where(eq(workOrders.id, input.id));
     if (wo.length === 0) return null;
     const ops = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
-    const logs = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.workOrderId, input.id));
+    let logs = [];
+    try {
+      logs = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.workOrderId, input.id));
+    } catch (e) {
+      console.warn("operation_time_logs \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u043F\u043D\u0430 \u2014 \u043F\u0443\u0448\u0442\u0438 /api/init-db", e);
+    }
     const byOp = /* @__PURE__ */ new Map();
     for (const l of logs) {
       const arr = byOp.get(l.operationId) ?? [];

@@ -76,7 +76,7 @@ export default function Production() {
     },
     onError: (e) => toast.error(e.message),
   });
-  const { data: woDetail } = trpc.production.workOrderById.useQuery({ id: selWO! }, { enabled: !!selWO });
+  const { data: woDetail, isLoading: woLoading, error: woError } = trpc.production.workOrderById.useQuery({ id: selWO! }, { enabled: !!selWO });
   const { data: materialsData } = trpc.storage.materialList.useQuery();
   const { data: warehousesData } = trpc.warehouse.warehouseList.useQuery();
 
@@ -289,6 +289,22 @@ export default function Production() {
               <Button size="sm" variant="outline" onClick={() => { if (woDetail) void printWorkOrder(woDetail, companySettings); }}><Printer className="h-3.5 w-3.5 mr-1.5" />Печати / PDF</Button>
             </div>
           </div>
+          {!woDetail && woLoading && (
+            <p className="py-10 text-center text-gray-400 text-sm">Вчитување на налогот...</p>
+          )}
+
+          {!woDetail && woError && (
+            <div className="py-8 px-4 text-center space-y-3">
+              <p className="text-sm font-medium text-red-700">Деталите не можат да се вчитаат</p>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">{woError.message}</p>
+              <p className="text-xs text-gray-400">
+                Ако неодамна е направен деплој со нови полиња, отвори
+                <span className="font-mono mx-1">/api/init-db</span>
+                еднаш па освежи со Ctrl+Shift+R.
+              </p>
+            </div>
+          )}
+
           {woDetail && (
             <div className="space-y-5 px-6 pb-6">
               {/* Инфо мрежа */}
