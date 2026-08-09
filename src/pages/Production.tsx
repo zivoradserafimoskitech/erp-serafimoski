@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { printWorkOrder, printRequisition } from "@/lib/print-documents";
-import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck } from "lucide-react";
+import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck, Clock } from "lucide-react";
 import { MaterialPicker } from "@/components/MaterialPicker";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
@@ -36,6 +36,17 @@ const opList: Record<string, string> = {
   drilling: "Дупчење", painting: "Бојадисување", assembly: "Монтажа",
   quality_control: "Контрола на квалитет", packaging: "Пакување",
 };
+
+function LiveElapsed({ since }: { since: string | Date }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const total = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 1000));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), sec = total % 60;
+  return <span className="font-mono tabular-nums">{h > 0 ? `${h}:` : ""}{String(m).padStart(2, "0")}:{String(sec).padStart(2, "0")}</span>;
+}
 
 export default function Production() {
   const utils = trpc.useUtils();
@@ -308,9 +319,31 @@ export default function Production() {
                 <TabsList className="bg-amber-50">
                   <TabsTrigger value="operations"><Layers className="h-4 w-4 mr-1" /> Операции</TabsTrigger>
                   <TabsTrigger value="materials"><Package className="h-4 w-4 mr-1" /> Материјали</TabsTrigger>
+                  <TabsTrigger value="timelogs"><Clock className="h-4 w-4 mr-1" /> Сесии</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="operations" className="space-y-4">
+                  {woDetail.scanSummary?.allDone && woDetail.status !== "completed" && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border-2 border-emerald-300 bg-emerald-50 px-4 py-3">
+                      <div className="text-sm text-emerald-900">
+                        <b>Сите операции се завршени.</b> Налогот сè уште е отворен — затвори го за
+                        готовиот производ да влезе во ГЛ-ПРОД.
+                      </div>
+                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={() => updateMut.mutate({ id: woDetail.id, status: "completed" } as any)}>
+                        Заврши налог
+                      </Button>
+                    </div>
+                  )}
+                  {(woDetail.scanSummary?.totalLoggedMinutes ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-4 text-xs text-gray-600 rounded-lg bg-gray-50 border px-4 py-2">
+                      <span>Скенирано време: <b>{Math.floor((woDetail.scanSummary.totalLoggedMinutes) / 60)}ч {(woDetail.scanSummary.totalLoggedMinutes) % 60}мин</b></span>
+                      <span>Завршени: <b>{woDetail.scanSummary.doneOps}/{woDetail.scanSummary.totalOps}</b></span>
+                      {woDetail.scanSummary.runningOps > 0 && (
+                        <span className="text-blue-700 font-medium">{woDetail.scanSummary.runningOps} во тек сега</span>
+                      )}
+                    </div>
+                  )}
                   {!woDetail.operations || woDetail.operations.length === 0 ? (<p className="text-gray-400 text-sm">Нема операции</p>) : (
                     <div className="space-y-2">
                       {woDetail.operations.map((op: any) => (
@@ -320,11 +353,34 @@ export default function Production() {
                             <span className="font-medium text-sm">{opList[op.operation] || op.operation}</span>
                             {op.description && <span className="text-gray-400 text-xs ml-2">{op.description}</span>}
                             {op.estimatedTime && <span className="text-blue-500 text-xs ml-2">план {parseFloat(op.estimatedTime)}ч</span>}
+                            {op.openLog && (
+                              <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                <LiveElapsed since={op.openLog.startedAt} />
+                                {op.openLog.operator && <span className="font-normal text-blue-600">· {op.openLog.operator}</span>}
+                              </span>
+                            )}
+                            {!op.openLog && op.timeFromScan && (
+                              <span className="ml-2 text-[11px] text-gray-400">
+                                скенирано · {op.sessionCount} {op.sessionCount === 1 ? "сесија" : "сесии"}
+                                {op.operators?.length > 0 && ` · ${op.operators.join(", ")}`}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-1.5 text-xs">
-                            <Input type="number" step="0.25" className="h-7 w-20 text-xs" placeholder="реално ч."
+                            <Input type="number" step="0.25" className={`h-7 w-20 text-xs ${op.timeFromScan ? "bg-blue-50 border-blue-200" : ""}`}
+                              placeholder="реално ч."
+                              title={op.timeFromScan ? "Времето доаѓа од скенирање на подот. Рачната измена ќе биде прегазена при следното скенирање." : undefined}
                               defaultValue={op.actualTime ? parseFloat(op.actualTime) : ""}
-                              onBlur={(e) => { const v = e.target.value; if (v !== String(op.actualTime ?? "")) opUpdateMut.mutate({ id: op.id, actualTime: v || "0" } as any); }} />
+                              onBlur={(e) => {
+                                const v = e.target.value;
+                                if (v === String(op.actualTime ?? "")) return;
+                                if (op.timeFromScan && !confirm(
+                                  `Времето на оваа операција доаѓа од скенирање (${op.sessionCount} сесии).\n\n` +
+                                  `Ако го смениш рачно, вредноста ќе се врати назад штом работникот следниот пат скенира.\n\nСепак да го сменам?`
+                                )) { e.target.value = op.actualTime ? String(parseFloat(op.actualTime)) : ""; return; }
+                                opUpdateMut.mutate({ id: op.id, actualTime: v || "0" } as any);
+                              }} />
                             <span className="text-gray-400">ч ×</span>
                             <Input type="number" step="10" className="h-7 w-24 text-xs" placeholder="ден/час"
                               defaultValue={op.costRate && parseFloat(op.costRate) > 0 ? parseFloat(op.costRate) : ""}
@@ -355,6 +411,43 @@ export default function Production() {
                     </div>
                     <Button type="submit" size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={opCreateMut.isPending}><Plus className="h-3.5 w-3.5 mr-1" />Додади</Button>
                   </form>
+                </TabsContent>
+
+                <TabsContent value="timelogs" className="space-y-3">
+                  {!woDetail.scanSummary?.timeLogs || woDetail.scanSummary.timeLogs.length === 0 ? (
+                    <p className="text-gray-400 text-sm py-6 text-center">
+                      Нема скенирани сесии. Работниците ги создаваат со скенирање на QR од печатениот налог.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {woDetail.scanSummary.timeLogs.map((l: any) => {
+                        const op = (woDetail.operations ?? []).find((o: any) => o.id === l.operationId);
+                        const mins = Number(l.minutes ?? 0);
+                        return (
+                          <div key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border rounded-lg px-3 py-2 text-sm bg-white">
+                            <span className="font-medium min-w-[110px]">
+                              {op ? (opList[op.operation] || op.operation) : `Операција #${l.operationId}`}
+                            </span>
+                            <span className="text-gray-600 text-xs">{l.operator || "—"}</span>
+                            <span className="text-gray-400 text-xs">
+                              {new Date(l.startedAt).toLocaleString("mk-MK", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              {l.endedAt && ` → ${new Date(l.endedAt).toLocaleTimeString("mk-MK", { hour: "2-digit", minute: "2-digit" })}`}
+                            </span>
+                            <span className="ml-auto font-semibold">
+                              {l.endedAt ? (
+                                mins >= 60 ? `${Math.floor(mins / 60)}ч ${Math.round(mins % 60)}мин` : `${Math.round(mins)} мин`
+                              ) : (
+                                <span className="text-blue-700 flex items-center gap-1.5">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                  <LiveElapsed since={l.startedAt} />
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="materials" className="space-y-4">

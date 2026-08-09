@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, Check, ArrowLeft, AlertCircle, User, Clock } from "lucide-react";
+import { Play, Pause, Check, ArrowLeft, AlertCircle, User, Clock, PackageCheck } from "lucide-react";
 
 const OPERATION_MK: Record<string, string> = {
   cutting: "Сечење", welding: "Варење", bending: "Свиткување", drilling: "Дупчење",
@@ -52,6 +52,8 @@ export default function WorkOrderScan() {
   const [msg, setMsg] = useState<string | null>(null);
   const [qtyFor, setQtyFor] = useState<number | null>(null);
   const [qty, setQty] = useState("");
+  const [finishWo, setFinishWo] = useState(false);
+  const [producedQty, setProducedQty] = useState("1");
 
   const { data: wo, isLoading } = trpc.production.woScanById.useQuery(
     { id: woId },
@@ -77,8 +79,25 @@ export default function WorkOrderScan() {
       setQtyFor(null);
       setQty("");
       setMsg(`Запишани ${fmtMinutes(r.sessionMinutes)} · вкупно ${fmtMinutes(r.totalMinutes)}`);
+      // Последната операција е готова — понуди затворање на налогот
+      if (r.allOperationsDone && r.workOrderStatus !== "completed") setFinishWo(true);
     },
   });
+
+  const closeSessions = trpc.production.closeOpenSessions.useMutation();
+  const finishMut = trpc.production.workOrderUpdate.useMutation({
+    onSuccess: () => {
+      invalidate();
+      setFinishWo(false);
+      setMsg("Налогот е завршен · готовиот производ е заведен во ГЛ-ПРОД");
+    },
+    onError: (e) => setMsg(`Грешка: ${e.message}`),
+  });
+
+  const finishWorkOrder = async () => {
+    await closeSessions.mutateAsync({ workOrderId: woId });
+    finishMut.mutate({ id: woId, status: "completed", producedQty } as any);
+  };
 
   const saveName = () => {
     const n = operator.trim();
@@ -128,6 +147,8 @@ export default function WorkOrderScan() {
 
   const ops = (wo.operations ?? []) as any[];
   const runningCount = ops.filter((o) => o.openLog).length;
+  const allOpsDone = ops.length > 0 && ops.every((o) => o.status === "completed" || o.status === "skipped");
+  const showFinish = finishWo || (allOpsDone && wo.status !== "completed");
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -158,6 +179,31 @@ export default function WorkOrderScan() {
             )}
           </div>
         </div>
+
+        {showFinish && (
+          <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2 font-semibold text-emerald-900">
+              <PackageCheck className="h-5 w-5" />Сите операции се завршени
+            </div>
+            <p className="text-sm text-emerald-800">
+              Затвори го налогот за готовиот производ да влезе во магацинот.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-emerald-900">Произведена количина</Label>
+              <Input type="number" inputMode="decimal" className="h-12 text-lg text-center bg-white"
+                value={producedQty} onChange={(e) => setProducedQty(e.target.value)} />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1 h-12 bg-white"
+                onClick={() => setFinishWo(false)}>Подоцна</Button>
+              <Button className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={finishMut.isPending || closeSessions.isPending}
+                onClick={finishWorkOrder}>
+                {finishMut.isPending ? "..." : "Заврши налог"}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {msg && (
           <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-xl px-4 py-3 flex items-center justify-between">

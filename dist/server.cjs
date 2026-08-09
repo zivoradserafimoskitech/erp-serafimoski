@@ -33033,7 +33033,28 @@ var productionRouter = createRouter({
       orderNumber = o[0]?.n ?? null;
     }
     if (!wo[0]) return null;
-    const ops = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
+    const opsRaw = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
+    const tLogs = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.workOrderId, input.id));
+    const logsByOp = /* @__PURE__ */ new Map();
+    for (const l of tLogs) {
+      const arr = logsByOp.get(l.operationId) ?? [];
+      arr.push(l);
+      logsByOp.set(l.operationId, arr);
+    }
+    const ops = opsRaw.map((o) => {
+      const ls = logsByOp.get(o.id) ?? [];
+      const open = ls.find((l) => !l.endedAt) ?? null;
+      const loggedMinutes = ls.filter((l) => l.endedAt).reduce((a, l) => a + (Number(l.minutes ?? 0) || 0), 0);
+      return {
+        ...o,
+        openLog: open ? { id: open.id, operator: open.operator, startedAt: open.startedAt } : null,
+        loggedMinutes: Math.round(loggedMinutes * 100) / 100,
+        sessionCount: ls.filter((l) => l.endedAt).length,
+        operators: Array.from(new Set(ls.map((l) => l.operator).filter(Boolean))),
+        // Времето доаѓа од скенирање — рачното менување го газѝ
+        timeFromScan: ls.length > 0
+      };
+    });
     const mats = await db2.select({
       id: workOrderMaterials.id,
       workOrderId: workOrderMaterials.workOrderId,
@@ -33056,11 +33077,23 @@ var productionRouter = createRouter({
     }));
     const plannedKg = matsWithWeight.filter((m) => m.isActual !== "actual").reduce((a, m) => a + m.weightKg, 0);
     const actualKg = matsWithWeight.filter((m) => m.isActual === "actual").reduce((a, m) => a + m.weightKg, 0);
+    const allOps = ops;
+    const doneOps = allOps.filter((o) => o.status === "completed" || o.status === "skipped");
+    const runningOps = allOps.filter((o) => o.openLog);
+    const scanSummary = {
+      totalOps: allOps.length,
+      doneOps: doneOps.length,
+      runningOps: runningOps.length,
+      allDone: allOps.length > 0 && doneOps.length === allOps.length,
+      totalLoggedMinutes: Math.round(allOps.reduce((a, o) => a + (o.loggedMinutes ?? 0), 0)),
+      timeLogs: tLogs.slice().sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    };
     return {
       ...wo[0],
       orderNumber,
       operations: ops,
       materials: matsWithWeight,
+      scanSummary,
       weightSummary: {
         plannedKg: Math.round(plannedKg * 1e3) / 1e3,
         actualKg: Math.round(actualKg * 1e3) / 1e3,
@@ -33366,12 +33399,51 @@ var productionRouter = createRouter({
     const op = ops[0];
     if (op) await recalcWorkOrderCost(op.workOrderId).catch(() => {
     });
+    let allDone = false;
+    let woNumber = null;
+    let woStatus = null;
+    if (op) {
+      const siblings = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, op.workOrderId));
+      const list = siblings;
+      allDone = list.length > 0 && list.every((o) => o.status === "completed" || o.status === "skipped");
+      const w = await db2.select().from(workOrders).where(eq(workOrders.id, op.workOrderId));
+      woNumber = w[0]?.woNumber ?? null;
+      woStatus = w[0]?.status ?? null;
+    }
     return {
       success: true,
       sessionMinutes: Math.round(sessionMinutes),
       totalMinutes: Math.round(totalMinutes),
-      hours: Math.round(hours * 100) / 100
+      hours: Math.round(hours * 100) / 100,
+      workOrderId: op?.workOrderId ?? null,
+      allOperationsDone: allDone,
+      workOrderNumber: woNumber,
+      workOrderStatus: woStatus
     };
+  }),
+  // ═══════════ ЗАТВОРАЊЕ НА ОТВОРЕНИ СЕСИИ ═══════════
+  // Се вика пред затворање на налог, за да не висат почнати операции.
+  // Самото затворање оди преку workOrderUpdate — иста патека како од канцеларија,
+  // за да не се дуплира логиката за ГЛ-ПРОД.
+  closeOpenSessions: publicQuery.input(external_exports.object({ workOrderId: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const logs = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.workOrderId, input.workOrderId));
+    const now = /* @__PURE__ */ new Date();
+    const open = logs.filter((l) => !l.endedAt);
+    const touched = /* @__PURE__ */ new Set();
+    for (const l of open) {
+      const mins = Math.max(0, (now.getTime() - new Date(l.startedAt).getTime()) / 6e4);
+      await db2.update(operationTimeLogs).set({ endedAt: now, minutes: mins.toFixed(2) }).where(eq(operationTimeLogs.id, l.id));
+      touched.add(l.operationId);
+    }
+    for (const opId of touched) {
+      const fresh = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.operationId, opId));
+      const totalMin = fresh.filter((l) => l.endedAt).reduce((a, l) => a + (Number(l.minutes ?? 0) || 0), 0);
+      await db2.update(workOrderOperations).set({ actualTime: (totalMin / 60).toFixed(2) }).where(eq(workOrderOperations.id, opId));
+    }
+    if (touched.size > 0) await recalcWorkOrderCost(input.workOrderId).catch(() => {
+    });
+    return { success: true, closed: open.length };
   }),
   opTimeLogs: publicQuery.input(external_exports.object({ workOrderId: external_exports.number() })).query(async ({ input }) => {
     const db2 = getDb();

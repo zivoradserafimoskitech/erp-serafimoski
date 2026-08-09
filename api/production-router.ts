@@ -50,7 +50,36 @@ export const productionRouter = createRouter({
         orderNumber = o[0]?.n ?? null;
       }
       if (!wo[0]) return null;
-      const ops = await db.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
+      const opsRaw = await db.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
+
+      // Сесии од скенирање на подот
+      const tLogs = await db
+        .select()
+        .from(operationTimeLogs)
+        .where(eq(operationTimeLogs.workOrderId, input.id));
+      const logsByOp = new Map<number, any[]>();
+      for (const l of tLogs as any[]) {
+        const arr = logsByOp.get(l.operationId) ?? [];
+        arr.push(l);
+        logsByOp.set(l.operationId, arr);
+      }
+      const ops = (opsRaw as any[]).map((o) => {
+        const ls = logsByOp.get(o.id) ?? [];
+        const open = ls.find((l) => !l.endedAt) ?? null;
+        const loggedMinutes = ls
+          .filter((l) => l.endedAt)
+          .reduce((a, l) => a + (Number(l.minutes ?? 0) || 0), 0);
+        return {
+          ...o,
+          openLog: open ? { id: open.id, operator: open.operator, startedAt: open.startedAt } : null,
+          loggedMinutes: Math.round(loggedMinutes * 100) / 100,
+          sessionCount: ls.filter((l) => l.endedAt).length,
+          operators: Array.from(new Set(ls.map((l) => l.operator).filter(Boolean))),
+          // Времето доаѓа од скенирање — рачното менување го газѝ
+          timeFromScan: ls.length > 0,
+        };
+      });
+
       const mats = await db
         .select({
           id: workOrderMaterials.id, workOrderId: workOrderMaterials.workOrderId,
@@ -76,8 +105,22 @@ export const productionRouter = createRouter({
       const actualKg = matsWithWeight
         .filter((m) => m.isActual === "actual")
         .reduce((a, m) => a + m.weightKg, 0);
+      const allOps = ops as any[];
+      const doneOps = allOps.filter((o) => o.status === "completed" || o.status === "skipped");
+      const runningOps = allOps.filter((o) => o.openLog);
+      const scanSummary = {
+        totalOps: allOps.length,
+        doneOps: doneOps.length,
+        runningOps: runningOps.length,
+        allDone: allOps.length > 0 && doneOps.length === allOps.length,
+        totalLoggedMinutes: Math.round(allOps.reduce((a, o) => a + (o.loggedMinutes ?? 0), 0)),
+        timeLogs: (tLogs as any[])
+          .slice()
+          .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
+      };
+
       return {
-        ...wo[0], orderNumber, operations: ops, materials: matsWithWeight,
+        ...wo[0], orderNumber, operations: ops, materials: matsWithWeight, scanSummary,
         weightSummary: {
           plannedKg: Math.round(plannedKg * 1000) / 1000,
           actualKg: Math.round(actualKg * 1000) / 1000,
@@ -450,12 +493,75 @@ export const productionRouter = createRouter({
       const op: any = ops[0];
       if (op) await recalcWorkOrderCost(op.workOrderId).catch(() => {});
 
+      // Дали налогот е спремен за затворање?
+      let allDone = false;
+      let woNumber: string | null = null;
+      let woStatus: string | null = null;
+      if (op) {
+        const siblings = await db
+          .select()
+          .from(workOrderOperations)
+          .where(eq(workOrderOperations.workOrderId, op.workOrderId));
+        const list = siblings as any[];
+        allDone = list.length > 0 && list.every((o) => o.status === "completed" || o.status === "skipped");
+        const w = await db.select().from(workOrders).where(eq(workOrders.id, op.workOrderId));
+        woNumber = (w[0] as any)?.woNumber ?? null;
+        woStatus = (w[0] as any)?.status ?? null;
+      }
+
       return {
         success: true,
         sessionMinutes: Math.round(sessionMinutes),
         totalMinutes: Math.round(totalMinutes),
         hours: Math.round(hours * 100) / 100,
+        workOrderId: op?.workOrderId ?? null,
+        allOperationsDone: allDone,
+        workOrderNumber: woNumber,
+        workOrderStatus: woStatus,
       };
+    }),
+
+  // ═══════════ ЗАТВОРАЊЕ НА ОТВОРЕНИ СЕСИИ ═══════════
+  // Се вика пред затворање на налог, за да не висат почнати операции.
+  // Самото затворање оди преку workOrderUpdate — иста патека како од канцеларија,
+  // за да не се дуплира логиката за ГЛ-ПРОД.
+  closeOpenSessions: publicQuery
+    .input(z.object({ workOrderId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const logs = await db
+        .select()
+        .from(operationTimeLogs)
+        .where(eq(operationTimeLogs.workOrderId, input.workOrderId));
+
+      const now = new Date();
+      const open = (logs as any[]).filter((l) => !l.endedAt);
+      const touched = new Set<number>();
+
+      for (const l of open) {
+        const mins = Math.max(0, (now.getTime() - new Date(l.startedAt).getTime()) / 60000);
+        await db.update(operationTimeLogs)
+          .set({ endedAt: now, minutes: mins.toFixed(2) } as any)
+          .where(eq(operationTimeLogs.id, l.id));
+        touched.add(l.operationId);
+      }
+
+      // Препиши го вкупното време на засегнатите операции
+      for (const opId of touched) {
+        const fresh = await db
+          .select()
+          .from(operationTimeLogs)
+          .where(eq(operationTimeLogs.operationId, opId));
+        const totalMin = (fresh as any[])
+          .filter((l) => l.endedAt)
+          .reduce((a, l) => a + (Number(l.minutes ?? 0) || 0), 0);
+        await db.update(workOrderOperations)
+          .set({ actualTime: (totalMin / 60).toFixed(2) } as any)
+          .where(eq(workOrderOperations.id, opId));
+      }
+
+      if (touched.size > 0) await recalcWorkOrderCost(input.workOrderId).catch(() => {});
+      return { success: true, closed: open.length };
     }),
 
   opTimeLogs: publicQuery
