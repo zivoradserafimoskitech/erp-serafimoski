@@ -136,6 +136,7 @@ export default function Accounting() {
   const { data: nextInvoiceNum, refetch: refetchNextNum } = trpc.accounting.nextInvoiceNumber.useQuery();
 
   const [reportData, setReportData] = useState<any>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const handleGenerateReport = async () => {
     if (!reportPeriod.startDate || !reportPeriod.endDate) {
@@ -144,6 +145,7 @@ export default function Accounting() {
     }
     setReportLoading(true);
     setReportData(null);
+    setReportError(null);
     try {
       const res = await fetch("/api/trpc/accounting.accountantReport?input=" + encodeURIComponent(JSON.stringify({ json: { startDate: reportPeriod.startDate, endDate: reportPeriod.endDate } })));
       const json = await res.json();
@@ -151,12 +153,18 @@ export default function Accounting() {
         setReportData(json.result.data.json);
         toast.success("Извештајот е генериран");
       } else if (json.error) {
-        toast.error(json.error.message || "Грешка при генерирање");
+        const raw = json.error.message || json.error.json?.message || "";
+        console.error("accountantReport:", json.error);
+        setReportError(raw || "Непозната грешка од серверот");
+        toast.error("Извештајот не е генериран — види ја пораката во прозорецот");
       } else {
+        setReportError(null);
         toast.error("Нема податоци за избраниот период");
       }
     } catch (e: any) {
-      toast.error(e.message || "Грешка при генерирање");
+      console.error("accountantReport:", e);
+      setReportError(e?.message || "Врската со серверот падна");
+      toast.error("Извештајот не е генериран");
     } finally {
       setReportLoading(false);
     }
@@ -591,6 +599,20 @@ export default function Accounting() {
                   </Button>
                   {reportData && <Button variant="outline" onClick={() => printAccountantReport(reportData, reportPeriod, companySettings)}><FileText className="h-4 w-4 mr-2" />Печати извештај / PDF</Button>}
                 </div>
+                {reportError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 space-y-2">
+                    <p className="text-sm font-medium text-red-800">Извештајот не е генериран</p>
+                    <p className="text-xs text-red-700 font-mono break-words whitespace-pre-wrap">{reportError}</p>
+                    {/does not exist|column|relation/i.test(reportError) && (
+                      <p className="text-xs text-gray-600">
+                        Базата нема некоја колона или табела што апликацијата ја очекува. Отвори
+                        <span className="font-mono mx-1">/api/init-db</span>
+                        еднаш, па пробај повторно.
+                      </p>
+                    )}
+                  </div>
+                )}
+
 
                 {reportData && (() => {
                   const wo = reportData.workOrders ?? [];
