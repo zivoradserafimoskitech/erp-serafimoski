@@ -43,6 +43,54 @@ export const companySettings = pgTable("company_settings", {
 export type CompanySetting = typeof companySettings.$inferSelect;
 
 // ============= USERS =============
+// ============= БАНКА: ИЗВОДИ И СТАВКИ =============
+export const bankStatements = pgTable("bank_statements", {
+  id: serial("id").primaryKey(),
+  accountNumber: varchar("account_number", { length: 40 }).notNull(),
+  statementNo: varchar("statement_no", { length: 20 }),
+  statementDate: date("statement_date").notNull(),
+  prevBalance: decimal("prev_balance", { precision: 16, scale: 2 }).default("0"),
+  debitTotal: decimal("debit_total", { precision: 16, scale: 2 }).default("0"),
+  creditTotal: decimal("credit_total", { precision: 16, scale: 2 }).default("0"),
+  newBalance: decimal("new_balance", { precision: 16, scale: 2 }).default("0"),
+  currency: varchar("currency", { length: 10 }).default("MKD"),
+  sourceFormat: varchar("source_format", { length: 20 }),
+  fileName: varchar("file_name", { length: 255 }),
+  importedAt: timestamp("imported_at").defaultNow().notNull(),
+});
+
+export type BankStatement = typeof bankStatements.$inferSelect;
+
+export const bankTransactions = pgTable("bank_transactions", {
+  id: serial("id").primaryKey(),
+  statementId: bigint("statement_id", { mode: "number", unsigned: true }),
+  accountNumber: varchar("account_number", { length: 40 }),
+  txDate: date("tx_date").notNull(),
+  direction: varchar("direction", { length: 10 }).notNull(), // in | out
+  amount: decimal("amount", { precision: 16, scale: 2 }).notNull().default("0"),
+  provision: decimal("provision", { precision: 14, scale: 2 }).default("0"),
+  counterpartyName: varchar("counterparty_name", { length: 255 }),
+  counterpartyAccount: varchar("counterparty_account", { length: 40 }),
+  purpose: text("purpose"),
+  code: varchar("code", { length: 10 }),
+  refPbo: varchar("ref_pbo", { length: 60 }),
+  refPbz: varchar("ref_pbz", { length: 60 }),
+  bankRef: varchar("bank_ref", { length: 60 }),
+  // Поврзување со документ
+  matchStatus: varchar("match_status", { length: 20 }).notNull().default("unmatched"),
+  matchedType: varchar("matched_type", { length: 30 }),
+  matchedId: bigint("matched_id", { mode: "number", unsigned: true }),
+  matchedRef: varchar("matched_ref", { length: 120 }),
+  partnerId: bigint("partner_id", { mode: "number", unsigned: true }),
+  partnerType: varchar("partner_type", { length: 20 }),
+  note: text("note"),
+  dedupeKey: varchar("dedupe_key", { length: 180 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type BankTransaction = typeof bankTransactions.$inferSelect;
+
 // ============= КОРИСНИЦИ НА АПЛИКАЦИЈАТА (улоги и пристап) =============
 // Секој има свој код за влез. Улогата одредува што смее.
 export const appUsers = pgTable("app_users", {

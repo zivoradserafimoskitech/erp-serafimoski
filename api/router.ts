@@ -14,6 +14,7 @@ import { emailRouter } from "./email-router";
 import { remnantsRouter } from "./remnants-router";
 import { certificatesRouter } from "./certificates-router";
 import { appUsersRouter } from "./app-users-router";
+import { bankRouter } from "./bank-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -34,6 +35,7 @@ export const appRouter = createRouter({
   remnants: remnantsRouter,
   certificates: certificatesRouter,
   appUsers: appUsersRouter,
+  bank: bankRouter,
 });
 
 export type AppRouter = typeof appRouter;

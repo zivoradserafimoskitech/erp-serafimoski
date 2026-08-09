@@ -1315,5 +1315,51 @@ export function getInitSql(): string[] {
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "app_users_passcode_uq" ON "app_users" ("passcode")`,
+
+    // ===== БАНКА =====
+    `CREATE TABLE IF NOT EXISTS "bank_statements" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"account_number" varchar(40) NOT NULL,
+	"statement_no" varchar(20),
+	"statement_date" date NOT NULL,
+	"prev_balance" numeric(16, 2) DEFAULT '0',
+	"debit_total" numeric(16, 2) DEFAULT '0',
+	"credit_total" numeric(16, 2) DEFAULT '0',
+	"new_balance" numeric(16, 2) DEFAULT '0',
+	"currency" varchar(10) DEFAULT 'MKD',
+	"source_format" varchar(20),
+	"file_name" varchar(255),
+	"imported_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE TABLE IF NOT EXISTS "bank_transactions" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"statement_id" bigint,
+	"account_number" varchar(40),
+	"tx_date" date NOT NULL,
+	"direction" varchar(10) NOT NULL,
+	"amount" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"provision" numeric(14, 2) DEFAULT '0',
+	"counterparty_name" varchar(255),
+	"counterparty_account" varchar(40),
+	"purpose" text,
+	"code" varchar(10),
+	"ref_pbo" varchar(60),
+	"ref_pbz" varchar(60),
+	"bank_ref" varchar(60),
+	"match_status" varchar(20) DEFAULT 'unmatched' NOT NULL,
+	"matched_type" varchar(30),
+	"matched_id" bigint,
+	"matched_ref" varchar(120),
+	"partner_id" bigint,
+	"partner_type" varchar(20),
+	"note" text,
+	"dedupe_key" varchar(180),
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "bank_tx_dedupe_uq" ON "bank_transactions" ("dedupe_key")`,
+    `CREATE INDEX IF NOT EXISTS "bank_tx_date_idx" ON "bank_transactions" ("tx_date")`,
+    `CREATE INDEX IF NOT EXISTS "bank_tx_status_idx" ON "bank_transactions" ("match_status")`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "bank_stmt_uq" ON "bank_statements" ("account_number", "statement_date", "statement_no")`,
   ];
 }

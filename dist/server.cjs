@@ -4961,8 +4961,8 @@ var init_dialect = __esm({
       escapeName(name2) {
         return `"${name2}"`;
       }
-      escapeParam(num) {
-        return `$${num + 1}`;
+      escapeParam(num2) {
+        return `$${num2 + 1}`;
       }
       escapeString(str) {
         return `'${str.replace(/'/g, "''")}'`;
@@ -9038,6 +9038,8 @@ var schema_exports = {};
 __export(schema_exports, {
   appUsers: () => appUsers,
   auditLog: () => auditLog,
+  bankStatements: () => bankStatements,
+  bankTransactions: () => bankTransactions,
   companySettings: () => companySettings,
   customers: () => customers,
   deliveryNotes: () => deliveryNotes,
@@ -9085,7 +9087,7 @@ __export(schema_exports, {
   workOrderOperations: () => workOrderOperations,
   workOrders: () => workOrders
 });
-var companySettings, appUsers, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
+var companySettings, bankStatements, bankTransactions, appUsers, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_pg_core();
@@ -9113,6 +9115,48 @@ var init_schema2 = __esm({
       // Параметри за кроење / остатоци
       cutKerfMm: decimal("cut_kerf_mm", { precision: 6, scale: 1 }).default("2"),
       minRemnantMm: decimal("min_remnant_mm", { precision: 8, scale: 1 }).default("300"),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    bankStatements = pgTable("bank_statements", {
+      id: serial("id").primaryKey(),
+      accountNumber: varchar("account_number", { length: 40 }).notNull(),
+      statementNo: varchar("statement_no", { length: 20 }),
+      statementDate: date5("statement_date").notNull(),
+      prevBalance: decimal("prev_balance", { precision: 16, scale: 2 }).default("0"),
+      debitTotal: decimal("debit_total", { precision: 16, scale: 2 }).default("0"),
+      creditTotal: decimal("credit_total", { precision: 16, scale: 2 }).default("0"),
+      newBalance: decimal("new_balance", { precision: 16, scale: 2 }).default("0"),
+      currency: varchar("currency", { length: 10 }).default("MKD"),
+      sourceFormat: varchar("source_format", { length: 20 }),
+      fileName: varchar("file_name", { length: 255 }),
+      importedAt: timestamp("imported_at").defaultNow().notNull()
+    });
+    bankTransactions = pgTable("bank_transactions", {
+      id: serial("id").primaryKey(),
+      statementId: bigint4("statement_id", { mode: "number", unsigned: true }),
+      accountNumber: varchar("account_number", { length: 40 }),
+      txDate: date5("tx_date").notNull(),
+      direction: varchar("direction", { length: 10 }).notNull(),
+      // in | out
+      amount: decimal("amount", { precision: 16, scale: 2 }).notNull().default("0"),
+      provision: decimal("provision", { precision: 14, scale: 2 }).default("0"),
+      counterpartyName: varchar("counterparty_name", { length: 255 }),
+      counterpartyAccount: varchar("counterparty_account", { length: 40 }),
+      purpose: text("purpose"),
+      code: varchar("code", { length: 10 }),
+      refPbo: varchar("ref_pbo", { length: 60 }),
+      refPbz: varchar("ref_pbz", { length: 60 }),
+      bankRef: varchar("bank_ref", { length: 60 }),
+      // Поврзување со документ
+      matchStatus: varchar("match_status", { length: 20 }).notNull().default("unmatched"),
+      matchedType: varchar("matched_type", { length: 30 }),
+      matchedId: bigint4("matched_id", { mode: "number", unsigned: true }),
+      matchedRef: varchar("matched_ref", { length: 120 }),
+      partnerId: bigint4("partner_id", { mode: "number", unsigned: true }),
+      partnerType: varchar("partner_type", { length: 20 }),
+      note: text("note"),
+      dedupeKey: varchar("dedupe_key", { length: 180 }),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
@@ -10107,11 +10151,11 @@ async function getNextDocNumber(kind, year2) {
     await db2.update(docCounters).set({ value: nextVal, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
   }
   const prefix = PREFIXES[kind] ?? "";
-  const num = String(nextVal).padStart(3, "0");
+  const num2 = String(nextVal).padStart(3, "0");
   if (kind === "invoice") {
-    return `${num}/${y}`;
+    return `${num2}/${y}`;
   }
-  return `${prefix}-${num}/${y}`;
+  return `${prefix}-${num2}/${y}`;
 }
 async function getNextDocNumberTxn(db2, kind, year2) {
   const y = year2 ?? (/* @__PURE__ */ new Date()).getFullYear();
@@ -10125,9 +10169,9 @@ async function getNextDocNumberTxn(db2, kind, year2) {
     await db2.update(docCounters).set({ value: nextVal, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
   }
   const prefix = PREFIXES[kind] ?? "";
-  const num = String(nextVal).padStart(3, "0");
-  if (kind === "invoice") return `${num}/${y}`;
-  return `${prefix}-${num}/${y}`;
+  const num2 = String(nextVal).padStart(3, "0");
+  if (kind === "invoice") return `${num2}/${y}`;
+  return `${prefix}-${num2}/${y}`;
 }
 async function peekNextDocNumber(kind, year2) {
   const db2 = getDb();
@@ -10135,9 +10179,9 @@ async function peekNextDocNumber(kind, year2) {
   const existing = await db2.select().from(docCounters).where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
   const nextVal = existing.length === 0 ? 1 : existing[0].value + 1;
   const prefix = PREFIXES[kind] ?? "";
-  const num = String(nextVal).padStart(3, "0");
-  if (kind === "invoice") return `${num}/${y}`;
-  return `${prefix}-${num}/${y}`;
+  const num2 = String(nextVal).padStart(3, "0");
+  if (kind === "invoice") return `${num2}/${y}`;
+  return `${prefix}-${num2}/${y}`;
 }
 async function bumpDocCounter(kind, usedNumber, year2) {
   const m = usedNumber.match(/(\d+)\s*\//);
@@ -13370,7 +13414,52 @@ function getInitSql() {
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS "app_users_passcode_uq" ON "app_users" ("passcode")`
+    `CREATE UNIQUE INDEX IF NOT EXISTS "app_users_passcode_uq" ON "app_users" ("passcode")`,
+    // ===== БАНКА =====
+    `CREATE TABLE IF NOT EXISTS "bank_statements" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"account_number" varchar(40) NOT NULL,
+	"statement_no" varchar(20),
+	"statement_date" date NOT NULL,
+	"prev_balance" numeric(16, 2) DEFAULT '0',
+	"debit_total" numeric(16, 2) DEFAULT '0',
+	"credit_total" numeric(16, 2) DEFAULT '0',
+	"new_balance" numeric(16, 2) DEFAULT '0',
+	"currency" varchar(10) DEFAULT 'MKD',
+	"source_format" varchar(20),
+	"file_name" varchar(255),
+	"imported_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE TABLE IF NOT EXISTS "bank_transactions" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"statement_id" bigint,
+	"account_number" varchar(40),
+	"tx_date" date NOT NULL,
+	"direction" varchar(10) NOT NULL,
+	"amount" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"provision" numeric(14, 2) DEFAULT '0',
+	"counterparty_name" varchar(255),
+	"counterparty_account" varchar(40),
+	"purpose" text,
+	"code" varchar(10),
+	"ref_pbo" varchar(60),
+	"ref_pbz" varchar(60),
+	"bank_ref" varchar(60),
+	"match_status" varchar(20) DEFAULT 'unmatched' NOT NULL,
+	"matched_type" varchar(30),
+	"matched_id" bigint,
+	"matched_ref" varchar(120),
+	"partner_id" bigint,
+	"partner_type" varchar(20),
+	"note" text,
+	"dedupe_key" varchar(180),
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "bank_tx_dedupe_uq" ON "bank_transactions" ("dedupe_key")`,
+    `CREATE INDEX IF NOT EXISTS "bank_tx_date_idx" ON "bank_transactions" ("tx_date")`,
+    `CREATE INDEX IF NOT EXISTS "bank_tx_status_idx" ON "bank_transactions" ("match_status")`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "bank_stmt_uq" ON "bank_statements" ("account_number", "statement_date", "statement_no")`
   ];
 }
 var init_init_db_sql = __esm({
@@ -13381,7 +13470,7 @@ var init_init_db_sql = __esm({
 // api/queries/pg-compat.ts
 var pg_compat_exports = {};
 __export(pg_compat_exports, {
-  and: () => and2,
+  and: () => and3,
   closeDb: () => closeDb2,
   desc: () => desc2,
   eq: () => eq2,
@@ -13408,7 +13497,7 @@ function desc2(column) {
   const colName = typeof column === "string" ? column : column.name || column._?.name || "id";
   return { type: "desc", column: colName };
 }
-function and2(...conditions) {
+function and3(...conditions) {
   return { type: "and", conditions };
 }
 function getDb2() {
@@ -19956,6 +20045,7 @@ var WRITE_ROLE_BY_ROUTER = {
   ocr: "manager",
   email: "manager",
   dashboard: "manager",
+  bank: "manager",
   // Подесувања — само администратор
   settings: "admin",
   appUsers: "admin"
@@ -31305,13 +31395,13 @@ function _promise(Class2, innerType) {
 }
 // @__NO_SIDE_EFFECTS__
 function _custom(Class2, fn, _params) {
-  const norm2 = normalizeParams(_params);
-  norm2.abort ?? (norm2.abort = true);
+  const norm3 = normalizeParams(_params);
+  norm3.abort ?? (norm3.abort = true);
   const schema = new Class2({
     type: "custom",
     check: "custom",
     fn,
-    ...norm2
+    ...norm3
   });
   return schema;
 }
@@ -40085,6 +40175,622 @@ var appUsersRouter = createRouter({
   })
 });
 
+// api/bank-router.ts
+init_drizzle_orm();
+init_connection();
+init_schema2();
+
+// api/bank-parsers.ts
+var num = (s) => {
+  const cleaned = String(s ?? "").replace(/[^\d.,+-]/g, "").replace(/,/g, "");
+  const v = parseFloat(cleaned);
+  return Number.isFinite(v) ? v : 0;
+};
+var trimAcc = (s) => String(s ?? "").trim().replace(/^0+(?=\d{10,})/, "");
+var clean = (s) => String(s ?? "").trim().replace(/\s+/g, " ");
+var TRANSLIT = [
+  [/Zh/g, "\u0416"],
+  [/zh/g, "\u0436"],
+  [/Ch/g, "\u0427"],
+  [/ch/g, "\u0447"],
+  [/Sh/g, "\u0428"],
+  [/sh/g, "\u0448"],
+  [/Kj/g, "\u040C"],
+  [/kj/g, "\u045C"],
+  [/Gj/g, "\u0403"],
+  [/gj/g, "\u0453"],
+  [/Dj/g, "\u040F"],
+  [/dj/g, "\u045F"]
+];
+function toCyrillic(input) {
+  let s = input;
+  for (const [re, r] of TRANSLIT) s = s.replace(re, r);
+  const map2 = {
+    A: "\u0410",
+    B: "\u0411",
+    V: "\u0412",
+    G: "\u0413",
+    D: "\u0414",
+    E: "\u0415",
+    Z: "\u0417",
+    I: "\u0418",
+    J: "\u0408",
+    K: "\u041A",
+    L: "\u041B",
+    M: "\u041C",
+    N: "\u041D",
+    O: "\u041E",
+    P: "\u041F",
+    R: "\u0420",
+    S: "\u0421",
+    T: "\u0422",
+    U: "\u0423",
+    F: "\u0424",
+    H: "\u0425",
+    C: "\u0426",
+    Q: "\u0409",
+    W: "\u040A",
+    X: "\u0425",
+    Y: "\u0405",
+    a: "\u0430",
+    b: "\u0431",
+    v: "\u0432",
+    g: "\u0433",
+    d: "\u0434",
+    e: "\u0435",
+    z: "\u0437",
+    i: "\u0438",
+    j: "\u0458",
+    k: "\u043A",
+    l: "\u043B",
+    m: "\u043C",
+    n: "\u043D",
+    o: "\u043E",
+    p: "\u043F",
+    r: "\u0440",
+    s: "\u0441",
+    t: "\u0442",
+    u: "\u0443",
+    f: "\u0444",
+    h: "\u0445",
+    c: "\u0446",
+    q: "\u0459",
+    w: "\u045A",
+    x: "\u0445",
+    y: "\u0455"
+  };
+  return s.split("").map((ch) => map2[ch] ?? ch).join("");
+}
+function parseKbLeading(text2) {
+  const out = [];
+  for (const line2 of text2.split(/\r?\n/)) {
+    if (line2.trim().length < 60) continue;
+    const acc = trimAcc(line2.slice(0, 18));
+    const dateRaw = line2.slice(18, 28);
+    const stNo = line2.slice(28, 31).trim().replace(/^0+/, "") || line2.slice(28, 31).trim();
+    if (!/^\d{4}\.\d{2}\.\d{2}$/.test(dateRaw)) continue;
+    const amounts = line2.slice(31).match(/[+-]\d+\.\d{2}/g) ?? [];
+    out.push({
+      accountNumber: acc,
+      statementNo: stNo,
+      statementDate: dateRaw.replace(/\./g, "-"),
+      prevBalance: num(amounts[0] ?? "0"),
+      debitTotal: num(amounts[1] ?? "0"),
+      creditTotal: num(amounts[2] ?? "0"),
+      newBalance: num(amounts[3] ?? "0"),
+      currency: "MKD",
+      transactions: []
+    });
+  }
+  return out;
+}
+function parseKbItems(text2) {
+  const out = [];
+  for (const line2 of text2.split(/\r?\n/)) {
+    if (line2.length < 250) continue;
+    const dateRaw = line2.slice(163, 173);
+    if (!/^\d{4}\.\d{2}\.\d{2}$/.test(dateRaw)) continue;
+    const debit = num(line2.slice(106, 125));
+    const credit = num(line2.slice(125, 144));
+    const provision = num(line2.slice(144, 163));
+    const isIn = credit > 0;
+    out.push({
+      txDate: dateRaw.replace(/\./g, "-"),
+      direction: isIn ? "in" : "out",
+      amount: isIn ? credit : debit,
+      provision,
+      counterpartyName: toCyrillic(clean(line2.slice(18, 88))),
+      counterpartyAccount: trimAcc(line2.slice(88, 106)),
+      purpose: toCyrillic(clean(line2.slice(173, 243))),
+      code: clean(line2.slice(243, 246)),
+      refPbo: clean(line2.slice(246, 270)),
+      refPbz: clean(line2.slice(270, 294)),
+      bankRef: ""
+    });
+  }
+  return out;
+}
+function parseMT940(text2) {
+  const out = [];
+  const blocks = text2.split(/\{1:/).filter((b) => b.includes(":20:"));
+  for (const block of blocks) {
+    const body = block.replace(/\r/g, "");
+    const get = (tag2) => {
+      const m = body.match(new RegExp(`:${tag2}:([^\\n]*)`));
+      return m ? m[1].trim() : "";
+    };
+    const account = trimAcc(get("25"));
+    const stRaw = get("28C");
+    const statementNo = stRaw.split("/")[0] ?? "";
+    const open = get("60F");
+    const close = get("62F");
+    const balOf = (v) => {
+      const m = v.match(/^([CD])(\d{6})([A-Z]{3})([\d.,]+)/);
+      if (!m) return { date: "", currency: "MKD", value: 0 };
+      const [, , d, cur, amt] = m;
+      const yy = d.slice(0, 2), mm = d.slice(2, 4), dd = d.slice(4, 6);
+      return {
+        date: `20${yy}-${mm}-${dd}`,
+        currency: cur,
+        value: parseFloat(amt.replace(/\./g, "").replace(",", ".")) || 0
+      };
+    };
+    const ob = balOf(open);
+    const cb = balOf(close);
+    const txs = [];
+    const parts = body.split(/\n:61:/).slice(1);
+    for (const part of parts) {
+      const lines = part.split("\n");
+      const head = lines[0] ?? "";
+      const m = head.match(/^(\d{6})(\d{4})?([CD])([DC])?([\d.,]+)N(\w{3})(\S*)/);
+      if (!m) continue;
+      const [, valueDate, , dc, , amtRaw, , ref] = m;
+      const yy = valueDate.slice(0, 2), mm = valueDate.slice(2, 4), dd = valueDate.slice(4, 6);
+      const amount = parseFloat(String(amtRaw).replace(/\./g, "").replace(",", ".")) || 0;
+      const detailLines = part.split(/\n:86:/)[1]?.split("\n") ?? [];
+      const detail = detailLines.filter((l) => !l.startsWith(":") && l.trim() !== "-}").map((l) => l.trim());
+      let counterAcc = "", counterName = "", purpose = "", pbo = "";
+      for (const d of detail) {
+        if (d.startsWith("/BENM/")) counterAcc = trimAcc(d.replace("/BENM/", ""));
+        else if (d.startsWith("/")) {
+          const v = d.replace(/^\//, "");
+          if (v === "EMPTY/" || v === "EMPTY") continue;
+          if (!counterName) counterName = v;
+          else if (v.includes("//")) pbo = v.split("//")[1] ?? "";
+          else purpose = purpose ? `${purpose} ${v}` : v;
+        }
+      }
+      txs.push({
+        txDate: `20${yy}-${mm}-${dd}`,
+        direction: dc === "C" ? "in" : "out",
+        amount,
+        provision: 0,
+        counterpartyName: toCyrillic(clean(counterName)),
+        counterpartyAccount: counterAcc,
+        purpose: toCyrillic(clean(purpose)),
+        code: "",
+        refPbo: clean(pbo),
+        refPbz: "",
+        bankRef: clean(ref)
+      });
+    }
+    const debitTotal = txs.filter((t2) => t2.direction === "out").reduce((a, t2) => a + t2.amount, 0);
+    const creditTotal = txs.filter((t2) => t2.direction === "in").reduce((a, t2) => a + t2.amount, 0);
+    out.push({
+      accountNumber: account,
+      statementNo,
+      statementDate: cb.date || ob.date,
+      prevBalance: ob.value,
+      debitTotal,
+      creditTotal,
+      newBalance: cb.value,
+      currency: cb.currency || "MKD",
+      transactions: txs
+    });
+  }
+  return out;
+}
+function parsePdfText(text2) {
+  const warnings = [];
+  const statements = [];
+  const chunks = text2.split(/Извод за промените и состојбата на сметката за ден/i).slice(1);
+  for (const ch of chunks) {
+    const head = ch.match(/(\d{2})\.(\d{2})\.(\d{4}),\s*број на извод\s*(\d+)/i);
+    const acc = ch.match(/Број на сметката:\s*(\d+)/i);
+    if (!head) continue;
+    const [, dd, mm, yyyy, no] = head;
+    const balRow = ch.match(
+      /([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+\d+\s+\d+\s+[\d.,]+/
+    );
+    statements.push({
+      accountNumber: acc ? acc[1] : "",
+      statementNo: no,
+      statementDate: `${yyyy}-${mm}-${dd}`,
+      prevBalance: balRow ? num(balRow[1]) : 0,
+      debitTotal: balRow ? num(balRow[2]) : 0,
+      creditTotal: balRow ? num(balRow[3]) : 0,
+      newBalance: balRow ? num(balRow[4]) : 0,
+      currency: "MKD",
+      transactions: []
+    });
+  }
+  if (statements.length > 0) {
+    warnings.push(
+      "PDF-\u043E\u0442 \u0434\u0430\u0432\u0430 \u0441\u0430\u043C\u043E \u0437\u0430\u0433\u043B\u0430\u0432\u0438\u0458\u0430 \u043D\u0430 \u0438\u0437\u0432\u043E\u0434\u0438\u0442\u0435 \u2014 \u043F\u043E\u0435\u0434\u0438\u043D\u0435\u0447\u043D\u0438\u0442\u0435 \u0441\u0442\u0430\u0432\u043A\u0438 \u043D\u0435 \u0441\u0435 \u0447\u0438\u0442\u0430\u0430\u0442 \u0441\u0438\u0433\u0443\u0440\u043D\u043E \u043E\u0434 \u043D\u0435\u0433\u043E. \u0417\u0430 \u0441\u0442\u0430\u0432\u043A\u0438 \u043A\u043E\u0440\u0438\u0441\u0442\u0438 \u0433\u0438 .300 \u0438\u043B\u0438 MT940 \u0434\u0430\u0442\u043E\u0442\u0435\u043A\u0438\u0442\u0435."
+    );
+  }
+  return { statements, warnings };
+}
+function detectAndParse(fileName, text2) {
+  const warnings = [];
+  const name2 = (fileName || "").toLowerCase();
+  if (text2.includes("{1:F01") || /:20:[A-Z0-9]/.test(text2)) {
+    return { format: "MT940", statements: parseMT940(text2), looseTransactions: [], warnings };
+  }
+  if (name2.includes("vodecki") || name2.includes("vodechki")) {
+    return { format: "KB \u0432\u043E\u0434\u0435\u0447\u043A\u0438 \u0441\u043B\u043E\u0433", statements: parseKbLeading(text2), looseTransactions: [], warnings };
+  }
+  if (name2.includes("stavki")) {
+    return { format: "KB \u0441\u0442\u0430\u0432\u043A\u0438", statements: [], looseTransactions: parseKbItems(text2), warnings };
+  }
+  const lines = text2.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length > 0) {
+    const len = lines[0].length;
+    if (len > 250) {
+      return { format: "KB \u0441\u0442\u0430\u0432\u043A\u0438", statements: [], looseTransactions: parseKbItems(text2), warnings };
+    }
+    if (len > 90 && len < 140) {
+      return { format: "KB \u0432\u043E\u0434\u0435\u0447\u043A\u0438 \u0441\u043B\u043E\u0433", statements: parseKbLeading(text2), looseTransactions: [], warnings };
+    }
+  }
+  if (text2.includes("\u0418\u0437\u0432\u043E\u0434 \u0437\u0430 \u043F\u0440\u043E\u043C\u0435\u043D\u0438\u0442\u0435")) {
+    const r = parsePdfText(text2);
+    return { format: "PDF", statements: r.statements, looseTransactions: [], warnings: r.warnings };
+  }
+  warnings.push("\u0424\u043E\u0440\u043C\u0430\u0442\u043E\u0442 \u043D\u0435 \u0435 \u043F\u0440\u0435\u043F\u043E\u0437\u043D\u0430\u0435\u043D.");
+  return { format: "\u043D\u0435\u043F\u043E\u0437\u043D\u0430\u0442", statements: [], looseTransactions: [], warnings };
+}
+function dedupeKey(accountNumber, t2) {
+  const base = [
+    accountNumber,
+    t2.txDate,
+    t2.direction,
+    t2.amount.toFixed(2),
+    t2.counterpartyAccount || t2.counterpartyName.slice(0, 20),
+    (t2.bankRef || t2.purpose).slice(0, 40)
+  ].join("|");
+  return base.slice(0, 180);
+}
+
+// api/bank-router.ts
+function extractInvoiceRefs(text2) {
+  const t2 = String(text2 ?? "");
+  const found = /* @__PURE__ */ new Set();
+  const patterns = [
+    /(?:ф-?ра|фактура|проф-?ра|фактури)\s*(?:број|бр\.?)?\s*([0-9A-Za-zА-Яа-яЀ-ӿ\-\/]+(?:\s*,\s*[0-9A-Za-zА-Яа-яЀ-ӿ\-\/]+)*)/gi,
+    /(?:f-?ra|faktura|prof-?ra)\s*(?:broj|br\.?)?\s*([0-9A-Za-z\-\/]+(?:\s*,\s*[0-9A-Za-z\-\/]+)*)/gi
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(t2)) !== null) {
+      for (const piece of m[1].split(/\s*,\s*/)) {
+        const v = piece.trim();
+        if (v && v.length >= 2 && /\d/.test(v)) found.add(v);
+      }
+    }
+  }
+  return Array.from(found);
+}
+var norm2 = (s) => String(s ?? "").toUpperCase().replace(/[^0-9A-ZА-ЯЀ-ӿ]/g, "");
+var bankRouter = createRouter({
+  // ═══════════ УВОЗ ═══════════
+  bankImport: publicQuery.input(
+    external_exports.object({
+      files: external_exports.array(external_exports.object({ name: external_exports.string(), text: external_exports.string() })).min(1)
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    let statementsAdded = 0, txAdded = 0, txSkipped = 0;
+    const warnings = [];
+    const formats = /* @__PURE__ */ new Set();
+    const stIndex = [];
+    const existingSt = await db2.select().from(bankStatements);
+    for (const s of existingSt) {
+      stIndex.push({ id: s.id, date: String(s.statementDate), account: s.accountNumber });
+    }
+    const parsedAll = input.files.map((f) => ({ f, r: detectAndParse(f.name, f.text) }));
+    for (const { r } of parsedAll) {
+      formats.add(r.format);
+      warnings.push(...r.warnings);
+    }
+    for (const { f, r } of parsedAll) {
+      for (const st of r.statements) {
+        if (!st.accountNumber || !st.statementDate) continue;
+        const dup = stIndex.find(
+          (x) => x.account === st.accountNumber && x.date === st.statementDate
+        );
+        if (dup) continue;
+        const res = await db2.insert(bankStatements).values({
+          accountNumber: st.accountNumber,
+          statementNo: st.statementNo,
+          statementDate: st.statementDate,
+          prevBalance: String(st.prevBalance),
+          debitTotal: String(st.debitTotal),
+          creditTotal: String(st.creditTotal),
+          newBalance: String(st.newBalance),
+          currency: st.currency,
+          sourceFormat: r.format,
+          fileName: f.name.slice(0, 255)
+        }).returning();
+        const id = res[0]?.id;
+        if (id) {
+          stIndex.push({ id, date: st.statementDate, account: st.accountNumber });
+          statementsAdded++;
+        }
+      }
+    }
+    const allTx = [];
+    for (const { r } of parsedAll) {
+      for (const st of r.statements) {
+        for (const tx of st.transactions) allTx.push({ accountNumber: st.accountNumber, tx });
+      }
+      for (const tx of r.looseTransactions) {
+        const acc = stIndex[0]?.account ?? "";
+        allTx.push({ accountNumber: acc, tx });
+      }
+    }
+    const existingKeys = new Set(
+      (await db2.select({ k: bankTransactions.dedupeKey }).from(bankTransactions)).map((x) => x.k).filter(Boolean)
+    );
+    for (const { accountNumber, tx } of allTx) {
+      const key = dedupeKey(accountNumber, tx);
+      if (existingKeys.has(key)) {
+        txSkipped++;
+        continue;
+      }
+      existingKeys.add(key);
+      const st = stIndex.find((x) => x.date === tx.txDate && (!accountNumber || x.account === accountNumber));
+      await db2.insert(bankTransactions).values({
+        statementId: st?.id ?? null,
+        accountNumber: accountNumber || st?.account || null,
+        txDate: tx.txDate,
+        direction: tx.direction,
+        amount: String(tx.amount),
+        provision: String(tx.provision),
+        counterpartyName: tx.counterpartyName.slice(0, 255),
+        counterpartyAccount: tx.counterpartyAccount.slice(0, 40),
+        purpose: tx.purpose,
+        code: tx.code.slice(0, 10),
+        refPbo: tx.refPbo.slice(0, 60),
+        refPbz: tx.refPbz.slice(0, 60),
+        bankRef: tx.bankRef.slice(0, 60),
+        dedupeKey: key,
+        matchStatus: "unmatched"
+      });
+      txAdded++;
+    }
+    await logAudit({
+      action: "CREATE",
+      entityType: "bank_import",
+      description: `\u0423\u0432\u043E\u0437 \u0438\u0437\u0432\u043E\u0434: ${statementsAdded} \u0438\u0437\u0432\u043E\u0434\u0438, ${txAdded} \u0441\u0442\u0430\u0432\u043A\u0438 (${Array.from(formats).join(", ")})`
+    }).catch(() => {
+    });
+    return {
+      success: true,
+      statementsAdded,
+      txAdded,
+      txSkipped,
+      formats: Array.from(formats),
+      warnings: Array.from(new Set(warnings))
+    };
+  }),
+  // ═══════════ ПРЕГЛЕД ═══════════
+  bankTxList: publicQuery.input(
+    external_exports.object({
+      status: external_exports.enum(["all", "unmatched", "matched", "ignored"]).optional(),
+      direction: external_exports.enum(["all", "in", "out"]).optional(),
+      search: external_exports.string().optional(),
+      from: external_exports.string().optional(),
+      to: external_exports.string().optional()
+    }).optional()
+  ).query(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(bankTransactions).orderBy(desc(bankTransactions.txDate), desc(bankTransactions.id));
+    let out = rows;
+    const st = input?.status ?? "unmatched";
+    if (st !== "all") out = out.filter((r) => r.matchStatus === st);
+    if (input?.direction && input.direction !== "all") out = out.filter((r) => r.direction === input.direction);
+    if (input?.from) out = out.filter((r) => String(r.txDate) >= input.from);
+    if (input?.to) out = out.filter((r) => String(r.txDate) <= input.to);
+    if (input?.search) {
+      const s = input.search.toLowerCase();
+      out = out.filter(
+        (r) => (r.counterpartyName ?? "").toLowerCase().includes(s) || (r.purpose ?? "").toLowerCase().includes(s) || (r.counterpartyAccount ?? "").includes(s) || (r.matchedRef ?? "").toLowerCase().includes(s)
+      );
+    }
+    return out;
+  }),
+  bankStats: publicQuery.query(async () => {
+    const db2 = getDb();
+    const rows = await db2.select().from(bankTransactions);
+    const sts = await db2.select().from(bankStatements);
+    const unmatched = rows.filter((r) => r.matchStatus === "unmatched");
+    return {
+      statements: sts.length,
+      transactions: rows.length,
+      unmatched: unmatched.length,
+      matched: rows.filter((r) => r.matchStatus === "matched").length,
+      unmatchedIn: unmatched.filter((r) => r.direction === "in").reduce((a, r) => a + Number(r.amount), 0),
+      unmatchedOut: unmatched.filter((r) => r.direction === "out").reduce((a, r) => a + Number(r.amount), 0),
+      lastBalance: sts.length ? Number(sts.slice().sort((a, b) => String(a.statementDate) < String(b.statementDate) ? 1 : -1)[0].newBalance) : 0,
+      lastDate: sts.length ? sts.slice().sort((a, b) => String(a.statementDate) < String(b.statementDate) ? 1 : -1)[0].statementDate : null
+    };
+  }),
+  bankStatementList: publicQuery.query(async () => {
+    const db2 = getDb();
+    return await db2.select().from(bankStatements).orderBy(desc(bankStatements.statementDate));
+  }),
+  // ═══════════ ПРЕДЛОГ ЗА ПОВРЗУВАЊЕ ═══════════
+  bankSuggest: publicQuery.input(external_exports.object({ txId: external_exports.number() })).query(async ({ input }) => {
+    const db2 = getDb();
+    const t2 = (await db2.select().from(bankTransactions).where(eq(bankTransactions.id, input.txId)))[0];
+    if (!t2) return { candidates: [] };
+    const refs = extractInvoiceRefs(t2.purpose ?? "").map(norm2);
+    const amount = Number(t2.amount);
+    const isIn = t2.direction === "in";
+    const cands = [];
+    if (isIn) {
+      const invs = await db2.select().from(invoices);
+      const custs = await db2.select().from(customers);
+      const cmap = new Map(custs.map((c) => [c.id, c]));
+      for (const inv of invs) {
+        if (inv.status === "paid") continue;
+        const total = Number(inv.totalAmount);
+        let score = 0;
+        const reasons = [];
+        if (refs.some((r) => norm2(inv.invoiceNumber).includes(r) || r.includes(norm2(inv.invoiceNumber)))) {
+          score += 60;
+          reasons.push("\u0431\u0440\u043E\u0458\u043E\u0442 \u043D\u0430 \u0444\u0430\u043A\u0442\u0443\u0440\u0430\u0442\u0430 \u0435 \u0432\u043E \u0446\u0435\u043B\u0442\u0430 \u043D\u0430 \u0434\u043E\u0437\u043D\u0430\u043A\u0430\u0442\u0430");
+        }
+        if (Math.abs(total - amount) < 0.01) {
+          score += 30;
+          reasons.push("\u0438\u0437\u043D\u043E\u0441\u043E\u0442 \u0441\u0435 \u0441\u043E\u0432\u043F\u0430\u0453\u0430 \u0442\u043E\u0447\u043D\u043E");
+        } else if (Math.abs(total - amount) / Math.max(total, 1) < 0.02) {
+          score += 10;
+          reasons.push("\u0438\u0437\u043D\u043E\u0441\u043E\u0442 \u0435 \u0431\u043B\u0438\u0437\u043E\u043A");
+        }
+        const c = cmap.get(inv.customerId);
+        if (c && t2.counterpartyName && norm2(c.name).slice(0, 10) && norm2(t2.counterpartyName).includes(norm2(c.name).slice(0, 10))) {
+          score += 25;
+          reasons.push("\u0438\u043C\u0435\u0442\u043E \u043D\u0430 \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0442 \u0441\u0435 \u0441\u043E\u0432\u043F\u0430\u0453\u0430");
+        }
+        if (score >= 30) {
+          cands.push({
+            type: "invoice",
+            id: inv.id,
+            ref: inv.invoiceNumber,
+            partnerName: c?.name ?? "",
+            amount: total,
+            date: inv.issueDate,
+            status: inv.status,
+            score,
+            reasons
+          });
+        }
+      }
+    } else {
+      const invs = await db2.select().from(incomingInvoices);
+      const sups = await db2.select().from(suppliers);
+      const smap = new Map(sups.map((s) => [s.id, s]));
+      for (const inv of invs) {
+        if (inv.status === "paid") continue;
+        const total = Number(inv.totalAmount);
+        let score = 0;
+        const reasons = [];
+        if (refs.some((r) => norm2(inv.supplierInvoiceNumber).includes(r) || r.includes(norm2(inv.supplierInvoiceNumber)))) {
+          score += 60;
+          reasons.push("\u0431\u0440\u043E\u0458\u043E\u0442 \u043D\u0430 \u0444\u0430\u043A\u0442\u0443\u0440\u0430\u0442\u0430 \u0435 \u0432\u043E \u0446\u0435\u043B\u0442\u0430 \u043D\u0430 \u0434\u043E\u0437\u043D\u0430\u043A\u0430\u0442\u0430");
+        }
+        if (Math.abs(total - amount) < 0.01) {
+          score += 30;
+          reasons.push("\u0438\u0437\u043D\u043E\u0441\u043E\u0442 \u0441\u0435 \u0441\u043E\u0432\u043F\u0430\u0453\u0430 \u0442\u043E\u0447\u043D\u043E");
+        } else if (Math.abs(total - amount) / Math.max(total, 1) < 0.02) {
+          score += 10;
+          reasons.push("\u0438\u0437\u043D\u043E\u0441\u043E\u0442 \u0435 \u0431\u043B\u0438\u0437\u043E\u043A");
+        }
+        const s = smap.get(inv.supplierId);
+        if (s && t2.counterpartyName && norm2(s.name).slice(0, 10) && norm2(t2.counterpartyName).includes(norm2(s.name).slice(0, 10))) {
+          score += 25;
+          reasons.push("\u0438\u043C\u0435\u0442\u043E \u043D\u0430 \u0434\u043E\u0431\u0430\u0432\u0443\u0432\u0430\u0447\u043E\u0442 \u0441\u0435 \u0441\u043E\u0432\u043F\u0430\u0453\u0430");
+        }
+        if (score >= 30) {
+          cands.push({
+            type: "incoming_invoice",
+            id: inv.id,
+            ref: inv.supplierInvoiceNumber,
+            partnerName: s?.name ?? "",
+            amount: total,
+            date: inv.issueDate ?? inv.receivedDate,
+            status: inv.status,
+            score,
+            reasons
+          });
+        }
+      }
+    }
+    cands.sort((a, b) => b.score - a.score);
+    return { candidates: cands.slice(0, 8), refs: extractInvoiceRefs(t2.purpose ?? "") };
+  }),
+  // ═══════════ ПОВРЗУВАЊЕ ═══════════
+  bankMatch: publicQuery.input(external_exports.object({
+    txId: external_exports.number(),
+    type: external_exports.enum(["invoice", "incoming_invoice"]),
+    targetId: external_exports.number(),
+    markPaid: external_exports.boolean().default(true)
+  })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    let ref = "";
+    if (input.type === "invoice") {
+      const inv = (await db2.select().from(invoices).where(eq(invoices.id, input.targetId)))[0];
+      ref = inv?.invoiceNumber ?? "";
+      if (input.markPaid && inv) {
+        await db2.update(invoices).set({ status: "paid", updatedAt: /* @__PURE__ */ new Date() }).where(eq(invoices.id, input.targetId));
+      }
+    } else {
+      const inv = (await db2.select().from(incomingInvoices).where(eq(incomingInvoices.id, input.targetId)))[0];
+      ref = inv?.supplierInvoiceNumber ?? "";
+      if (input.markPaid && inv) {
+        await db2.update(incomingInvoices).set({ status: "paid", updatedAt: /* @__PURE__ */ new Date() }).where(eq(incomingInvoices.id, input.targetId));
+      }
+    }
+    await db2.update(bankTransactions).set({
+      matchStatus: "matched",
+      matchedType: input.type,
+      matchedId: input.targetId,
+      matchedRef: ref,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(bankTransactions.id, input.txId));
+    return { success: true, ref };
+  }),
+  bankUnmatch: publicQuery.input(external_exports.object({ txId: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    await db2.update(bankTransactions).set({
+      matchStatus: "unmatched",
+      matchedType: null,
+      matchedId: null,
+      matchedRef: null,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(bankTransactions.id, input.txId));
+    return { success: true };
+  }),
+  bankIgnore: publicQuery.input(external_exports.object({ txId: external_exports.number(), note: external_exports.string().optional() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    await db2.update(bankTransactions).set({
+      matchStatus: "ignored",
+      note: input.note ?? null,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(bankTransactions.id, input.txId));
+    return { success: true };
+  }),
+  /** Автоматско поврзување на сите каде предлогот е убедлив */
+  bankAutoMatch: publicQuery.input(external_exports.object({ minScore: external_exports.number().default(85) }).optional()).mutation(async ({ input, ctx }) => {
+    const db2 = getDb();
+    const minScore = input?.minScore ?? 85;
+    const rows = await db2.select().from(bankTransactions).where(eq(bankTransactions.matchStatus, "unmatched"));
+    const caller = bankRouter.createCaller(ctx);
+    let matched = 0;
+    for (const t2 of rows) {
+      const s = await caller.bankSuggest({ txId: t2.id });
+      const best = s.candidates?.[0];
+      if (best && best.score >= minScore) {
+        await caller.bankMatch({ txId: t2.id, type: best.type, targetId: best.id, markPaid: true });
+        matched++;
+      }
+    }
+    return { success: true, matched, checked: rows.length };
+  })
+});
+
 // api/router.ts
 var appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -40103,7 +40809,8 @@ var appRouter = createRouter({
   email: emailRouter,
   remnants: remnantsRouter,
   certificates: certificatesRouter,
-  appUsers: appUsersRouter
+  appUsers: appUsersRouter,
+  bank: bankRouter
 });
 
 // api/railway.ts

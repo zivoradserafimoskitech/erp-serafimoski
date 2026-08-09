@@ -1,3 +1,4 @@
+import BankTab from "@/components/BankTab";
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
   Receipt, Truck, ArrowUpRight, ArrowDownLeft, Calculator,
   Radio, RefreshCw, Send, SearchIcon, Upload, Building2, Zap,
-  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck,
+  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck, Landmark,
 } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
@@ -725,6 +726,7 @@ export default function Accounting() {
           { key: "incoming", label: "Влезни фактури", icon: ArrowDownLeft },
           
           { key: "delivery", label: "Испратници", icon: Truck },
+          { key: "bank", label: "Банка", icon: Landmark },
           { key: "einvoice", label: "УЈП е-фактури", icon: FileText },
           { key: "email", label: "Е-маил фактури", icon: Upload },
           { key: "parsed", label: "PDF Парсирање", icon: FileUp },
@@ -878,6 +880,8 @@ export default function Accounting() {
       )}
 
       {/* ===== UJP E-INVOICES ===== */}
+      {tab === "bank" && <BankTab />}
+
       {tab === "einvoice" && <UJPEFakturaTab />}
 
       {/* ===== EMAIL INVOICES ===== */}

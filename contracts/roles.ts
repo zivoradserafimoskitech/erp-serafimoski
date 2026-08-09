@@ -57,6 +57,7 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   ocr: "manager",
   email: "manager",
   dashboard: "manager",
+  bank: "manager",
 
   // Подесувања — само администратор
   settings: "admin",
