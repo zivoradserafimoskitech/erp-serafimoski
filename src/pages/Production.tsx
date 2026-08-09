@@ -275,7 +275,7 @@ export default function Production() {
                 <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50" onClick={() => woDetail && chainDN.mutate({ workOrderId: woDetail.id })} disabled={chainDN.isPending}><Truck className="h-3.5 w-3.5 mr-1.5" />Кон испратница</Button>
               )}
               <Button size="sm" variant="outline" onClick={() => woDetail && printRequisition(woDetail, companySettings)}><ClipboardList className="h-3.5 w-3.5 mr-1.5" />Требовање</Button>
-              <Button size="sm" variant="outline" onClick={() => woDetail && printWorkOrder(woDetail, companySettings)}><Printer className="h-3.5 w-3.5 mr-1.5" />Печати / PDF</Button>
+              <Button size="sm" variant="outline" onClick={() => { if (woDetail) void printWorkOrder(woDetail, companySettings); }}><Printer className="h-3.5 w-3.5 mr-1.5" />Печати / PDF</Button>
             </div>
           </div>
           {woDetail && (

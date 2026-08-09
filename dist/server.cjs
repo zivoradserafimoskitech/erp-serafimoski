@@ -8815,6 +8815,7 @@ __export(schema_exports, {
   materialRemnants: () => materialRemnants,
   materialStock: () => materialStock,
   materials: () => materials,
+  operationTimeLogs: () => operationTimeLogs,
   orderItems: () => orderItems,
   orders: () => orders,
   overhead: () => overhead,
@@ -8840,7 +8841,7 @@ __export(schema_exports, {
   workOrderOperations: () => workOrderOperations,
   workOrders: () => workOrders
 });
-var companySettings, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
+var companySettings, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_pg_core();
@@ -9194,6 +9195,17 @@ var init_schema2 = __esm({
       costRate: decimal("cost_rate", { precision: 12, scale: 2 }).notNull().default("0"),
       costAmount: decimal("cost_amount", { precision: 12, scale: 2 }).notNull().default("0"),
       notes: text("notes"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    operationTimeLogs = pgTable("operation_time_logs", {
+      id: serial("id").primaryKey(),
+      operationId: bigint4("operation_id", { mode: "number", unsigned: true }).notNull(),
+      workOrderId: bigint4("work_order_id", { mode: "number", unsigned: true }).notNull(),
+      operator: varchar("operator", { length: 255 }),
+      startedAt: timestamp("started_at").defaultNow().notNull(),
+      endedAt: timestamp("ended_at"),
+      minutes: decimal("minutes", { precision: 10, scale: 2 }).default("0"),
+      note: text("note"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
     workOrderMaterials = pgTable("work_order_materials", {
@@ -11194,7 +11206,21 @@ function getInitSql() {
 	"created_at" timestamp DEFAULT now() NOT NULL
 );`,
     `CREATE INDEX IF NOT EXISTS "dn_certificates_dn_idx" ON "dn_certificates" ("delivery_note_id")`,
-    `CREATE INDEX IF NOT EXISTS "material_lots_heat_idx" ON "material_lots" ("heat_number")`
+    `CREATE INDEX IF NOT EXISTS "material_lots_heat_idx" ON "material_lots" ("heat_number")`,
+    // ===== ВРЕМЕ ПО ОПЕРАЦИЈА =====
+    `CREATE TABLE IF NOT EXISTS "operation_time_logs" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"operation_id" bigint NOT NULL,
+	"work_order_id" bigint NOT NULL,
+	"operator" varchar(255),
+	"started_at" timestamp DEFAULT now() NOT NULL,
+	"ended_at" timestamp,
+	"minutes" numeric(10, 2) DEFAULT '0',
+	"note" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE INDEX IF NOT EXISTS "op_time_logs_op_idx" ON "operation_time_logs" ("operation_id")`,
+    `CREATE INDEX IF NOT EXISTS "op_time_logs_wo_idx" ON "operation_time_logs" ("work_order_id")`
   ];
 }
 var init_init_db_sql = __esm({
@@ -33254,6 +33280,102 @@ var productionRouter = createRouter({
     if (op[0]) await recalcWorkOrderCost(op[0].workOrderId).catch(() => {
     });
     return { success: true };
+  }),
+  // ═══════════ РАБОТА НА ПОДОТ (скенирање) ═══════════
+  woScanById: publicQuery.input(external_exports.object({ id: external_exports.number() })).query(async ({ input }) => {
+    const db2 = getDb();
+    const wo = await db2.select().from(workOrders).where(eq(workOrders.id, input.id));
+    if (wo.length === 0) return null;
+    const ops = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id)).orderBy(workOrderOperations.sequence);
+    const logs = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.workOrderId, input.id));
+    const byOp = /* @__PURE__ */ new Map();
+    for (const l of logs) {
+      const arr = byOp.get(l.operationId) ?? [];
+      arr.push(l);
+      byOp.set(l.operationId, arr);
+    }
+    const opsOut = ops.map((o) => {
+      const ls = byOp.get(o.id) ?? [];
+      const open = ls.find((l) => !l.endedAt) ?? null;
+      const doneMinutes = ls.filter((l) => l.endedAt).reduce((a, l) => a + (Number(l.minutes ?? 0) || 0), 0);
+      return {
+        ...o,
+        openLog: open ? { id: open.id, operator: open.operator, startedAt: open.startedAt } : null,
+        loggedMinutes: Math.round(doneMinutes * 100) / 100,
+        operators: Array.from(new Set(ls.map((l) => l.operator).filter(Boolean)))
+      };
+    });
+    return { ...wo[0], operations: opsOut };
+  }),
+  opClockIn: publicQuery.input(external_exports.object({ operationId: external_exports.number(), operator: external_exports.string().optional() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const ops = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.id, input.operationId));
+    if (ops.length === 0) throw new Error("\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0458\u0430\u0442\u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
+    const op = ops[0];
+    const existing = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.operationId, input.operationId));
+    const open = existing.find((l) => !l.endedAt);
+    if (open) return { success: true, alreadyRunning: true, logId: open.id };
+    const res = await db2.insert(operationTimeLogs).values({
+      operationId: input.operationId,
+      workOrderId: op.workOrderId,
+      operator: input.operator ?? null,
+      startedAt: /* @__PURE__ */ new Date()
+    }).returning();
+    const patch = { status: "in_progress" };
+    if (input.operator) patch.operator = input.operator;
+    await db2.update(workOrderOperations).set(patch).where(eq(workOrderOperations.id, input.operationId));
+    const wos = await db2.select().from(workOrders).where(eq(workOrders.id, op.workOrderId));
+    const wo = wos[0];
+    if (wo && (wo.status === "pending" || !wo.actualStart)) {
+      await db2.update(workOrders).set({
+        status: wo.status === "pending" ? "in_progress" : wo.status,
+        actualStart: wo.actualStart ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq(workOrders.id, op.workOrderId));
+    }
+    return { success: true, alreadyRunning: false, logId: res[0]?.id };
+  }),
+  opClockOut: publicQuery.input(external_exports.object({
+    operationId: external_exports.number(),
+    finish: external_exports.boolean().default(false),
+    note: external_exports.string().optional(),
+    actualQty: external_exports.string().optional()
+  })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const logs = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.operationId, input.operationId));
+    const open = logs.find((l) => !l.endedAt);
+    const now = /* @__PURE__ */ new Date();
+    let sessionMinutes = 0;
+    if (open) {
+      const started = new Date(open.startedAt);
+      sessionMinutes = Math.max(0, (now.getTime() - started.getTime()) / 6e4);
+      await db2.update(operationTimeLogs).set({
+        endedAt: now,
+        minutes: sessionMinutes.toFixed(2),
+        note: input.note ?? null
+      }).where(eq(operationTimeLogs.id, open.id));
+    }
+    const fresh = await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.operationId, input.operationId));
+    const totalMinutes = fresh.filter((l) => l.endedAt).reduce((a, l) => a + (Number(l.minutes ?? 0) || 0), 0);
+    const hours = totalMinutes / 60;
+    const patch = { actualTime: hours.toFixed(2) };
+    if (input.finish) patch.status = "completed";
+    if (input.actualQty) patch.actualQty = input.actualQty;
+    await db2.update(workOrderOperations).set(patch).where(eq(workOrderOperations.id, input.operationId));
+    const ops = await db2.select().from(workOrderOperations).where(eq(workOrderOperations.id, input.operationId));
+    const op = ops[0];
+    if (op) await recalcWorkOrderCost(op.workOrderId).catch(() => {
+    });
+    return {
+      success: true,
+      sessionMinutes: Math.round(sessionMinutes),
+      totalMinutes: Math.round(totalMinutes),
+      hours: Math.round(hours * 100) / 100
+    };
+  }),
+  opTimeLogs: publicQuery.input(external_exports.object({ workOrderId: external_exports.number() })).query(async ({ input }) => {
+    const db2 = getDb();
+    return await db2.select().from(operationTimeLogs).where(eq(operationTimeLogs.workOrderId, input.workOrderId)).orderBy(desc(operationTimeLogs.startedAt));
   }),
   operationDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
     const db2 = getDb();

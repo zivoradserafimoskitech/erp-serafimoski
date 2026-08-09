@@ -156,11 +156,22 @@ export function printInvoice(inv: any, settings: any) {
 }
 
 // ══════════════ РАБОТЕН НАЛОГ ══════════════
-export function printWorkOrder(wo: any, settings: any) {
+export async function printWorkOrder(wo: any, settings: any) {
   const s = settings ?? {};
   const mats: any[] = wo?.materials ?? [];
   const ops: any[] = wo?.operations ?? [];
 
+  // QR кон страницата за скенирање на подот
+  let woQr = "";
+  if (wo?.id) {
+    try {
+      const QRCode = (await import("qrcode")).default;
+      woQr = await QRCode.toDataURL(`${window.location.origin}/n/${wo.id}`, {
+        errorCorrectionLevel: "M", margin: 0, width: 260,
+        color: { dark: "#16112b", light: "#ffffff" },
+      });
+    } catch { /* без QR — налогот сепак се печати */ }
+  }
   const ws = wo?.weightSummary ?? null;
   const hasKg = mats.some((m) => Number(m.weightKg ?? 0) > 0);
   const matRows = mats.map((m, i) => `<tr>
@@ -178,6 +189,11 @@ export function printWorkOrder(wo: any, settings: any) {
   ${header(s, "РАБОТЕН НАЛОГ", wo?.woNumber ?? "", `
     Статус: <span class="badge">${esc(STATUS_MK[wo?.status] ?? wo?.status ?? "")}</span><br>
     Приоритет: <b>${esc(PRIORITY_MK[wo?.priority] ?? wo?.priority ?? "—")}</b>`)}
+  ${woQr ? `<div style="float:right;text-align:center;margin:0 0 4mm 5mm;padding:2.5mm;border:1.5px solid var(--dark);border-radius:4px">
+      <img src="${woQr}" style="width:24mm;height:24mm;display:block">
+      <div style="font-size:7px;color:#666;margin-top:1.5mm;letter-spacing:.4px;text-transform:uppercase">Скенирај за работа</div>
+      <div style="font-size:8px;font-weight:700;margin-top:.5mm">${esc(wo?.woNumber ?? "")}</div>
+    </div>` : ""}
   <div class="stitle">Податоци за налогот</div>
   <div class="grid2">
     <div class="kv"><span>Опис:</span><b>${esc(wo?.description ?? "—")}</b></div>

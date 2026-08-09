@@ -470,6 +470,21 @@ export type WorkOrderOperation = typeof workOrderOperations.$inferSelect;
 export type InsertWorkOrderOperation = typeof workOrderOperations.$inferInsert;
 
 // ============= WORK ORDER MATERIALS =============
+// ============= ВРЕМЕ ПО ОПЕРАЦИЈА (скенирање на подот) =============
+export const operationTimeLogs = pgTable("operation_time_logs", {
+  id: serial("id").primaryKey(),
+  operationId: bigint("operation_id", { mode: "number", unsigned: true }).notNull(),
+  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }).notNull(),
+  operator: varchar("operator", { length: 255 }),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  endedAt: timestamp("ended_at"),
+  minutes: decimal("minutes", { precision: 10, scale: 2 }).default("0"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type OperationTimeLog = typeof operationTimeLogs.$inferSelect;
+
 export const workOrderMaterials = pgTable("work_order_materials", {
   id: serial("id").primaryKey(),
   workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }).notNull(),

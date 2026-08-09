@@ -13,6 +13,7 @@ import CatalogPage from "@/pages/Catalog";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 import RemnantScan from "@/pages/RemnantScan";
+import WorkOrderScan from "@/pages/WorkOrderScan";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       {/* Скенирање на етикета — без Layout, за телефон */}
       <Route path="/o/:code" element={<RemnantScan />} />
+      <Route path="/n/:id" element={<WorkOrderScan />} />
       <Route
         path="/"
         element={

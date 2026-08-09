@@ -3,7 +3,7 @@ import { eq, desc } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { workOrders, workOrderOperations, workOrderMaterials, orders, orderItems, customers, deliveryNotes, documentItems, materials, warehouses, products, finishedGoodsStock } from "@db/schema";
+import { workOrders, workOrderOperations, workOrderMaterials, orders, orderItems, customers, deliveryNotes, documentItems, materials, warehouses, products, finishedGoodsStock , operationTimeLogs } from "@db/schema";
 import { recalcWorkOrderCost } from "./wo-cost-helper";
 import { logAudit } from "./audit-helper";
 
@@ -309,6 +309,164 @@ export const productionRouter = createRouter({
       const op = await db.select().from(workOrderOperations).where(eq(workOrderOperations.id, id));
       if (op[0]) await recalcWorkOrderCost(op[0].workOrderId).catch(() => {});
       return { success: true };
+    }),
+
+  // ═══════════ РАБОТА НА ПОДОТ (скенирање) ═══════════
+  woScanById: publicQuery
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const wo = await db.select().from(workOrders).where(eq(workOrders.id, input.id));
+      if (wo.length === 0) return null;
+
+      const ops = await db
+        .select()
+        .from(workOrderOperations)
+        .where(eq(workOrderOperations.workOrderId, input.id))
+        .orderBy(workOrderOperations.sequence);
+
+      const logs = await db
+        .select()
+        .from(operationTimeLogs)
+        .where(eq(operationTimeLogs.workOrderId, input.id));
+
+      const byOp = new Map<number, any[]>();
+      for (const l of logs as any[]) {
+        const arr = byOp.get(l.operationId) ?? [];
+        arr.push(l);
+        byOp.set(l.operationId, arr);
+      }
+
+      const opsOut = (ops as any[]).map((o) => {
+        const ls = byOp.get(o.id) ?? [];
+        const open = ls.find((l) => !l.endedAt) ?? null;
+        const doneMinutes = ls
+          .filter((l) => l.endedAt)
+          .reduce((a, l) => a + (Number(l.minutes ?? 0) || 0), 0);
+        return {
+          ...o,
+          openLog: open
+            ? { id: open.id, operator: open.operator, startedAt: open.startedAt }
+            : null,
+          loggedMinutes: Math.round(doneMinutes * 100) / 100,
+          operators: Array.from(new Set(ls.map((l) => l.operator).filter(Boolean))),
+        };
+      });
+
+      return { ...(wo[0] as any), operations: opsOut };
+    }),
+
+  opClockIn: publicQuery
+    .input(z.object({ operationId: z.number(), operator: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const ops = await db
+        .select()
+        .from(workOrderOperations)
+        .where(eq(workOrderOperations.id, input.operationId));
+      if (ops.length === 0) throw new Error("Операцијата не постои");
+      const op: any = ops[0];
+
+      // Ако веќе тече сесија за истиот работник — не отворај втора
+      const existing = await db
+        .select()
+        .from(operationTimeLogs)
+        .where(eq(operationTimeLogs.operationId, input.operationId));
+      const open = (existing as any[]).find((l) => !l.endedAt);
+      if (open) return { success: true, alreadyRunning: true, logId: open.id };
+
+      const res = await db.insert(operationTimeLogs).values({
+        operationId: input.operationId,
+        workOrderId: op.workOrderId,
+        operator: input.operator ?? null,
+        startedAt: new Date(),
+      } as any).returning();
+
+      const patch: any = { status: "in_progress" };
+      if (input.operator) patch.operator = input.operator;
+      await db.update(workOrderOperations).set(patch).where(eq(workOrderOperations.id, input.operationId));
+
+      // Работниот налог тргнува со првата скенирана операција
+      const wos = await db.select().from(workOrders).where(eq(workOrders.id, op.workOrderId));
+      const wo: any = wos[0];
+      if (wo && (wo.status === "pending" || !wo.actualStart)) {
+        await db.update(workOrders).set({
+          status: wo.status === "pending" ? "in_progress" : wo.status,
+          actualStart: wo.actualStart ?? new Date().toISOString().slice(0, 10),
+          updatedAt: new Date(),
+        } as any).where(eq(workOrders.id, op.workOrderId));
+      }
+
+      return { success: true, alreadyRunning: false, logId: res[0]?.id };
+    }),
+
+  opClockOut: publicQuery
+    .input(z.object({
+      operationId: z.number(),
+      finish: z.boolean().default(false),
+      note: z.string().optional(),
+      actualQty: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const logs = await db
+        .select()
+        .from(operationTimeLogs)
+        .where(eq(operationTimeLogs.operationId, input.operationId));
+
+      const open = (logs as any[]).find((l) => !l.endedAt);
+      const now = new Date();
+      let sessionMinutes = 0;
+
+      if (open) {
+        const started = new Date(open.startedAt);
+        sessionMinutes = Math.max(0, (now.getTime() - started.getTime()) / 60000);
+        await db.update(operationTimeLogs).set({
+          endedAt: now,
+          minutes: sessionMinutes.toFixed(2),
+          note: input.note ?? null,
+        } as any).where(eq(operationTimeLogs.id, open.id));
+      }
+
+      // Вкупно време = сите затворени сесии
+      const fresh = await db
+        .select()
+        .from(operationTimeLogs)
+        .where(eq(operationTimeLogs.operationId, input.operationId));
+      const totalMinutes = (fresh as any[])
+        .filter((l) => l.endedAt)
+        .reduce((a, l) => a + (Number(l.minutes ?? 0) || 0), 0);
+      const hours = totalMinutes / 60;
+
+      const patch: any = { actualTime: hours.toFixed(2) };
+      if (input.finish) patch.status = "completed";
+      if (input.actualQty) patch.actualQty = input.actualQty;
+      await db.update(workOrderOperations).set(patch).where(eq(workOrderOperations.id, input.operationId));
+
+      const ops = await db
+        .select()
+        .from(workOrderOperations)
+        .where(eq(workOrderOperations.id, input.operationId));
+      const op: any = ops[0];
+      if (op) await recalcWorkOrderCost(op.workOrderId).catch(() => {});
+
+      return {
+        success: true,
+        sessionMinutes: Math.round(sessionMinutes),
+        totalMinutes: Math.round(totalMinutes),
+        hours: Math.round(hours * 100) / 100,
+      };
+    }),
+
+  opTimeLogs: publicQuery
+    .input(z.object({ workOrderId: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return await db
+        .select()
+        .from(operationTimeLogs)
+        .where(eq(operationTimeLogs.workOrderId, input.workOrderId))
+        .orderBy(desc(operationTimeLogs.startedAt));
     }),
 
   operationDelete: publicQuery

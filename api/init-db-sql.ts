@@ -1286,5 +1286,20 @@ export function getInitSql(): string[] {
 );`,
     `CREATE INDEX IF NOT EXISTS "dn_certificates_dn_idx" ON "dn_certificates" ("delivery_note_id")`,
     `CREATE INDEX IF NOT EXISTS "material_lots_heat_idx" ON "material_lots" ("heat_number")`,
+
+    // ===== ВРЕМЕ ПО ОПЕРАЦИЈА =====
+    `CREATE TABLE IF NOT EXISTS "operation_time_logs" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"operation_id" bigint NOT NULL,
+	"work_order_id" bigint NOT NULL,
+	"operator" varchar(255),
+	"started_at" timestamp DEFAULT now() NOT NULL,
+	"ended_at" timestamp,
+	"minutes" numeric(10, 2) DEFAULT '0',
+	"note" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE INDEX IF NOT EXISTS "op_time_logs_op_idx" ON "operation_time_logs" ("operation_id")`,
+    `CREATE INDEX IF NOT EXISTS "op_time_logs_wo_idx" ON "operation_time_logs" ("work_order_id")`,
   ];
 }
