@@ -605,26 +605,55 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
 
 
 // ══════════════ ЕТИКЕТИ ЗА ОСТАТОЦИ (крајки) ══════════════
-export function printRemnantLabels(remnants: any[], settings: any) {
+export async function printRemnantLabels(remnants: any[], settings: any) {
   const list = Array.isArray(remnants) ? remnants : [remnants];
   if (list.length === 0) return;
+
+  // QR води до страницата за скенирање: /o/<код>
+  const origin = window.location.origin;
+  const qrMap = new Map<string, string>();
+  // Се вчитува само при печатење етикети — да не тежи главниот пакет
+  const QRCode = (await import("qrcode")).default;
+  await Promise.all(
+    list.map(async (r) => {
+      if (!r?.code) return;
+      try {
+        const url = `${origin}/o/${encodeURIComponent(r.code)}`;
+        const dataUrl = await QRCode.toDataURL(url, {
+          errorCorrectionLevel: "M",
+          margin: 0,
+          width: 220,
+          color: { dark: "#16112b", light: "#ffffff" },
+        });
+        qrMap.set(r.code, dataUrl);
+      } catch {
+        /* без QR — етикетата сепак се печати */
+      }
+    })
+  );
 
   const totalKg = list.reduce((a, r) => a + (Number(r.weightKg ?? 0) || 0), 0);
   const cards = list
     .map((r) => {
       const lenM = (Number(r.lengthMm ?? 0) / 1000).toFixed(3);
+      const qr = qrMap.get(r.code);
       return `<div class="lbl">
         <div class="lbl-top">
           <span class="lbl-co">${esc(settings?.name ?? "Serafimoski Tech")}</span>
           <span class="lbl-date">${dt(r.createdAt)}</span>
         </div>
-        <div class="lbl-code">${esc(r.code)}</div>
-        <div class="lbl-mat">${esc(r.materialName ?? "")}</div>
-        <div class="lbl-sub">${esc(r.materialCode ?? "")}</div>
-        <div class="lbl-len">${esc(Number(r.lengthMm ?? 0).toFixed(0))} <small>mm</small></div>
-        <div class="lbl-sub">${lenM} m${(r.quantity ?? 1) > 1 ? ` · ${r.quantity} ком` : ""}${
-          Number(r.weightKg ?? 0) > 0 ? ` · <b>${Number(r.weightKg).toFixed(1)} кг</b>` : ""
-        }</div>
+        <div class="lbl-body">
+          <div class="lbl-left">
+            <div class="lbl-code">${esc(r.code)}</div>
+            <div class="lbl-mat">${esc(r.materialName ?? "")}</div>
+            <div class="lbl-sub">${esc(r.materialCode ?? "")}</div>
+            <div class="lbl-len">${esc(Number(r.lengthMm ?? 0).toFixed(0))} <small>mm</small></div>
+            <div class="lbl-sub">${lenM} m${(r.quantity ?? 1) > 1 ? ` · ${r.quantity} ком` : ""}${
+              Number(r.weightKg ?? 0) > 0 ? ` · <b>${Number(r.weightKg).toFixed(1)} кг</b>` : ""
+            }</div>
+          </div>
+          ${qr ? `<div class="lbl-qr"><img src="${qr}"><span>скенирај</span></div>` : ""}
+        </div>
         <div class="lbl-foot">${r.location ? "📍 " + esc(r.location) : "&nbsp;"}</div>
       </div>`;
     })
@@ -638,14 +667,19 @@ export function printRemnantLabels(remnants: any[], settings: any) {
   body { font-family:'Segoe UI', Arial, sans-serif; color:#16112b; padding:8mm; }
   h1 { font-size:13px; margin-bottom:6mm; color:#b45309; letter-spacing:.5px; text-transform:uppercase; }
   .sheet { display:grid; grid-template-columns:repeat(3, 1fr); gap:4mm; }
-  .lbl { border:1.5px solid #16112b; border-radius:4px; padding:3.5mm; height:38mm;
+  .lbl { border:1.5px solid #16112b; border-radius:4px; padding:3.5mm; height:42mm;
          display:flex; flex-direction:column; page-break-inside:avoid; }
+  .lbl-body { display:flex; gap:2.5mm; flex:1; min-height:0; }
+  .lbl-left { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .lbl-qr { width:17mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:1.5mm; }
+  .lbl-qr img { width:17mm; height:17mm; display:block; }
+  .lbl-qr span { font-size:6px; color:#999; letter-spacing:.3px; margin-top:.8mm; text-transform:uppercase; }
   .lbl-top { display:flex; justify-content:space-between; font-size:7px; color:#888; border-bottom:1px solid #eee; padding-bottom:1.5mm; }
   .lbl-co { font-weight:700; letter-spacing:.3px; }
   .lbl-code { font-size:17px; font-weight:800; letter-spacing:.5px; margin-top:2mm; color:#b45309; font-family:'Consolas', monospace; }
   .lbl-mat { font-size:9.5px; font-weight:600; margin-top:1.5mm; line-height:1.25; overflow:hidden; }
   .lbl-sub { font-size:7.5px; color:#777; }
-  .lbl-len { font-size:22px; font-weight:800; margin-top:auto; line-height:1; }
+  .lbl-len { font-size:20px; font-weight:800; margin-top:auto; line-height:1; }
   .lbl-len small { font-size:10px; font-weight:600; color:#777; }
   .lbl-foot { font-size:7.5px; color:#555; margin-top:1.5mm; border-top:1px dotted #ddd; padding-top:1.5mm; }
   @media print { body { padding:0; } }

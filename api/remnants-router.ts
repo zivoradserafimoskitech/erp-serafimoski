@@ -151,6 +151,22 @@ export const remnantsRouter = createRouter({
         .sort((a: any, b: any) => Number(a.lengthMm) - Number(b.lengthMm)); // најмал доволен прв
     }),
 
+  // ===== ЕДЕН ОСТАТОК ПО КОД (за скенирање) =====
+  remnantByCode: publicQuery
+    .input(z.object({ code: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const rows = await db
+        .select(baseSelect)
+        .from(materialRemnants)
+        .leftJoin(materials, eq(materialRemnants.materialId, materials.id))
+        .leftJoin(warehouses, eq(materialRemnants.warehouseId, warehouses.id));
+      const code = input.code.trim().toUpperCase();
+      const r: any = (rows as any[]).find((x) => (x.code ?? "").toUpperCase() === code);
+      if (!r) return null;
+      return { ...r, weightKg: remnantWeightKg(r), estValue: remnantValue(r) };
+    }),
+
   // ===== СТАТИСТИКА =====
   remnantStats: publicQuery.query(async () => {
     const db = getDb();

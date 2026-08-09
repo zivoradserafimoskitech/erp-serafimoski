@@ -38864,6 +38864,15 @@ var remnantsRouter = createRouter({
     const min2 = input.minLengthMm ?? 0;
     return rows.filter((r) => Number(r.lengthMm) >= min2).map((r) => ({ ...r, weightKg: remnantWeightKg(r), estValue: remnantValue(r) })).sort((a, b) => Number(a.lengthMm) - Number(b.lengthMm));
   }),
+  // ===== ЕДЕН ОСТАТОК ПО КОД (за скенирање) =====
+  remnantByCode: publicQuery.input(external_exports.object({ code: external_exports.string().min(1) })).query(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select(baseSelect).from(materialRemnants).leftJoin(materials, eq(materialRemnants.materialId, materials.id)).leftJoin(warehouses, eq(materialRemnants.warehouseId, warehouses.id));
+    const code = input.code.trim().toUpperCase();
+    const r = rows.find((x) => (x.code ?? "").toUpperCase() === code);
+    if (!r) return null;
+    return { ...r, weightKg: remnantWeightKg(r), estValue: remnantValue(r) };
+  }),
   // ===== СТАТИСТИКА =====
   remnantStats: publicQuery.query(async () => {
     const db2 = getDb();

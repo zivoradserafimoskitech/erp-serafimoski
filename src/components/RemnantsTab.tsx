@@ -149,7 +149,7 @@ export default function RemnantsTab() {
   const printAll = () => {
     const list = (remnants ?? []).filter((r: any) => r.status === "available");
     if (list.length === 0) return;
-    printRemnantLabels(list, settings);
+    void printRemnantLabels(list, settings);
   };
 
   return (
@@ -303,7 +303,7 @@ export default function RemnantsTab() {
                               <Scissors className="h-3.5 w-3.5" />
                             </Button>
                             <Button size="sm" variant="outline" title="Печати етикета"
-                              onClick={() => printRemnantLabels([r], settings)}>
+                              onClick={() => { void printRemnantLabels([r], settings); }}>
                               <Printer className="h-3.5 w-3.5" />
                             </Button>
                             <Button size="sm" variant="outline" className="text-red-500 hover:text-red-600" title="Отпиши"
