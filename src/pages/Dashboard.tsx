@@ -143,7 +143,7 @@ export default function Dashboard() {
               { label: "На чекање", value: stats?.production.pending ?? 0, color: "bg-gray-400" },
               { label: "Во тек", value: stats?.production.inProgress ?? 0, color: "bg-blue-400" },
               { label: "Завршени", value: stats?.production.completed ?? 0, color: "bg-emerald-400" },
-              { label: "На удар", value: stats?.production.onHold ?? 0, color: "bg-red-400" },
+              { label: "Паузирани", value: stats?.production.onHold ?? 0, color: "bg-amber-400" },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-3">
                 <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />

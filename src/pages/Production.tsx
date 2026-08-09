@@ -18,7 +18,7 @@ import { MaterialPicker } from "@/components/MaterialPicker";
 const statusCfg: Record<string, { label: string; cls: string }> = {
   pending: { label: "На чекање", cls: "bg-gray-100 text-gray-700" },
   in_progress: { label: "Во тек", cls: "bg-blue-100 text-blue-700" },
-  on_hold: { label: "На удар", cls: "bg-amber-100 text-amber-700" },
+  on_hold: { label: "Паузиран", cls: "bg-amber-100 text-amber-700" },
   completed: { label: "Завршено", cls: "bg-emerald-100 text-emerald-700" },
   cancelled: { label: "Откажано", cls: "bg-red-100 text-red-700" },
 };
@@ -195,7 +195,7 @@ export default function Production() {
           { label: "Вкупно", value: stats?.total ?? 0, cls: "text-gray-700" },
           { label: "На чекање", value: stats?.pending ?? 0, cls: "text-gray-600" },
           { label: "Во тек", value: stats?.inProgress ?? 0, cls: "text-blue-600" },
-          { label: "На удар", value: stats?.onHold ?? 0, cls: "text-amber-600" },
+          { label: "Паузирани", value: stats?.onHold ?? 0, cls: "text-amber-600" },
           { label: "Завршени", value: stats?.completed ?? 0, cls: "text-emerald-600" },
         ].map((s) => (
           <Card key={s.label}><CardContent className="p-4"><p className="text-sm text-gray-500">{s.label}</p><p className={`text-2xl font-bold ${s.cls}`}>{s.value}</p></CardContent></Card>
