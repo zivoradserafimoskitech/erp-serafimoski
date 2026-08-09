@@ -31,6 +31,215 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// node_modules/hono/dist/utils/url.js
+var splitPath, splitRoutingPath, extractGroupsFromPath, replaceGroupMarks, patternCache, getPattern, tryDecode, tryDecodeURI, getPath, getPathNoStrict, mergePath, checkOptionalParameter, _decodeURI, _getQueryParam, getQueryParam, getQueryParams, decodeURIComponent_;
+var init_url = __esm({
+  "node_modules/hono/dist/utils/url.js"() {
+    splitPath = (path) => {
+      const paths = path.split("/");
+      if (paths[0] === "") {
+        paths.shift();
+      }
+      return paths;
+    };
+    splitRoutingPath = (routePath) => {
+      const { groups, path } = extractGroupsFromPath(routePath);
+      const paths = splitPath(path);
+      return replaceGroupMarks(paths, groups);
+    };
+    extractGroupsFromPath = (path) => {
+      const groups = [];
+      path = path.replace(/\{[^}]+\}/g, (match2, index) => {
+        const mark = `@${index}`;
+        groups.push([mark, match2]);
+        return mark;
+      });
+      return { groups, path };
+    };
+    replaceGroupMarks = (paths, groups) => {
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const [mark] = groups[i];
+        for (let j = paths.length - 1; j >= 0; j--) {
+          if (paths[j].includes(mark)) {
+            paths[j] = paths[j].replace(mark, groups[i][1]);
+            break;
+          }
+        }
+      }
+      return paths;
+    };
+    patternCache = {};
+    getPattern = (label, next) => {
+      if (label === "*") {
+        return "*";
+      }
+      const match2 = label.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);
+      if (match2) {
+        const cacheKey2 = `${label}#${next}`;
+        if (!patternCache[cacheKey2]) {
+          if (match2[2]) {
+            patternCache[cacheKey2] = next && next[0] !== ":" && next[0] !== "*" ? [cacheKey2, match2[1], new RegExp(`^${match2[2]}(?=/${next})`)] : [label, match2[1], new RegExp(`^${match2[2]}$`)];
+          } else {
+            patternCache[cacheKey2] = [label, match2[1], true];
+          }
+        }
+        return patternCache[cacheKey2];
+      }
+      return null;
+    };
+    tryDecode = (str, decoder2) => {
+      try {
+        return decoder2(str);
+      } catch {
+        return str.replace(/(?:%[0-9A-Fa-f]{2})+/g, (match2) => {
+          try {
+            return decoder2(match2);
+          } catch {
+            return match2;
+          }
+        });
+      }
+    };
+    tryDecodeURI = (str) => tryDecode(str, decodeURI);
+    getPath = (request) => {
+      const url2 = request.url;
+      const start = url2.indexOf("/", url2.indexOf(":") + 4);
+      let i = start;
+      for (; i < url2.length; i++) {
+        const charCode = url2.charCodeAt(i);
+        if (charCode === 37) {
+          const queryIndex = url2.indexOf("?", i);
+          const hashIndex = url2.indexOf("#", i);
+          const end = queryIndex === -1 ? hashIndex === -1 ? void 0 : hashIndex : hashIndex === -1 ? queryIndex : Math.min(queryIndex, hashIndex);
+          const path = url2.slice(start, end);
+          return tryDecodeURI(path.includes("%25") ? path.replace(/%25/g, "%2525") : path);
+        } else if (charCode === 63 || charCode === 35) {
+          break;
+        }
+      }
+      return url2.slice(start, i);
+    };
+    getPathNoStrict = (request) => {
+      const result = getPath(request);
+      return result.length > 1 && result.at(-1) === "/" ? result.slice(0, -1) : result;
+    };
+    mergePath = (base, sub, ...rest) => {
+      if (rest.length) {
+        sub = mergePath(sub, ...rest);
+      }
+      return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
+    };
+    checkOptionalParameter = (path) => {
+      if (path.charCodeAt(path.length - 1) !== 63 || !path.includes(":")) {
+        return null;
+      }
+      const segments = path.split("/");
+      const results = [];
+      let basePath = "";
+      segments.forEach((segment) => {
+        if (segment !== "" && !/\:/.test(segment)) {
+          basePath += "/" + segment;
+        } else if (/\:/.test(segment)) {
+          if (/\?/.test(segment)) {
+            if (results.length === 0 && basePath === "") {
+              results.push("/");
+            } else {
+              results.push(basePath);
+            }
+            const optionalSegment = segment.replace("?", "");
+            basePath += "/" + optionalSegment;
+            results.push(basePath);
+          } else {
+            basePath += "/" + segment;
+          }
+        }
+      });
+      return results.filter((v, i, a) => a.indexOf(v) === i);
+    };
+    _decodeURI = (value) => {
+      if (!/[%+]/.test(value)) {
+        return value;
+      }
+      if (value.indexOf("+") !== -1) {
+        value = value.replace(/\+/g, " ");
+      }
+      return value.indexOf("%") !== -1 ? tryDecode(value, decodeURIComponent_) : value;
+    };
+    _getQueryParam = (url2, key, multiple) => {
+      let encoded;
+      if (!multiple && key && !/[%+]/.test(key)) {
+        let keyIndex2 = url2.indexOf("?", 8);
+        if (keyIndex2 === -1) {
+          return void 0;
+        }
+        if (!url2.startsWith(key, keyIndex2 + 1)) {
+          keyIndex2 = url2.indexOf(`&${key}`, keyIndex2 + 1);
+        }
+        while (keyIndex2 !== -1) {
+          const trailingKeyCode = url2.charCodeAt(keyIndex2 + key.length + 1);
+          if (trailingKeyCode === 61) {
+            const valueIndex = keyIndex2 + key.length + 2;
+            const endIndex = url2.indexOf("&", valueIndex);
+            return _decodeURI(url2.slice(valueIndex, endIndex === -1 ? void 0 : endIndex));
+          } else if (trailingKeyCode == 38 || isNaN(trailingKeyCode)) {
+            return "";
+          }
+          keyIndex2 = url2.indexOf(`&${key}`, keyIndex2 + 1);
+        }
+        encoded = /[%+]/.test(url2);
+        if (!encoded) {
+          return void 0;
+        }
+      }
+      const results = {};
+      encoded ??= /[%+]/.test(url2);
+      let keyIndex = url2.indexOf("?", 8);
+      while (keyIndex !== -1) {
+        const nextKeyIndex = url2.indexOf("&", keyIndex + 1);
+        let valueIndex = url2.indexOf("=", keyIndex);
+        if (valueIndex > nextKeyIndex && nextKeyIndex !== -1) {
+          valueIndex = -1;
+        }
+        let name2 = url2.slice(
+          keyIndex + 1,
+          valueIndex === -1 ? nextKeyIndex === -1 ? void 0 : nextKeyIndex : valueIndex
+        );
+        if (encoded) {
+          name2 = _decodeURI(name2);
+        }
+        keyIndex = nextKeyIndex;
+        if (name2 === "") {
+          continue;
+        }
+        let value;
+        if (valueIndex === -1) {
+          value = "";
+        } else {
+          value = url2.slice(valueIndex + 1, nextKeyIndex === -1 ? void 0 : nextKeyIndex);
+          if (encoded) {
+            value = _decodeURI(value);
+          }
+        }
+        if (multiple) {
+          if (!(results[name2] && Array.isArray(results[name2]))) {
+            results[name2] = [];
+          }
+          ;
+          results[name2].push(value);
+        } else {
+          results[name2] ??= value;
+        }
+      }
+      return key ? results[key] : results;
+    };
+    getQueryParam = _getQueryParam;
+    getQueryParams = (url2, key) => {
+      return _getQueryParam(url2, key, true);
+    };
+    decodeURIComponent_ = decodeURIComponent;
+  }
+});
+
 // node_modules/cookie/dist/index.js
 var require_dist = __commonJS({
   "node_modules/cookie/dist/index.js"(exports2) {
@@ -277,6 +486,40 @@ var require_dist = __commonJS({
     function isDate2(val) {
       return __toString.call(val) === "[object Date]";
     }
+  }
+});
+
+// contracts/constants.ts
+var Session, ErrorMessages;
+var init_constants = __esm({
+  "contracts/constants.ts"() {
+    Session = {
+      cookieName: "kimi_sid",
+      maxAgeMs: 365 * 24 * 60 * 60 * 1e3
+    };
+    ErrorMessages = {
+      unauthenticated: "Authentication required",
+      insufficientRole: "Insufficient permissions"
+    };
+  }
+});
+
+// api/lib/cookies.ts
+function isLocalhost(headers) {
+  const host = headers.get("host") || "";
+  return host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
+}
+function getSessionCookieOptions(headers) {
+  const localhost = isLocalhost(headers);
+  return {
+    httpOnly: true,
+    path: "/",
+    sameSite: localhost ? "Lax" : "None",
+    secure: !localhost
+  };
+}
+var init_cookies = __esm({
+  "api/lib/cookies.ts"() {
   }
 });
 
@@ -8793,6 +9036,7 @@ var init_connection = __esm({
 // db/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
+  appUsers: () => appUsers,
   auditLog: () => auditLog,
   companySettings: () => companySettings,
   customers: () => customers,
@@ -8841,7 +9085,7 @@ __export(schema_exports, {
   workOrderOperations: () => workOrderOperations,
   workOrders: () => workOrders
 });
-var companySettings, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
+var companySettings, appUsers, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_pg_core();
@@ -8869,6 +9113,17 @@ var init_schema2 = __esm({
       // Параметри за кроење / остатоци
       cutKerfMm: decimal("cut_kerf_mm", { precision: 6, scale: 1 }).default("2"),
       minRemnantMm: decimal("min_remnant_mm", { precision: 8, scale: 1 }).default("300"),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    appUsers = pgTable("app_users", {
+      id: serial("id").primaryKey(),
+      name: varchar("name", { length: 255 }).notNull(),
+      passcode: varchar("passcode", { length: 120 }).notNull().unique(),
+      role: varchar("role", { length: 20 }).notNull().default("operator"),
+      isActive: varchar("is_active", { length: 20 }).notNull().default("active"),
+      note: text("note"),
+      lastSeenAt: timestamp("last_seen_at"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
@@ -9918,6 +10173,1888 @@ var init_counters_helper = __esm({
       order: "\u041D\u0410\u0420",
       po: "\u041D\u041D"
     };
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/buffer_utils.js
+function concat(...buffers) {
+  const size = buffers.reduce((acc, { length }) => acc + length, 0);
+  const buf = new Uint8Array(size);
+  let i = 0;
+  for (const buffer of buffers) {
+    buf.set(buffer, i);
+    i += buffer.length;
+  }
+  return buf;
+}
+function encode3(string4) {
+  const bytes = new Uint8Array(string4.length);
+  for (let i = 0; i < string4.length; i++) {
+    const code = string4.charCodeAt(i);
+    if (code > 127) {
+      throw new TypeError("non-ASCII string encountered in encode()");
+    }
+    bytes[i] = code;
+  }
+  return bytes;
+}
+var encoder, decoder, MAX_INT32;
+var init_buffer_utils = __esm({
+  "node_modules/jose/dist/webapi/lib/buffer_utils.js"() {
+    encoder = new TextEncoder();
+    decoder = new TextDecoder();
+    MAX_INT32 = 2 ** 32;
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/base64.js
+function encodeBase64(input) {
+  if (Uint8Array.prototype.toBase64) {
+    return input.toBase64();
+  }
+  const CHUNK_SIZE = 32768;
+  const arr = [];
+  for (let i = 0; i < input.length; i += CHUNK_SIZE) {
+    arr.push(String.fromCharCode.apply(null, input.subarray(i, i + CHUNK_SIZE)));
+  }
+  return btoa(arr.join(""));
+}
+function decodeBase64(encoded) {
+  if (Uint8Array.fromBase64) {
+    return Uint8Array.fromBase64(encoded);
+  }
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+var init_base64 = __esm({
+  "node_modules/jose/dist/webapi/lib/base64.js"() {
+  }
+});
+
+// node_modules/jose/dist/webapi/util/base64url.js
+function decode3(input) {
+  if (Uint8Array.fromBase64) {
+    return Uint8Array.fromBase64(typeof input === "string" ? input : decoder.decode(input), {
+      alphabet: "base64url"
+    });
+  }
+  let encoded = input;
+  if (encoded instanceof Uint8Array) {
+    encoded = decoder.decode(encoded);
+  }
+  encoded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  try {
+    return decodeBase64(encoded);
+  } catch {
+    throw new TypeError("The input to be decoded is not correctly encoded.");
+  }
+}
+function encode4(input) {
+  let unencoded = input;
+  if (typeof unencoded === "string") {
+    unencoded = encoder.encode(unencoded);
+  }
+  if (Uint8Array.prototype.toBase64) {
+    return unencoded.toBase64({ alphabet: "base64url", omitPadding: true });
+  }
+  return encodeBase64(unencoded).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+var init_base64url = __esm({
+  "node_modules/jose/dist/webapi/util/base64url.js"() {
+    init_buffer_utils();
+    init_base64();
+  }
+});
+
+// node_modules/jose/dist/webapi/util/errors.js
+var JOSEError, JWTClaimValidationFailed, JWTExpired, JOSEAlgNotAllowed, JOSENotSupported, JWSInvalid, JWTInvalid, JWSSignatureVerificationFailed;
+var init_errors2 = __esm({
+  "node_modules/jose/dist/webapi/util/errors.js"() {
+    JOSEError = class extends Error {
+      static code = "ERR_JOSE_GENERIC";
+      code = "ERR_JOSE_GENERIC";
+      constructor(message2, options) {
+        super(message2, options);
+        this.name = this.constructor.name;
+        Error.captureStackTrace?.(this, this.constructor);
+      }
+    };
+    JWTClaimValidationFailed = class extends JOSEError {
+      static code = "ERR_JWT_CLAIM_VALIDATION_FAILED";
+      code = "ERR_JWT_CLAIM_VALIDATION_FAILED";
+      claim;
+      reason;
+      payload;
+      constructor(message2, payload, claim = "unspecified", reason = "unspecified") {
+        super(message2, { cause: { claim, reason, payload } });
+        this.claim = claim;
+        this.reason = reason;
+        this.payload = payload;
+      }
+    };
+    JWTExpired = class extends JOSEError {
+      static code = "ERR_JWT_EXPIRED";
+      code = "ERR_JWT_EXPIRED";
+      claim;
+      reason;
+      payload;
+      constructor(message2, payload, claim = "unspecified", reason = "unspecified") {
+        super(message2, { cause: { claim, reason, payload } });
+        this.claim = claim;
+        this.reason = reason;
+        this.payload = payload;
+      }
+    };
+    JOSEAlgNotAllowed = class extends JOSEError {
+      static code = "ERR_JOSE_ALG_NOT_ALLOWED";
+      code = "ERR_JOSE_ALG_NOT_ALLOWED";
+    };
+    JOSENotSupported = class extends JOSEError {
+      static code = "ERR_JOSE_NOT_SUPPORTED";
+      code = "ERR_JOSE_NOT_SUPPORTED";
+    };
+    JWSInvalid = class extends JOSEError {
+      static code = "ERR_JWS_INVALID";
+      code = "ERR_JWS_INVALID";
+    };
+    JWTInvalid = class extends JOSEError {
+      static code = "ERR_JWT_INVALID";
+      code = "ERR_JWT_INVALID";
+    };
+    JWSSignatureVerificationFailed = class extends JOSEError {
+      static code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
+      code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
+      constructor(message2 = "signature verification failed", options) {
+        super(message2, options);
+      }
+    };
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/crypto_key.js
+function getHashLength(hash2) {
+  return parseInt(hash2.name.slice(4), 10);
+}
+function getNamedCurve(alg) {
+  switch (alg) {
+    case "ES256":
+      return "P-256";
+    case "ES384":
+      return "P-384";
+    case "ES512":
+      return "P-521";
+    default:
+      throw new Error("unreachable");
+  }
+}
+function checkUsage(key, usage) {
+  if (usage && !key.usages.includes(usage)) {
+    throw new TypeError(`CryptoKey does not support this operation, its usages must include ${usage}.`);
+  }
+}
+function checkSigCryptoKey(key, alg, usage) {
+  switch (alg) {
+    case "HS256":
+    case "HS384":
+    case "HS512": {
+      if (!isAlgorithm(key.algorithm, "HMAC"))
+        throw unusable("HMAC");
+      const expected = parseInt(alg.slice(2), 10);
+      const actual = getHashLength(key.algorithm.hash);
+      if (actual !== expected)
+        throw unusable(`SHA-${expected}`, "algorithm.hash");
+      break;
+    }
+    case "RS256":
+    case "RS384":
+    case "RS512": {
+      if (!isAlgorithm(key.algorithm, "RSASSA-PKCS1-v1_5"))
+        throw unusable("RSASSA-PKCS1-v1_5");
+      const expected = parseInt(alg.slice(2), 10);
+      const actual = getHashLength(key.algorithm.hash);
+      if (actual !== expected)
+        throw unusable(`SHA-${expected}`, "algorithm.hash");
+      break;
+    }
+    case "PS256":
+    case "PS384":
+    case "PS512": {
+      if (!isAlgorithm(key.algorithm, "RSA-PSS"))
+        throw unusable("RSA-PSS");
+      const expected = parseInt(alg.slice(2), 10);
+      const actual = getHashLength(key.algorithm.hash);
+      if (actual !== expected)
+        throw unusable(`SHA-${expected}`, "algorithm.hash");
+      break;
+    }
+    case "Ed25519":
+    case "EdDSA": {
+      if (!isAlgorithm(key.algorithm, "Ed25519"))
+        throw unusable("Ed25519");
+      break;
+    }
+    case "ML-DSA-44":
+    case "ML-DSA-65":
+    case "ML-DSA-87": {
+      if (!isAlgorithm(key.algorithm, alg))
+        throw unusable(alg);
+      break;
+    }
+    case "ES256":
+    case "ES384":
+    case "ES512": {
+      if (!isAlgorithm(key.algorithm, "ECDSA"))
+        throw unusable("ECDSA");
+      const expected = getNamedCurve(alg);
+      const actual = key.algorithm.namedCurve;
+      if (actual !== expected)
+        throw unusable(expected, "algorithm.namedCurve");
+      break;
+    }
+    default:
+      throw new TypeError("CryptoKey does not support this operation");
+  }
+  checkUsage(key, usage);
+}
+var unusable, isAlgorithm;
+var init_crypto_key = __esm({
+  "node_modules/jose/dist/webapi/lib/crypto_key.js"() {
+    unusable = (name2, prop = "algorithm.name") => new TypeError(`CryptoKey does not support this operation, its ${prop} must be ${name2}`);
+    isAlgorithm = (algorithm, name2) => algorithm.name === name2;
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/invalid_key_input.js
+function message(msg, actual, ...types2) {
+  types2 = types2.filter(Boolean);
+  if (types2.length > 2) {
+    const last = types2.pop();
+    msg += `one of type ${types2.join(", ")}, or ${last}.`;
+  } else if (types2.length === 2) {
+    msg += `one of type ${types2[0]} or ${types2[1]}.`;
+  } else {
+    msg += `of type ${types2[0]}.`;
+  }
+  if (actual == null) {
+    msg += ` Received ${actual}`;
+  } else if (typeof actual === "function" && actual.name) {
+    msg += ` Received function ${actual.name}`;
+  } else if (typeof actual === "object" && actual != null) {
+    if (actual.constructor?.name) {
+      msg += ` Received an instance of ${actual.constructor.name}`;
+    }
+  }
+  return msg;
+}
+var invalidKeyInput, withAlg;
+var init_invalid_key_input = __esm({
+  "node_modules/jose/dist/webapi/lib/invalid_key_input.js"() {
+    invalidKeyInput = (actual, ...types2) => message("Key must be ", actual, ...types2);
+    withAlg = (alg, actual, ...types2) => message(`Key for the ${alg} algorithm must be `, actual, ...types2);
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/is_key_like.js
+var isCryptoKey, isKeyObject, isKeyLike;
+var init_is_key_like = __esm({
+  "node_modules/jose/dist/webapi/lib/is_key_like.js"() {
+    isCryptoKey = (key) => {
+      if (key?.[Symbol.toStringTag] === "CryptoKey")
+        return true;
+      try {
+        return key instanceof CryptoKey;
+      } catch {
+        return false;
+      }
+    };
+    isKeyObject = (key) => key?.[Symbol.toStringTag] === "KeyObject";
+    isKeyLike = (key) => isCryptoKey(key) || isKeyObject(key);
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/is_disjoint.js
+function isDisjoint(...headers) {
+  const sources = headers.filter(Boolean);
+  if (sources.length === 0 || sources.length === 1) {
+    return true;
+  }
+  let acc;
+  for (const header of sources) {
+    const parameters = Object.keys(header);
+    if (!acc || acc.size === 0) {
+      acc = new Set(parameters);
+      continue;
+    }
+    for (const parameter of parameters) {
+      if (acc.has(parameter)) {
+        return false;
+      }
+      acc.add(parameter);
+    }
+  }
+  return true;
+}
+var init_is_disjoint = __esm({
+  "node_modules/jose/dist/webapi/lib/is_disjoint.js"() {
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/is_object.js
+function isObject3(input) {
+  if (!isObjectLike(input) || Object.prototype.toString.call(input) !== "[object Object]") {
+    return false;
+  }
+  if (Object.getPrototypeOf(input) === null) {
+    return true;
+  }
+  let proto = input;
+  while (Object.getPrototypeOf(proto) !== null) {
+    proto = Object.getPrototypeOf(proto);
+  }
+  return Object.getPrototypeOf(input) === proto;
+}
+var isObjectLike;
+var init_is_object = __esm({
+  "node_modules/jose/dist/webapi/lib/is_object.js"() {
+    isObjectLike = (value) => typeof value === "object" && value !== null;
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/check_key_length.js
+function checkKeyLength(alg, key) {
+  if (alg.startsWith("RS") || alg.startsWith("PS")) {
+    const { modulusLength } = key.algorithm;
+    if (typeof modulusLength !== "number" || modulusLength < 2048) {
+      throw new TypeError(`${alg} requires key modulusLength to be 2048 bits or larger`);
+    }
+  }
+}
+var init_check_key_length = __esm({
+  "node_modules/jose/dist/webapi/lib/check_key_length.js"() {
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/asn1.js
+function parsePKCS8Header(state) {
+  expectTag(state, 48, "Invalid PKCS#8 structure");
+  parseLength(state);
+  expectTag(state, 2, "Expected version field");
+  const verLen = parseLength(state);
+  state.pos += verLen;
+  expectTag(state, 48, "Expected algorithm identifier");
+  const algIdLen = parseLength(state);
+  const algIdStart = state.pos;
+  return { algIdStart, algIdLength: algIdLen };
+}
+var bytesEqual, createASN1State, parseLength, expectTag, getSubarray, parseAlgorithmOID, parseECAlgorithmIdentifier, genericImport, processPEMData, fromPKCS8;
+var init_asn1 = __esm({
+  "node_modules/jose/dist/webapi/lib/asn1.js"() {
+    init_base64();
+    init_errors2();
+    bytesEqual = (a, b) => {
+      if (a.byteLength !== b.length)
+        return false;
+      for (let i = 0; i < a.byteLength; i++) {
+        if (a[i] !== b[i])
+          return false;
+      }
+      return true;
+    };
+    createASN1State = (data) => ({ data, pos: 0 });
+    parseLength = (state) => {
+      const first = state.data[state.pos++];
+      if (first & 128) {
+        const lengthOfLen = first & 127;
+        let length = 0;
+        for (let i = 0; i < lengthOfLen; i++) {
+          length = length << 8 | state.data[state.pos++];
+        }
+        return length;
+      }
+      return first;
+    };
+    expectTag = (state, expectedTag, errorMessage) => {
+      if (state.data[state.pos++] !== expectedTag) {
+        throw new Error(errorMessage);
+      }
+    };
+    getSubarray = (state, length) => {
+      const result = state.data.subarray(state.pos, state.pos + length);
+      state.pos += length;
+      return result;
+    };
+    parseAlgorithmOID = (state) => {
+      expectTag(state, 6, "Expected algorithm OID");
+      const oidLen = parseLength(state);
+      return getSubarray(state, oidLen);
+    };
+    parseECAlgorithmIdentifier = (state) => {
+      const algOid = parseAlgorithmOID(state);
+      if (bytesEqual(algOid, [43, 101, 110])) {
+        return "X25519";
+      }
+      if (!bytesEqual(algOid, [42, 134, 72, 206, 61, 2, 1])) {
+        throw new Error("Unsupported key algorithm");
+      }
+      expectTag(state, 6, "Expected curve OID");
+      const curveOidLen = parseLength(state);
+      const curveOid = getSubarray(state, curveOidLen);
+      for (const { name: name2, oid } of [
+        { name: "P-256", oid: [42, 134, 72, 206, 61, 3, 1, 7] },
+        { name: "P-384", oid: [43, 129, 4, 0, 34] },
+        { name: "P-521", oid: [43, 129, 4, 0, 35] }
+      ]) {
+        if (bytesEqual(curveOid, oid)) {
+          return name2;
+        }
+      }
+      throw new Error("Unsupported named curve");
+    };
+    genericImport = async (keyFormat, keyData, alg, options) => {
+      let algorithm;
+      let keyUsages;
+      const isPublic = keyFormat === "spki";
+      const getSigUsages = () => isPublic ? ["verify"] : ["sign"];
+      const getEncUsages = () => isPublic ? ["encrypt", "wrapKey"] : ["decrypt", "unwrapKey"];
+      switch (alg) {
+        case "PS256":
+        case "PS384":
+        case "PS512":
+          algorithm = { name: "RSA-PSS", hash: `SHA-${alg.slice(-3)}` };
+          keyUsages = getSigUsages();
+          break;
+        case "RS256":
+        case "RS384":
+        case "RS512":
+          algorithm = { name: "RSASSA-PKCS1-v1_5", hash: `SHA-${alg.slice(-3)}` };
+          keyUsages = getSigUsages();
+          break;
+        case "RSA-OAEP":
+        case "RSA-OAEP-256":
+        case "RSA-OAEP-384":
+        case "RSA-OAEP-512":
+          algorithm = {
+            name: "RSA-OAEP",
+            hash: `SHA-${parseInt(alg.slice(-3), 10) || 1}`
+          };
+          keyUsages = getEncUsages();
+          break;
+        case "ES256":
+        case "ES384":
+        case "ES512": {
+          const curveMap = { ES256: "P-256", ES384: "P-384", ES512: "P-521" };
+          algorithm = { name: "ECDSA", namedCurve: curveMap[alg] };
+          keyUsages = getSigUsages();
+          break;
+        }
+        case "ECDH-ES":
+        case "ECDH-ES+A128KW":
+        case "ECDH-ES+A192KW":
+        case "ECDH-ES+A256KW": {
+          try {
+            const namedCurve = options.getNamedCurve(keyData);
+            algorithm = namedCurve === "X25519" ? { name: "X25519" } : { name: "ECDH", namedCurve };
+          } catch (cause) {
+            throw new JOSENotSupported("Invalid or unsupported key format");
+          }
+          keyUsages = isPublic ? [] : ["deriveBits"];
+          break;
+        }
+        case "Ed25519":
+        case "EdDSA":
+          algorithm = { name: "Ed25519" };
+          keyUsages = getSigUsages();
+          break;
+        case "ML-DSA-44":
+        case "ML-DSA-65":
+        case "ML-DSA-87":
+          algorithm = { name: alg };
+          keyUsages = getSigUsages();
+          break;
+        default:
+          throw new JOSENotSupported('Invalid or unsupported "alg" (Algorithm) value');
+      }
+      return crypto.subtle.importKey(keyFormat, keyData, algorithm, options?.extractable ?? (isPublic ? true : false), keyUsages);
+    };
+    processPEMData = (pem, pattern) => {
+      return decodeBase64(pem.replace(pattern, ""));
+    };
+    fromPKCS8 = (pem, alg, options) => {
+      const keyData = processPEMData(pem, /(?:-----(?:BEGIN|END) PRIVATE KEY-----|\s)/g);
+      let opts = options;
+      if (alg?.startsWith?.("ECDH-ES")) {
+        opts ||= {};
+        opts.getNamedCurve = (keyData2) => {
+          const state = createASN1State(keyData2);
+          parsePKCS8Header(state);
+          return parseECAlgorithmIdentifier(state);
+        };
+      }
+      return genericImport("pkcs8", keyData, alg, opts);
+    };
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/jwk_to_key.js
+function subtleMapping(jwk) {
+  let algorithm;
+  let keyUsages;
+  switch (jwk.kty) {
+    case "AKP": {
+      switch (jwk.alg) {
+        case "ML-DSA-44":
+        case "ML-DSA-65":
+        case "ML-DSA-87":
+          algorithm = { name: jwk.alg };
+          keyUsages = jwk.priv ? ["sign"] : ["verify"];
+          break;
+        default:
+          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+      }
+      break;
+    }
+    case "RSA": {
+      switch (jwk.alg) {
+        case "PS256":
+        case "PS384":
+        case "PS512":
+          algorithm = { name: "RSA-PSS", hash: `SHA-${jwk.alg.slice(-3)}` };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "RS256":
+        case "RS384":
+        case "RS512":
+          algorithm = { name: "RSASSA-PKCS1-v1_5", hash: `SHA-${jwk.alg.slice(-3)}` };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "RSA-OAEP":
+        case "RSA-OAEP-256":
+        case "RSA-OAEP-384":
+        case "RSA-OAEP-512":
+          algorithm = {
+            name: "RSA-OAEP",
+            hash: `SHA-${parseInt(jwk.alg.slice(-3), 10) || 1}`
+          };
+          keyUsages = jwk.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"];
+          break;
+        default:
+          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+      }
+      break;
+    }
+    case "EC": {
+      switch (jwk.alg) {
+        case "ES256":
+          algorithm = { name: "ECDSA", namedCurve: "P-256" };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "ES384":
+          algorithm = { name: "ECDSA", namedCurve: "P-384" };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "ES512":
+          algorithm = { name: "ECDSA", namedCurve: "P-521" };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "ECDH-ES":
+        case "ECDH-ES+A128KW":
+        case "ECDH-ES+A192KW":
+        case "ECDH-ES+A256KW":
+          algorithm = { name: "ECDH", namedCurve: jwk.crv };
+          keyUsages = jwk.d ? ["deriveBits"] : [];
+          break;
+        default:
+          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+      }
+      break;
+    }
+    case "OKP": {
+      switch (jwk.alg) {
+        case "Ed25519":
+        case "EdDSA":
+          algorithm = { name: "Ed25519" };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "ECDH-ES":
+        case "ECDH-ES+A128KW":
+        case "ECDH-ES+A192KW":
+        case "ECDH-ES+A256KW":
+          algorithm = { name: jwk.crv };
+          keyUsages = jwk.d ? ["deriveBits"] : [];
+          break;
+        default:
+          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+      }
+      break;
+    }
+    default:
+      throw new JOSENotSupported('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
+  }
+  return { algorithm, keyUsages };
+}
+async function jwkToKey(jwk) {
+  if (!jwk.alg) {
+    throw new TypeError('"alg" argument is required when "jwk.alg" is not present');
+  }
+  const { algorithm, keyUsages } = subtleMapping(jwk);
+  const keyData = { ...jwk };
+  if (keyData.kty !== "AKP") {
+    delete keyData.alg;
+  }
+  delete keyData.use;
+  return crypto.subtle.importKey("jwk", keyData, algorithm, jwk.ext ?? (jwk.d || jwk.priv ? false : true), jwk.key_ops ?? keyUsages);
+}
+var init_jwk_to_key = __esm({
+  "node_modules/jose/dist/webapi/lib/jwk_to_key.js"() {
+    init_errors2();
+  }
+});
+
+// node_modules/jose/dist/webapi/key/import.js
+async function importPKCS8(pkcs8, alg, options) {
+  if (typeof pkcs8 !== "string" || pkcs8.indexOf("-----BEGIN PRIVATE KEY-----") !== 0) {
+    throw new TypeError('"pkcs8" must be PKCS#8 formatted string');
+  }
+  return fromPKCS8(pkcs8, alg, options);
+}
+var init_import = __esm({
+  "node_modules/jose/dist/webapi/key/import.js"() {
+    init_asn1();
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/validate_crit.js
+function validateCrit(Err, recognizedDefault, recognizedOption, protectedHeader, joseHeader) {
+  if (joseHeader.crit !== void 0 && protectedHeader?.crit === void 0) {
+    throw new Err('"crit" (Critical) Header Parameter MUST be integrity protected');
+  }
+  if (!protectedHeader || protectedHeader.crit === void 0) {
+    return /* @__PURE__ */ new Set();
+  }
+  if (!Array.isArray(protectedHeader.crit) || protectedHeader.crit.length === 0 || protectedHeader.crit.some((input) => typeof input !== "string" || input.length === 0)) {
+    throw new Err('"crit" (Critical) Header Parameter MUST be an array of non-empty strings when present');
+  }
+  let recognized;
+  if (recognizedOption !== void 0) {
+    recognized = new Map([...Object.entries(recognizedOption), ...recognizedDefault.entries()]);
+  } else {
+    recognized = recognizedDefault;
+  }
+  for (const parameter of protectedHeader.crit) {
+    if (!recognized.has(parameter)) {
+      throw new JOSENotSupported(`Extension Header Parameter "${parameter}" is not recognized`);
+    }
+    if (joseHeader[parameter] === void 0) {
+      throw new Err(`Extension Header Parameter "${parameter}" is missing`);
+    }
+    if (recognized.get(parameter) && protectedHeader[parameter] === void 0) {
+      throw new Err(`Extension Header Parameter "${parameter}" MUST be integrity protected`);
+    }
+  }
+  return new Set(protectedHeader.crit);
+}
+var init_validate_crit = __esm({
+  "node_modules/jose/dist/webapi/lib/validate_crit.js"() {
+    init_errors2();
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/validate_algorithms.js
+function validateAlgorithms(option, algorithms) {
+  if (algorithms !== void 0 && (!Array.isArray(algorithms) || algorithms.some((s) => typeof s !== "string"))) {
+    throw new TypeError(`"${option}" option must be an array of strings`);
+  }
+  if (!algorithms) {
+    return void 0;
+  }
+  return new Set(algorithms);
+}
+var init_validate_algorithms = __esm({
+  "node_modules/jose/dist/webapi/lib/validate_algorithms.js"() {
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/is_jwk.js
+var isJWK, isPrivateJWK, isPublicJWK, isSecretJWK;
+var init_is_jwk = __esm({
+  "node_modules/jose/dist/webapi/lib/is_jwk.js"() {
+    init_is_object();
+    isJWK = (key) => isObject3(key) && typeof key.kty === "string";
+    isPrivateJWK = (key) => key.kty !== "oct" && (key.kty === "AKP" && typeof key.priv === "string" || typeof key.d === "string");
+    isPublicJWK = (key) => key.kty !== "oct" && key.d === void 0 && key.priv === void 0;
+    isSecretJWK = (key) => key.kty === "oct" && typeof key.k === "string";
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/normalize_key.js
+async function normalizeKey(key, alg) {
+  if (key instanceof Uint8Array) {
+    return key;
+  }
+  if (isCryptoKey(key)) {
+    return key;
+  }
+  if (isKeyObject(key)) {
+    if (key.type === "secret") {
+      return key.export();
+    }
+    if ("toCryptoKey" in key && typeof key.toCryptoKey === "function") {
+      try {
+        return handleKeyObject(key, alg);
+      } catch (err) {
+        if (err instanceof TypeError) {
+          throw err;
+        }
+      }
+    }
+    let jwk = key.export({ format: "jwk" });
+    return handleJWK(key, jwk, alg);
+  }
+  if (isJWK(key)) {
+    if (key.k) {
+      return decode3(key.k);
+    }
+    return handleJWK(key, key, alg, true);
+  }
+  throw new Error("unreachable");
+}
+var cache, handleJWK, handleKeyObject;
+var init_normalize_key = __esm({
+  "node_modules/jose/dist/webapi/lib/normalize_key.js"() {
+    init_is_jwk();
+    init_base64url();
+    init_jwk_to_key();
+    init_is_key_like();
+    handleJWK = async (key, jwk, alg, freeze = false) => {
+      cache ||= /* @__PURE__ */ new WeakMap();
+      let cached2 = cache.get(key);
+      if (cached2?.[alg]) {
+        return cached2[alg];
+      }
+      const cryptoKey = await jwkToKey({ ...jwk, alg });
+      if (freeze)
+        Object.freeze(key);
+      if (!cached2) {
+        cache.set(key, { [alg]: cryptoKey });
+      } else {
+        cached2[alg] = cryptoKey;
+      }
+      return cryptoKey;
+    };
+    handleKeyObject = (keyObject, alg) => {
+      cache ||= /* @__PURE__ */ new WeakMap();
+      let cached2 = cache.get(keyObject);
+      if (cached2?.[alg]) {
+        return cached2[alg];
+      }
+      const isPublic = keyObject.type === "public";
+      const extractable = isPublic ? true : false;
+      let cryptoKey;
+      if (keyObject.asymmetricKeyType === "x25519") {
+        switch (alg) {
+          case "ECDH-ES":
+          case "ECDH-ES+A128KW":
+          case "ECDH-ES+A192KW":
+          case "ECDH-ES+A256KW":
+            break;
+          default:
+            throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+        }
+        cryptoKey = keyObject.toCryptoKey(keyObject.asymmetricKeyType, extractable, isPublic ? [] : ["deriveBits"]);
+      }
+      if (keyObject.asymmetricKeyType === "ed25519") {
+        if (alg !== "EdDSA" && alg !== "Ed25519") {
+          throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+        }
+        cryptoKey = keyObject.toCryptoKey(keyObject.asymmetricKeyType, extractable, [
+          isPublic ? "verify" : "sign"
+        ]);
+      }
+      switch (keyObject.asymmetricKeyType) {
+        case "ml-dsa-44":
+        case "ml-dsa-65":
+        case "ml-dsa-87": {
+          if (alg !== keyObject.asymmetricKeyType.toUpperCase()) {
+            throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+          }
+          cryptoKey = keyObject.toCryptoKey(keyObject.asymmetricKeyType, extractable, [
+            isPublic ? "verify" : "sign"
+          ]);
+        }
+      }
+      if (keyObject.asymmetricKeyType === "rsa") {
+        let hash2;
+        switch (alg) {
+          case "RSA-OAEP":
+            hash2 = "SHA-1";
+            break;
+          case "RS256":
+          case "PS256":
+          case "RSA-OAEP-256":
+            hash2 = "SHA-256";
+            break;
+          case "RS384":
+          case "PS384":
+          case "RSA-OAEP-384":
+            hash2 = "SHA-384";
+            break;
+          case "RS512":
+          case "PS512":
+          case "RSA-OAEP-512":
+            hash2 = "SHA-512";
+            break;
+          default:
+            throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+        }
+        if (alg.startsWith("RSA-OAEP")) {
+          return keyObject.toCryptoKey({
+            name: "RSA-OAEP",
+            hash: hash2
+          }, extractable, isPublic ? ["encrypt"] : ["decrypt"]);
+        }
+        cryptoKey = keyObject.toCryptoKey({
+          name: alg.startsWith("PS") ? "RSA-PSS" : "RSASSA-PKCS1-v1_5",
+          hash: hash2
+        }, extractable, [isPublic ? "verify" : "sign"]);
+      }
+      if (keyObject.asymmetricKeyType === "ec") {
+        const nist = /* @__PURE__ */ new Map([
+          ["prime256v1", "P-256"],
+          ["secp384r1", "P-384"],
+          ["secp521r1", "P-521"]
+        ]);
+        const namedCurve = nist.get(keyObject.asymmetricKeyDetails?.namedCurve);
+        if (!namedCurve) {
+          throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+        }
+        if (alg === "ES256" && namedCurve === "P-256") {
+          cryptoKey = keyObject.toCryptoKey({
+            name: "ECDSA",
+            namedCurve
+          }, extractable, [isPublic ? "verify" : "sign"]);
+        }
+        if (alg === "ES384" && namedCurve === "P-384") {
+          cryptoKey = keyObject.toCryptoKey({
+            name: "ECDSA",
+            namedCurve
+          }, extractable, [isPublic ? "verify" : "sign"]);
+        }
+        if (alg === "ES512" && namedCurve === "P-521") {
+          cryptoKey = keyObject.toCryptoKey({
+            name: "ECDSA",
+            namedCurve
+          }, extractable, [isPublic ? "verify" : "sign"]);
+        }
+        if (alg.startsWith("ECDH-ES")) {
+          cryptoKey = keyObject.toCryptoKey({
+            name: "ECDH",
+            namedCurve
+          }, extractable, isPublic ? [] : ["deriveBits"]);
+        }
+      }
+      if (!cryptoKey) {
+        throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+      }
+      if (!cached2) {
+        cache.set(keyObject, { [alg]: cryptoKey });
+      } else {
+        cached2[alg] = cryptoKey;
+      }
+      return cryptoKey;
+    };
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/check_key_type.js
+function checkKeyType(alg, key, usage) {
+  switch (alg.substring(0, 2)) {
+    case "A1":
+    case "A2":
+    case "di":
+    case "HS":
+    case "PB":
+      symmetricTypeCheck(alg, key, usage);
+      break;
+    default:
+      asymmetricTypeCheck(alg, key, usage);
+  }
+}
+var tag, jwkMatchesOp, symmetricTypeCheck, asymmetricTypeCheck;
+var init_check_key_type = __esm({
+  "node_modules/jose/dist/webapi/lib/check_key_type.js"() {
+    init_invalid_key_input();
+    init_is_key_like();
+    init_is_jwk();
+    tag = (key) => key?.[Symbol.toStringTag];
+    jwkMatchesOp = (alg, key, usage) => {
+      if (key.use !== void 0) {
+        let expected;
+        switch (usage) {
+          case "sign":
+          case "verify":
+            expected = "sig";
+            break;
+          case "encrypt":
+          case "decrypt":
+            expected = "enc";
+            break;
+        }
+        if (key.use !== expected) {
+          throw new TypeError(`Invalid key for this operation, its "use" must be "${expected}" when present`);
+        }
+      }
+      if (key.alg !== void 0 && key.alg !== alg) {
+        throw new TypeError(`Invalid key for this operation, its "alg" must be "${alg}" when present`);
+      }
+      if (Array.isArray(key.key_ops)) {
+        let expectedKeyOp;
+        switch (true) {
+          case (usage === "sign" || usage === "verify"):
+          case alg === "dir":
+          case alg.includes("CBC-HS"):
+            expectedKeyOp = usage;
+            break;
+          case alg.startsWith("PBES2"):
+            expectedKeyOp = "deriveBits";
+            break;
+          case /^A\d{3}(?:GCM)?(?:KW)?$/.test(alg):
+            if (!alg.includes("GCM") && alg.endsWith("KW")) {
+              expectedKeyOp = usage === "encrypt" ? "wrapKey" : "unwrapKey";
+            } else {
+              expectedKeyOp = usage;
+            }
+            break;
+          case (usage === "encrypt" && alg.startsWith("RSA")):
+            expectedKeyOp = "wrapKey";
+            break;
+          case usage === "decrypt":
+            expectedKeyOp = alg.startsWith("RSA") ? "unwrapKey" : "deriveBits";
+            break;
+        }
+        if (expectedKeyOp && key.key_ops?.includes?.(expectedKeyOp) === false) {
+          throw new TypeError(`Invalid key for this operation, its "key_ops" must include "${expectedKeyOp}" when present`);
+        }
+      }
+      return true;
+    };
+    symmetricTypeCheck = (alg, key, usage) => {
+      if (key instanceof Uint8Array)
+        return;
+      if (isJWK(key)) {
+        if (isSecretJWK(key) && jwkMatchesOp(alg, key, usage))
+          return;
+        throw new TypeError(`JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present`);
+      }
+      if (!isKeyLike(key)) {
+        throw new TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key", "Uint8Array"));
+      }
+      if (key.type !== "secret") {
+        throw new TypeError(`${tag(key)} instances for symmetric algorithms must be of type "secret"`);
+      }
+    };
+    asymmetricTypeCheck = (alg, key, usage) => {
+      if (isJWK(key)) {
+        switch (usage) {
+          case "decrypt":
+          case "sign":
+            if (isPrivateJWK(key) && jwkMatchesOp(alg, key, usage))
+              return;
+            throw new TypeError(`JSON Web Key for this operation must be a private JWK`);
+          case "encrypt":
+          case "verify":
+            if (isPublicJWK(key) && jwkMatchesOp(alg, key, usage))
+              return;
+            throw new TypeError(`JSON Web Key for this operation must be a public JWK`);
+        }
+      }
+      if (!isKeyLike(key)) {
+        throw new TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key"));
+      }
+      if (key.type === "secret") {
+        throw new TypeError(`${tag(key)} instances for asymmetric algorithms must not be of type "secret"`);
+      }
+      if (key.type === "public") {
+        switch (usage) {
+          case "sign":
+            throw new TypeError(`${tag(key)} instances for asymmetric algorithm signing must be of type "private"`);
+          case "decrypt":
+            throw new TypeError(`${tag(key)} instances for asymmetric algorithm decryption must be of type "private"`);
+        }
+      }
+      if (key.type === "private") {
+        switch (usage) {
+          case "verify":
+            throw new TypeError(`${tag(key)} instances for asymmetric algorithm verifying must be of type "public"`);
+          case "encrypt":
+            throw new TypeError(`${tag(key)} instances for asymmetric algorithm encryption must be of type "public"`);
+        }
+      }
+    };
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/subtle_dsa.js
+function subtleAlgorithm(alg, algorithm) {
+  const hash2 = `SHA-${alg.slice(-3)}`;
+  switch (alg) {
+    case "HS256":
+    case "HS384":
+    case "HS512":
+      return { hash: hash2, name: "HMAC" };
+    case "PS256":
+    case "PS384":
+    case "PS512":
+      return { hash: hash2, name: "RSA-PSS", saltLength: parseInt(alg.slice(-3), 10) >> 3 };
+    case "RS256":
+    case "RS384":
+    case "RS512":
+      return { hash: hash2, name: "RSASSA-PKCS1-v1_5" };
+    case "ES256":
+    case "ES384":
+    case "ES512":
+      return { hash: hash2, name: "ECDSA", namedCurve: algorithm.namedCurve };
+    case "Ed25519":
+    case "EdDSA":
+      return { name: "Ed25519" };
+    case "ML-DSA-44":
+    case "ML-DSA-65":
+    case "ML-DSA-87":
+      return { name: alg };
+    default:
+      throw new JOSENotSupported(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
+  }
+}
+var init_subtle_dsa = __esm({
+  "node_modules/jose/dist/webapi/lib/subtle_dsa.js"() {
+    init_errors2();
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/get_sign_verify_key.js
+async function getSigKey(alg, key, usage) {
+  if (key instanceof Uint8Array) {
+    if (!alg.startsWith("HS")) {
+      throw new TypeError(invalidKeyInput(key, "CryptoKey", "KeyObject", "JSON Web Key"));
+    }
+    return crypto.subtle.importKey("raw", key, { hash: `SHA-${alg.slice(-3)}`, name: "HMAC" }, false, [usage]);
+  }
+  checkSigCryptoKey(key, alg, usage);
+  return key;
+}
+var init_get_sign_verify_key = __esm({
+  "node_modules/jose/dist/webapi/lib/get_sign_verify_key.js"() {
+    init_crypto_key();
+    init_invalid_key_input();
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/verify.js
+async function verify(alg, key, signature, data) {
+  const cryptoKey = await getSigKey(alg, key, "verify");
+  checkKeyLength(alg, cryptoKey);
+  const algorithm = subtleAlgorithm(alg, cryptoKey.algorithm);
+  try {
+    return await crypto.subtle.verify(algorithm, cryptoKey, signature, data);
+  } catch {
+    return false;
+  }
+}
+var init_verify = __esm({
+  "node_modules/jose/dist/webapi/lib/verify.js"() {
+    init_subtle_dsa();
+    init_check_key_length();
+    init_get_sign_verify_key();
+  }
+});
+
+// node_modules/jose/dist/webapi/jws/flattened/verify.js
+async function flattenedVerify(jws, key, options) {
+  if (!isObject3(jws)) {
+    throw new JWSInvalid("Flattened JWS must be an object");
+  }
+  if (jws.protected === void 0 && jws.header === void 0) {
+    throw new JWSInvalid('Flattened JWS must have either of the "protected" or "header" members');
+  }
+  if (jws.protected !== void 0 && typeof jws.protected !== "string") {
+    throw new JWSInvalid("JWS Protected Header incorrect type");
+  }
+  if (jws.payload === void 0) {
+    throw new JWSInvalid("JWS Payload missing");
+  }
+  if (typeof jws.signature !== "string") {
+    throw new JWSInvalid("JWS Signature missing or incorrect type");
+  }
+  if (jws.header !== void 0 && !isObject3(jws.header)) {
+    throw new JWSInvalid("JWS Unprotected Header incorrect type");
+  }
+  let parsedProt = {};
+  if (jws.protected) {
+    try {
+      const protectedHeader = decode3(jws.protected);
+      parsedProt = JSON.parse(decoder.decode(protectedHeader));
+    } catch {
+      throw new JWSInvalid("JWS Protected Header is invalid");
+    }
+  }
+  if (!isDisjoint(parsedProt, jws.header)) {
+    throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
+  }
+  const joseHeader = {
+    ...parsedProt,
+    ...jws.header
+  };
+  const extensions = validateCrit(JWSInvalid, /* @__PURE__ */ new Map([["b64", true]]), options?.crit, parsedProt, joseHeader);
+  let b64 = true;
+  if (extensions.has("b64")) {
+    b64 = parsedProt.b64;
+    if (typeof b64 !== "boolean") {
+      throw new JWSInvalid('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
+    }
+  }
+  const { alg } = joseHeader;
+  if (typeof alg !== "string" || !alg) {
+    throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
+  }
+  const algorithms = options && validateAlgorithms("algorithms", options.algorithms);
+  if (algorithms && !algorithms.has(alg)) {
+    throw new JOSEAlgNotAllowed('"alg" (Algorithm) Header Parameter value not allowed');
+  }
+  if (b64) {
+    if (typeof jws.payload !== "string") {
+      throw new JWSInvalid("JWS Payload must be a string");
+    }
+  } else if (typeof jws.payload !== "string" && !(jws.payload instanceof Uint8Array)) {
+    throw new JWSInvalid("JWS Payload must be a string or an Uint8Array instance");
+  }
+  let resolvedKey = false;
+  if (typeof key === "function") {
+    key = await key(parsedProt, jws);
+    resolvedKey = true;
+  }
+  checkKeyType(alg, key, "verify");
+  const data = concat(jws.protected !== void 0 ? encode3(jws.protected) : new Uint8Array(), encode3("."), typeof jws.payload === "string" ? b64 ? encode3(jws.payload) : encoder.encode(jws.payload) : jws.payload);
+  let signature;
+  try {
+    signature = decode3(jws.signature);
+  } catch {
+    throw new JWSInvalid("Failed to base64url decode the signature");
+  }
+  const k = await normalizeKey(key, alg);
+  const verified = await verify(alg, k, signature, data);
+  if (!verified) {
+    throw new JWSSignatureVerificationFailed();
+  }
+  let payload;
+  if (b64) {
+    try {
+      payload = decode3(jws.payload);
+    } catch {
+      throw new JWSInvalid("Failed to base64url decode the payload");
+    }
+  } else if (typeof jws.payload === "string") {
+    payload = encoder.encode(jws.payload);
+  } else {
+    payload = jws.payload;
+  }
+  const result = { payload };
+  if (jws.protected !== void 0) {
+    result.protectedHeader = parsedProt;
+  }
+  if (jws.header !== void 0) {
+    result.unprotectedHeader = jws.header;
+  }
+  if (resolvedKey) {
+    return { ...result, key: k };
+  }
+  return result;
+}
+var init_verify2 = __esm({
+  "node_modules/jose/dist/webapi/jws/flattened/verify.js"() {
+    init_base64url();
+    init_verify();
+    init_errors2();
+    init_buffer_utils();
+    init_is_disjoint();
+    init_is_object();
+    init_check_key_type();
+    init_validate_crit();
+    init_validate_algorithms();
+    init_normalize_key();
+  }
+});
+
+// node_modules/jose/dist/webapi/jws/compact/verify.js
+async function compactVerify(jws, key, options) {
+  if (jws instanceof Uint8Array) {
+    jws = decoder.decode(jws);
+  }
+  if (typeof jws !== "string") {
+    throw new JWSInvalid("Compact JWS must be a string or Uint8Array");
+  }
+  const { 0: protectedHeader, 1: payload, 2: signature, length } = jws.split(".");
+  if (length !== 3) {
+    throw new JWSInvalid("Invalid Compact JWS");
+  }
+  const verified = await flattenedVerify({ payload, protected: protectedHeader, signature }, key, options);
+  const result = { payload: verified.payload, protectedHeader: verified.protectedHeader };
+  if (typeof key === "function") {
+    return { ...result, key: verified.key };
+  }
+  return result;
+}
+var init_verify3 = __esm({
+  "node_modules/jose/dist/webapi/jws/compact/verify.js"() {
+    init_verify2();
+    init_errors2();
+    init_buffer_utils();
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/jwt_claims_set.js
+function secs(str) {
+  const matched = REGEX.exec(str);
+  if (!matched || matched[4] && matched[1]) {
+    throw new TypeError("Invalid time period format");
+  }
+  const value = parseFloat(matched[2]);
+  const unit = matched[3].toLowerCase();
+  let numericDate;
+  switch (unit) {
+    case "sec":
+    case "secs":
+    case "second":
+    case "seconds":
+    case "s":
+      numericDate = Math.round(value);
+      break;
+    case "minute":
+    case "minutes":
+    case "min":
+    case "mins":
+    case "m":
+      numericDate = Math.round(value * minute);
+      break;
+    case "hour":
+    case "hours":
+    case "hr":
+    case "hrs":
+    case "h":
+      numericDate = Math.round(value * hour);
+      break;
+    case "day":
+    case "days":
+    case "d":
+      numericDate = Math.round(value * day);
+      break;
+    case "week":
+    case "weeks":
+    case "w":
+      numericDate = Math.round(value * week);
+      break;
+    default:
+      numericDate = Math.round(value * year);
+      break;
+  }
+  if (matched[1] === "-" || matched[4] === "ago") {
+    return -numericDate;
+  }
+  return numericDate;
+}
+function validateInput(label, input) {
+  if (!Number.isFinite(input)) {
+    throw new TypeError(`Invalid ${label} input`);
+  }
+  return input;
+}
+function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
+  let payload;
+  try {
+    payload = JSON.parse(decoder.decode(encodedPayload));
+  } catch {
+  }
+  if (!isObject3(payload)) {
+    throw new JWTInvalid("JWT Claims Set must be a top-level JSON object");
+  }
+  const { typ } = options;
+  if (typ && (typeof protectedHeader.typ !== "string" || normalizeTyp(protectedHeader.typ) !== normalizeTyp(typ))) {
+    throw new JWTClaimValidationFailed('unexpected "typ" JWT header value', payload, "typ", "check_failed");
+  }
+  const { requiredClaims = [], issuer, subject, audience, maxTokenAge } = options;
+  const presenceCheck = [...requiredClaims];
+  if (maxTokenAge !== void 0)
+    presenceCheck.push("iat");
+  if (audience !== void 0)
+    presenceCheck.push("aud");
+  if (subject !== void 0)
+    presenceCheck.push("sub");
+  if (issuer !== void 0)
+    presenceCheck.push("iss");
+  for (const claim of new Set(presenceCheck.reverse())) {
+    if (!(claim in payload)) {
+      throw new JWTClaimValidationFailed(`missing required "${claim}" claim`, payload, claim, "missing");
+    }
+  }
+  if (issuer && !(Array.isArray(issuer) ? issuer : [issuer]).includes(payload.iss)) {
+    throw new JWTClaimValidationFailed('unexpected "iss" claim value', payload, "iss", "check_failed");
+  }
+  if (subject && payload.sub !== subject) {
+    throw new JWTClaimValidationFailed('unexpected "sub" claim value', payload, "sub", "check_failed");
+  }
+  if (audience && !checkAudiencePresence(payload.aud, typeof audience === "string" ? [audience] : audience)) {
+    throw new JWTClaimValidationFailed('unexpected "aud" claim value', payload, "aud", "check_failed");
+  }
+  let tolerance;
+  switch (typeof options.clockTolerance) {
+    case "string":
+      tolerance = secs(options.clockTolerance);
+      break;
+    case "number":
+      tolerance = options.clockTolerance;
+      break;
+    case "undefined":
+      tolerance = 0;
+      break;
+    default:
+      throw new TypeError("Invalid clockTolerance option type");
+  }
+  const { currentDate } = options;
+  const now = epoch(currentDate || /* @__PURE__ */ new Date());
+  if ((payload.iat !== void 0 || maxTokenAge) && typeof payload.iat !== "number") {
+    throw new JWTClaimValidationFailed('"iat" claim must be a number', payload, "iat", "invalid");
+  }
+  if (payload.nbf !== void 0) {
+    if (typeof payload.nbf !== "number") {
+      throw new JWTClaimValidationFailed('"nbf" claim must be a number', payload, "nbf", "invalid");
+    }
+    if (payload.nbf > now + tolerance) {
+      throw new JWTClaimValidationFailed('"nbf" claim timestamp check failed', payload, "nbf", "check_failed");
+    }
+  }
+  if (payload.exp !== void 0) {
+    if (typeof payload.exp !== "number") {
+      throw new JWTClaimValidationFailed('"exp" claim must be a number', payload, "exp", "invalid");
+    }
+    if (payload.exp <= now - tolerance) {
+      throw new JWTExpired('"exp" claim timestamp check failed', payload, "exp", "check_failed");
+    }
+  }
+  if (maxTokenAge) {
+    const age = now - payload.iat;
+    const max2 = typeof maxTokenAge === "number" ? maxTokenAge : secs(maxTokenAge);
+    if (age - tolerance > max2) {
+      throw new JWTExpired('"iat" claim timestamp check failed (too far in the past)', payload, "iat", "check_failed");
+    }
+    if (age < 0 - tolerance) {
+      throw new JWTClaimValidationFailed('"iat" claim timestamp check failed (it should be in the past)', payload, "iat", "check_failed");
+    }
+  }
+  return payload;
+}
+var epoch, minute, hour, day, week, year, REGEX, normalizeTyp, checkAudiencePresence, JWTClaimsBuilder;
+var init_jwt_claims_set = __esm({
+  "node_modules/jose/dist/webapi/lib/jwt_claims_set.js"() {
+    init_errors2();
+    init_buffer_utils();
+    init_is_object();
+    epoch = (date6) => Math.floor(date6.getTime() / 1e3);
+    minute = 60;
+    hour = minute * 60;
+    day = hour * 24;
+    week = day * 7;
+    year = day * 365.25;
+    REGEX = /^(\+|\-)? ?(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)(?: (ago|from now))?$/i;
+    normalizeTyp = (value) => {
+      if (value.includes("/")) {
+        return value.toLowerCase();
+      }
+      return `application/${value.toLowerCase()}`;
+    };
+    checkAudiencePresence = (audPayload, audOption) => {
+      if (typeof audPayload === "string") {
+        return audOption.includes(audPayload);
+      }
+      if (Array.isArray(audPayload)) {
+        return audOption.some(Set.prototype.has.bind(new Set(audPayload)));
+      }
+      return false;
+    };
+    JWTClaimsBuilder = class {
+      #payload;
+      constructor(payload) {
+        if (!isObject3(payload)) {
+          throw new TypeError("JWT Claims Set MUST be an object");
+        }
+        this.#payload = structuredClone(payload);
+      }
+      data() {
+        return encoder.encode(JSON.stringify(this.#payload));
+      }
+      get iss() {
+        return this.#payload.iss;
+      }
+      set iss(value) {
+        this.#payload.iss = value;
+      }
+      get sub() {
+        return this.#payload.sub;
+      }
+      set sub(value) {
+        this.#payload.sub = value;
+      }
+      get aud() {
+        return this.#payload.aud;
+      }
+      set aud(value) {
+        this.#payload.aud = value;
+      }
+      set jti(value) {
+        this.#payload.jti = value;
+      }
+      set nbf(value) {
+        if (typeof value === "number") {
+          this.#payload.nbf = validateInput("setNotBefore", value);
+        } else if (value instanceof Date) {
+          this.#payload.nbf = validateInput("setNotBefore", epoch(value));
+        } else {
+          this.#payload.nbf = epoch(/* @__PURE__ */ new Date()) + secs(value);
+        }
+      }
+      set exp(value) {
+        if (typeof value === "number") {
+          this.#payload.exp = validateInput("setExpirationTime", value);
+        } else if (value instanceof Date) {
+          this.#payload.exp = validateInput("setExpirationTime", epoch(value));
+        } else {
+          this.#payload.exp = epoch(/* @__PURE__ */ new Date()) + secs(value);
+        }
+      }
+      set iat(value) {
+        if (value === void 0) {
+          this.#payload.iat = epoch(/* @__PURE__ */ new Date());
+        } else if (value instanceof Date) {
+          this.#payload.iat = validateInput("setIssuedAt", epoch(value));
+        } else if (typeof value === "string") {
+          this.#payload.iat = validateInput("setIssuedAt", epoch(/* @__PURE__ */ new Date()) + secs(value));
+        } else {
+          this.#payload.iat = validateInput("setIssuedAt", value);
+        }
+      }
+    };
+  }
+});
+
+// node_modules/jose/dist/webapi/jwt/verify.js
+async function jwtVerify(jwt2, key, options) {
+  const verified = await compactVerify(jwt2, key, options);
+  if (verified.protectedHeader.crit?.includes("b64") && verified.protectedHeader.b64 === false) {
+    throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
+  }
+  const payload = validateClaimsSet(verified.protectedHeader, verified.payload, options);
+  const result = { payload, protectedHeader: verified.protectedHeader };
+  if (typeof key === "function") {
+    return { ...result, key: verified.key };
+  }
+  return result;
+}
+var init_verify4 = __esm({
+  "node_modules/jose/dist/webapi/jwt/verify.js"() {
+    init_verify3();
+    init_jwt_claims_set();
+    init_errors2();
+  }
+});
+
+// node_modules/jose/dist/webapi/lib/sign.js
+async function sign(alg, key, data) {
+  const cryptoKey = await getSigKey(alg, key, "sign");
+  checkKeyLength(alg, cryptoKey);
+  const signature = await crypto.subtle.sign(subtleAlgorithm(alg, cryptoKey.algorithm), cryptoKey, data);
+  return new Uint8Array(signature);
+}
+var init_sign = __esm({
+  "node_modules/jose/dist/webapi/lib/sign.js"() {
+    init_subtle_dsa();
+    init_check_key_length();
+    init_get_sign_verify_key();
+  }
+});
+
+// node_modules/jose/dist/webapi/jws/flattened/sign.js
+var FlattenedSign;
+var init_sign2 = __esm({
+  "node_modules/jose/dist/webapi/jws/flattened/sign.js"() {
+    init_base64url();
+    init_sign();
+    init_is_disjoint();
+    init_errors2();
+    init_buffer_utils();
+    init_check_key_type();
+    init_validate_crit();
+    init_normalize_key();
+    FlattenedSign = class {
+      #payload;
+      #protectedHeader;
+      #unprotectedHeader;
+      constructor(payload) {
+        if (!(payload instanceof Uint8Array)) {
+          throw new TypeError("payload must be an instance of Uint8Array");
+        }
+        this.#payload = payload;
+      }
+      setProtectedHeader(protectedHeader) {
+        if (this.#protectedHeader) {
+          throw new TypeError("setProtectedHeader can only be called once");
+        }
+        this.#protectedHeader = protectedHeader;
+        return this;
+      }
+      setUnprotectedHeader(unprotectedHeader) {
+        if (this.#unprotectedHeader) {
+          throw new TypeError("setUnprotectedHeader can only be called once");
+        }
+        this.#unprotectedHeader = unprotectedHeader;
+        return this;
+      }
+      async sign(key, options) {
+        if (!this.#protectedHeader && !this.#unprotectedHeader) {
+          throw new JWSInvalid("either setProtectedHeader or setUnprotectedHeader must be called before #sign()");
+        }
+        if (!isDisjoint(this.#protectedHeader, this.#unprotectedHeader)) {
+          throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
+        }
+        const joseHeader = {
+          ...this.#protectedHeader,
+          ...this.#unprotectedHeader
+        };
+        const extensions = validateCrit(JWSInvalid, /* @__PURE__ */ new Map([["b64", true]]), options?.crit, this.#protectedHeader, joseHeader);
+        let b64 = true;
+        if (extensions.has("b64")) {
+          b64 = this.#protectedHeader.b64;
+          if (typeof b64 !== "boolean") {
+            throw new JWSInvalid('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
+          }
+        }
+        const { alg } = joseHeader;
+        if (typeof alg !== "string" || !alg) {
+          throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
+        }
+        checkKeyType(alg, key, "sign");
+        let payloadS;
+        let payloadB;
+        if (b64) {
+          payloadS = encode4(this.#payload);
+          payloadB = encode3(payloadS);
+        } else {
+          payloadB = this.#payload;
+          payloadS = "";
+        }
+        let protectedHeaderString;
+        let protectedHeaderBytes;
+        if (this.#protectedHeader) {
+          protectedHeaderString = encode4(JSON.stringify(this.#protectedHeader));
+          protectedHeaderBytes = encode3(protectedHeaderString);
+        } else {
+          protectedHeaderString = "";
+          protectedHeaderBytes = new Uint8Array();
+        }
+        const data = concat(protectedHeaderBytes, encode3("."), payloadB);
+        const k = await normalizeKey(key, alg);
+        const signature = await sign(alg, k, data);
+        const jws = {
+          signature: encode4(signature),
+          payload: payloadS
+        };
+        if (this.#unprotectedHeader) {
+          jws.header = this.#unprotectedHeader;
+        }
+        if (this.#protectedHeader) {
+          jws.protected = protectedHeaderString;
+        }
+        return jws;
+      }
+    };
+  }
+});
+
+// node_modules/jose/dist/webapi/jws/compact/sign.js
+var CompactSign;
+var init_sign3 = __esm({
+  "node_modules/jose/dist/webapi/jws/compact/sign.js"() {
+    init_sign2();
+    CompactSign = class {
+      #flattened;
+      constructor(payload) {
+        this.#flattened = new FlattenedSign(payload);
+      }
+      setProtectedHeader(protectedHeader) {
+        this.#flattened.setProtectedHeader(protectedHeader);
+        return this;
+      }
+      async sign(key, options) {
+        const jws = await this.#flattened.sign(key, options);
+        if (jws.payload === void 0) {
+          throw new TypeError("use the flattened module for creating JWS with b64: false");
+        }
+        return `${jws.protected}.${jws.payload}.${jws.signature}`;
+      }
+    };
+  }
+});
+
+// node_modules/jose/dist/webapi/jwt/sign.js
+var SignJWT;
+var init_sign4 = __esm({
+  "node_modules/jose/dist/webapi/jwt/sign.js"() {
+    init_sign3();
+    init_errors2();
+    init_jwt_claims_set();
+    SignJWT = class {
+      #protectedHeader;
+      #jwt;
+      constructor(payload = {}) {
+        this.#jwt = new JWTClaimsBuilder(payload);
+      }
+      setIssuer(issuer) {
+        this.#jwt.iss = issuer;
+        return this;
+      }
+      setSubject(subject) {
+        this.#jwt.sub = subject;
+        return this;
+      }
+      setAudience(audience) {
+        this.#jwt.aud = audience;
+        return this;
+      }
+      setJti(jwtId) {
+        this.#jwt.jti = jwtId;
+        return this;
+      }
+      setNotBefore(input) {
+        this.#jwt.nbf = input;
+        return this;
+      }
+      setExpirationTime(input) {
+        this.#jwt.exp = input;
+        return this;
+      }
+      setIssuedAt(input) {
+        this.#jwt.iat = input;
+        return this;
+      }
+      setProtectedHeader(protectedHeader) {
+        this.#protectedHeader = protectedHeader;
+        return this;
+      }
+      async sign(key, options) {
+        const sig = new CompactSign(this.#jwt.data());
+        sig.setProtectedHeader(this.#protectedHeader);
+        if (Array.isArray(this.#protectedHeader?.crit) && this.#protectedHeader.crit.includes("b64") && this.#protectedHeader.b64 === false) {
+          throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
+        }
+        return sig.sign(key, options);
+      }
+    };
+  }
+});
+
+// node_modules/jose/dist/webapi/index.js
+var init_webapi = __esm({
+  "node_modules/jose/dist/webapi/index.js"() {
+    init_verify4();
+    init_sign4();
+    init_import();
+  }
+});
+
+// node_modules/hono/dist/utils/cookie.js
+var init_cookie = __esm({
+  "node_modules/hono/dist/utils/cookie.js"() {
+    init_url();
+  }
+});
+
+// node_modules/hono/dist/helper/cookie/index.js
+var init_cookie2 = __esm({
+  "node_modules/hono/dist/helper/cookie/index.js"() {
+    init_cookie();
+  }
+});
+
+// api/lib/env.ts
+var import_config, env;
+var init_env = __esm({
+  "api/lib/env.ts"() {
+    import_config = require("dotenv/config");
+    env = {
+      appId: process.env.APP_ID ?? "",
+      appSecret: process.env.APP_SECRET ?? "",
+      isProduction: process.env.NODE_ENV === "production",
+      databaseUrl: process.env.DATABASE_URL ?? "",
+      kimiAuthUrl: process.env.KIMI_AUTH_URL ?? "",
+      kimiOpenUrl: process.env.KIMI_OPEN_URL ?? "",
+      ownerUnionId: process.env.OWNER_UNION_ID ?? ""
+    };
+  }
+});
+
+// contracts/errors.ts
+function appError(status, message2) {
+  return { tag: "app_error", status, message: message2 };
+}
+var Errors;
+var init_errors3 = __esm({
+  "contracts/errors.ts"() {
+    Errors = {
+      badRequest: (msg) => appError(400, msg),
+      unauthorized: (msg) => appError(401, msg),
+      forbidden: (msg) => appError(403, msg),
+      notFound: (msg) => appError(404, msg),
+      internal: (msg) => appError(500, msg)
+    };
+  }
+});
+
+// api/kimi/session.ts
+async function verifySessionToken(token) {
+  if (!token) {
+    console.warn("[session] No token provided for verification.");
+    return null;
+  }
+  try {
+    const secret = new TextEncoder().encode(env.appSecret);
+    const { payload } = await jwtVerify(token, secret, {
+      algorithms: [JWT_ALG]
+    });
+    const { unionId, clientId } = payload;
+    if (!unionId || !clientId) {
+      console.warn("[session] JWT payload missing required fields.");
+      return null;
+    }
+    return { unionId, clientId };
+  } catch (error51) {
+    console.warn("[session] JWT verification failed:", error51);
+    return null;
+  }
+}
+var JWT_ALG;
+var init_session3 = __esm({
+  "api/kimi/session.ts"() {
+    init_webapi();
+    init_env();
+    JWT_ALG = "HS256";
+  }
+});
+
+// api/kimi/platform.ts
+var init_platform = __esm({
+  "api/kimi/platform.ts"() {
+    init_env();
+  }
+});
+
+// api/queries/users.ts
+async function findUserByUnionId(unionId) {
+  const rows = await getDb().select().from(users).where(eq(users.unionId, unionId)).limit(1);
+  return rows.at(0);
+}
+var init_users = __esm({
+  "api/queries/users.ts"() {
+    init_drizzle_orm();
+    init_schema2();
+    init_connection();
+    init_env();
+  }
+});
+
+// api/kimi/auth.ts
+async function authenticateRequest(headers) {
+  const cookies = cookie2.parse(headers.get("cookie") || "");
+  const token = cookies[Session.cookieName];
+  if (!token) {
+    console.warn("[auth] No session cookie found in request.");
+    throw Errors.forbidden("Invalid authentication token.");
+  }
+  const claim = await verifySessionToken(token);
+  if (!claim) {
+    throw Errors.forbidden("Invalid authentication token.");
+  }
+  const user = await findUserByUnionId(claim.unionId);
+  if (!user) {
+    throw Errors.forbidden("User not found. Please re-login.");
+  }
+  return user;
+}
+var cookie2;
+var init_auth = __esm({
+  "api/kimi/auth.ts"() {
+    init_cookie2();
+    cookie2 = __toESM(require_dist(), 1);
+    init_env();
+    init_cookies();
+    init_constants();
+    init_errors3();
+    init_session3();
+    init_platform();
+    init_users();
+  }
+});
+
+// api/context.ts
+var context_exports = {};
+__export(context_exports, {
+  clearActorCache: () => clearActorCache,
+  createContext: () => createContext,
+  resolveActor: () => resolveActor
+});
+async function resolveActor(key) {
+  if (!key) {
+    return process.env.APP_PASSWORD ? void 0 : { id: null, name: "\u041E\u0442\u0432\u043E\u0440\u0435\u043D \u043F\u0440\u0438\u0441\u0442\u0430\u043F", role: "admin" };
+  }
+  if (process.env.APP_PASSWORD && key === process.env.APP_PASSWORD) {
+    return { id: null, name: "\u0410\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440", role: "admin" };
+  }
+  const hit = actorCache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.actor;
+  try {
+    const { getDb: getDb3 } = await Promise.resolve().then(() => (init_connection(), connection_exports));
+    const { appUsers: appUsers2 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
+    const { eq: eq3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
+    const db2 = getDb3();
+    const rows = await db2.select().from(appUsers2).where(eq3(appUsers2.passcode, key));
+    const u = rows[0];
+    if (!u || u.isActive !== "active") return void 0;
+    const actor = { id: u.id, name: u.name, role: u.role ?? "viewer" };
+    actorCache.set(key, { actor, at: Date.now() });
+    db2.update(appUsers2).set({ lastSeenAt: /* @__PURE__ */ new Date() }).where(eq3(appUsers2.id, u.id)).catch(() => {
+    });
+    return actor;
+  } catch {
+    return void 0;
+  }
+}
+function clearActorCache() {
+  actorCache.clear();
+}
+async function createContext(opts) {
+  const ctx = { req: opts.req, resHeaders: opts.resHeaders };
+  try {
+    ctx.user = await authenticateRequest(opts.req.headers);
+  } catch {
+  }
+  ctx.actor = await resolveActor(opts.req.headers.get("x-app-key"));
+  return ctx;
+}
+var actorCache, CACHE_MS;
+var init_context = __esm({
+  "api/context.ts"() {
+    init_auth();
+    actorCache = /* @__PURE__ */ new Map();
+    CACHE_MS = 6e4;
   }
 });
 
@@ -11220,7 +13357,20 @@ function getInitSql() {
 	"created_at" timestamp DEFAULT now() NOT NULL
 );`,
     `CREATE INDEX IF NOT EXISTS "op_time_logs_op_idx" ON "operation_time_logs" ("operation_id")`,
-    `CREATE INDEX IF NOT EXISTS "op_time_logs_wo_idx" ON "operation_time_logs" ("work_order_id")`
+    `CREATE INDEX IF NOT EXISTS "op_time_logs_wo_idx" ON "operation_time_logs" ("work_order_id")`,
+    // ===== КОРИСНИЦИ И УЛОГИ =====
+    `CREATE TABLE IF NOT EXISTS "app_users" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"passcode" varchar(120) NOT NULL,
+	"role" varchar(20) DEFAULT 'operator' NOT NULL,
+	"is_active" varchar(20) DEFAULT 'active' NOT NULL,
+	"note" text,
+	"last_seen_at" timestamp,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "app_users_passcode_uq" ON "app_users" ("passcode")`
   ];
 }
 var init_init_db_sql = __esm({
@@ -11912,211 +14062,8 @@ var handleParsingNestedValues = (form, key, value) => {
   });
 };
 
-// node_modules/hono/dist/utils/url.js
-var splitPath = (path) => {
-  const paths = path.split("/");
-  if (paths[0] === "") {
-    paths.shift();
-  }
-  return paths;
-};
-var splitRoutingPath = (routePath) => {
-  const { groups, path } = extractGroupsFromPath(routePath);
-  const paths = splitPath(path);
-  return replaceGroupMarks(paths, groups);
-};
-var extractGroupsFromPath = (path) => {
-  const groups = [];
-  path = path.replace(/\{[^}]+\}/g, (match2, index) => {
-    const mark = `@${index}`;
-    groups.push([mark, match2]);
-    return mark;
-  });
-  return { groups, path };
-};
-var replaceGroupMarks = (paths, groups) => {
-  for (let i = groups.length - 1; i >= 0; i--) {
-    const [mark] = groups[i];
-    for (let j = paths.length - 1; j >= 0; j--) {
-      if (paths[j].includes(mark)) {
-        paths[j] = paths[j].replace(mark, groups[i][1]);
-        break;
-      }
-    }
-  }
-  return paths;
-};
-var patternCache = {};
-var getPattern = (label, next) => {
-  if (label === "*") {
-    return "*";
-  }
-  const match2 = label.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);
-  if (match2) {
-    const cacheKey2 = `${label}#${next}`;
-    if (!patternCache[cacheKey2]) {
-      if (match2[2]) {
-        patternCache[cacheKey2] = next && next[0] !== ":" && next[0] !== "*" ? [cacheKey2, match2[1], new RegExp(`^${match2[2]}(?=/${next})`)] : [label, match2[1], new RegExp(`^${match2[2]}$`)];
-      } else {
-        patternCache[cacheKey2] = [label, match2[1], true];
-      }
-    }
-    return patternCache[cacheKey2];
-  }
-  return null;
-};
-var tryDecode = (str, decoder2) => {
-  try {
-    return decoder2(str);
-  } catch {
-    return str.replace(/(?:%[0-9A-Fa-f]{2})+/g, (match2) => {
-      try {
-        return decoder2(match2);
-      } catch {
-        return match2;
-      }
-    });
-  }
-};
-var tryDecodeURI = (str) => tryDecode(str, decodeURI);
-var getPath = (request) => {
-  const url2 = request.url;
-  const start = url2.indexOf("/", url2.indexOf(":") + 4);
-  let i = start;
-  for (; i < url2.length; i++) {
-    const charCode = url2.charCodeAt(i);
-    if (charCode === 37) {
-      const queryIndex = url2.indexOf("?", i);
-      const hashIndex = url2.indexOf("#", i);
-      const end = queryIndex === -1 ? hashIndex === -1 ? void 0 : hashIndex : hashIndex === -1 ? queryIndex : Math.min(queryIndex, hashIndex);
-      const path = url2.slice(start, end);
-      return tryDecodeURI(path.includes("%25") ? path.replace(/%25/g, "%2525") : path);
-    } else if (charCode === 63 || charCode === 35) {
-      break;
-    }
-  }
-  return url2.slice(start, i);
-};
-var getPathNoStrict = (request) => {
-  const result = getPath(request);
-  return result.length > 1 && result.at(-1) === "/" ? result.slice(0, -1) : result;
-};
-var mergePath = (base, sub, ...rest) => {
-  if (rest.length) {
-    sub = mergePath(sub, ...rest);
-  }
-  return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
-};
-var checkOptionalParameter = (path) => {
-  if (path.charCodeAt(path.length - 1) !== 63 || !path.includes(":")) {
-    return null;
-  }
-  const segments = path.split("/");
-  const results = [];
-  let basePath = "";
-  segments.forEach((segment) => {
-    if (segment !== "" && !/\:/.test(segment)) {
-      basePath += "/" + segment;
-    } else if (/\:/.test(segment)) {
-      if (/\?/.test(segment)) {
-        if (results.length === 0 && basePath === "") {
-          results.push("/");
-        } else {
-          results.push(basePath);
-        }
-        const optionalSegment = segment.replace("?", "");
-        basePath += "/" + optionalSegment;
-        results.push(basePath);
-      } else {
-        basePath += "/" + segment;
-      }
-    }
-  });
-  return results.filter((v, i, a) => a.indexOf(v) === i);
-};
-var _decodeURI = (value) => {
-  if (!/[%+]/.test(value)) {
-    return value;
-  }
-  if (value.indexOf("+") !== -1) {
-    value = value.replace(/\+/g, " ");
-  }
-  return value.indexOf("%") !== -1 ? tryDecode(value, decodeURIComponent_) : value;
-};
-var _getQueryParam = (url2, key, multiple) => {
-  let encoded;
-  if (!multiple && key && !/[%+]/.test(key)) {
-    let keyIndex2 = url2.indexOf("?", 8);
-    if (keyIndex2 === -1) {
-      return void 0;
-    }
-    if (!url2.startsWith(key, keyIndex2 + 1)) {
-      keyIndex2 = url2.indexOf(`&${key}`, keyIndex2 + 1);
-    }
-    while (keyIndex2 !== -1) {
-      const trailingKeyCode = url2.charCodeAt(keyIndex2 + key.length + 1);
-      if (trailingKeyCode === 61) {
-        const valueIndex = keyIndex2 + key.length + 2;
-        const endIndex = url2.indexOf("&", valueIndex);
-        return _decodeURI(url2.slice(valueIndex, endIndex === -1 ? void 0 : endIndex));
-      } else if (trailingKeyCode == 38 || isNaN(trailingKeyCode)) {
-        return "";
-      }
-      keyIndex2 = url2.indexOf(`&${key}`, keyIndex2 + 1);
-    }
-    encoded = /[%+]/.test(url2);
-    if (!encoded) {
-      return void 0;
-    }
-  }
-  const results = {};
-  encoded ??= /[%+]/.test(url2);
-  let keyIndex = url2.indexOf("?", 8);
-  while (keyIndex !== -1) {
-    const nextKeyIndex = url2.indexOf("&", keyIndex + 1);
-    let valueIndex = url2.indexOf("=", keyIndex);
-    if (valueIndex > nextKeyIndex && nextKeyIndex !== -1) {
-      valueIndex = -1;
-    }
-    let name2 = url2.slice(
-      keyIndex + 1,
-      valueIndex === -1 ? nextKeyIndex === -1 ? void 0 : nextKeyIndex : valueIndex
-    );
-    if (encoded) {
-      name2 = _decodeURI(name2);
-    }
-    keyIndex = nextKeyIndex;
-    if (name2 === "") {
-      continue;
-    }
-    let value;
-    if (valueIndex === -1) {
-      value = "";
-    } else {
-      value = url2.slice(valueIndex + 1, nextKeyIndex === -1 ? void 0 : nextKeyIndex);
-      if (encoded) {
-        value = _decodeURI(value);
-      }
-    }
-    if (multiple) {
-      if (!(results[name2] && Array.isArray(results[name2]))) {
-        results[name2] = [];
-      }
-      ;
-      results[name2].push(value);
-    } else {
-      results[name2] ??= value;
-    }
-  }
-  return key ? results[key] : results;
-};
-var getQueryParam = _getQueryParam;
-var getQueryParams = (url2, key) => {
-  return _getQueryParam(url2, key, true);
-};
-var decodeURIComponent_ = decodeURIComponent;
-
 // node_modules/hono/dist/request.js
+init_url();
 var tryDecodeURIComponent = (str) => tryDecode(str, decodeURIComponent_);
 var HonoRequest = class {
   /**
@@ -12860,6 +14807,7 @@ var UnsupportedPathError = class extends Error {
 var COMPOSED_HANDLER = "__COMPOSED_HANDLER";
 
 // node_modules/hono/dist/hono-base.js
+init_url();
 var notFoundHandler = (c) => {
   return c.text("404 Not Found", 404);
 };
@@ -13234,6 +15182,9 @@ var Hono = class _Hono {
     });
   };
 };
+
+// node_modules/hono/dist/router/reg-exp-router/router.js
+init_url();
 
 // node_modules/hono/dist/router/reg-exp-router/matcher.js
 var emptyParam = [];
@@ -13654,7 +15605,11 @@ var SmartRouter = class {
   }
 };
 
+// node_modules/hono/dist/router/trie-router/router.js
+init_url();
+
 // node_modules/hono/dist/router/trie-router/node.js
+init_url();
 var emptyParams = /* @__PURE__ */ Object.create(null);
 var hasChildren = (children) => {
   for (const _ in children) {
@@ -16841,31 +18796,11 @@ async function fetchRequestHandler(opts) {
 
 // api/auth-router.ts
 var cookie = __toESM(require_dist(), 1);
+init_constants();
+init_cookies();
 
-// contracts/constants.ts
-var Session = {
-  cookieName: "kimi_sid",
-  maxAgeMs: 365 * 24 * 60 * 60 * 1e3
-};
-var ErrorMessages = {
-  unauthenticated: "Authentication required",
-  insufficientRole: "Insufficient permissions"
-};
-
-// api/lib/cookies.ts
-function isLocalhost(headers) {
-  const host = headers.get("host") || "";
-  return host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
-}
-function getSessionCookieOptions(headers) {
-  const localhost = isLocalhost(headers);
-  return {
-    httpOnly: true,
-    path: "/",
-    sameSite: localhost ? "Lax" : "None",
-    secure: !localhost
-  };
-}
+// api/middleware.ts
+init_constants();
 
 // node_modules/@trpc/server/dist/initTRPC-BRf4imah.mjs
 var import_objectSpread2$2 = __toESM2(require_objectSpread2(), 1);
@@ -17976,12 +19911,98 @@ var registerCustom = SuperJSON.registerCustom;
 var registerSymbol = SuperJSON.registerSymbol;
 var allowErrorProps = SuperJSON.allowErrorProps;
 
+// contracts/roles.ts
+var ROLES = {
+  admin: {
+    label: "\u0410\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440",
+    description: "\u0421\xE8, \u0432\u043A\u043B\u0443\u0447\u0438\u0442\u0435\u043B\u043D\u043E \u043A\u043E\u0440\u0438\u0441\u043D\u0438\u0446\u0438, \u043F\u043E\u0434\u0435\u0441\u0443\u0432\u0430\u045A\u0430 \u0438 \u0431\u0440\u0438\u0448\u0435\u045A\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0438.",
+    rank: 4
+  },
+  manager: {
+    label: "\u0420\u0430\u043A\u043E\u0432\u043E\u0434\u0438\u0442\u0435\u043B",
+    description: "\u041F\u043E\u043D\u0443\u0434\u0438, \u043D\u0430\u0440\u0430\u0447\u043A\u0438, \u0444\u0430\u043A\u0442\u0443\u0440\u0438, \u043D\u0430\u0431\u0430\u0432\u043A\u0430, \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434\u0441\u0442\u0432\u043E. \u041D\u0435 \u0431\u0440\u0438\u0448\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0438 \u0438 \u043D\u0435 \u043C\u0435\u043D\u0443\u0432\u0430 \u043A\u043E\u0440\u0438\u0441\u043D\u0438\u0446\u0438.",
+    rank: 3
+  },
+  operator: {
+    label: "\u041E\u043F\u0435\u0440\u0430\u0442\u043E\u0440",
+    description: "\u041F\u0440\u043E\u0438\u0437\u0432\u043E\u0434\u0441\u0442\u0432\u043E, \u0441\u043A\u043B\u0430\u0434, \u043F\u0440\u0438\u0435\u043C\u043D\u0438\u0446\u0438, \u043E\u0441\u0442\u0430\u0442\u043E\u0446\u0438. \u0424\u0438\u043D\u0430\u043D\u0441\u0438\u0438\u0442\u0435 \u0433\u0438 \u0433\u043B\u0435\u0434\u0430, \u043D\u043E \u043D\u0435 \u0433\u0438 \u043C\u0435\u043D\u0443\u0432\u0430.",
+    rank: 2
+  },
+  viewer: {
+    label: "\u041F\u0440\u0435\u0433\u043B\u0435\u0434",
+    description: "\u0421\u0430\u043C\u043E \u0447\u0438\u0442\u0430. \u041D\u0438\u0448\u0442\u043E \u043D\u0435 \u043C\u0435\u043D\u0443\u0432\u0430.",
+    rank: 1
+  }
+};
+function rankOf(role) {
+  return ROLES[role ?? "viewer"]?.rank ?? 0;
+}
+function atLeast(role, min2) {
+  return rankOf(role) >= ROLES[min2].rank;
+}
+var WRITE_ROLE_BY_ROUTER = {
+  // Производство и склад — операторот работи тука
+  production: "operator",
+  storage: "operator",
+  warehouse: "operator",
+  remnants: "operator",
+  certificates: "operator",
+  // Комерцијала и финансии — раководител
+  quotation: "manager",
+  customers: "manager",
+  accounting: "manager",
+  procurement: "manager",
+  catalog: "manager",
+  ocr: "manager",
+  email: "manager",
+  dashboard: "manager",
+  // Подесувања — само администратор
+  settings: "admin",
+  appUsers: "admin"
+};
+function isDestructive(procedure) {
+  const p = procedure.toLowerCase();
+  return p.endsWith("delete") || p.includes("reset") || p.includes("wipe");
+}
+function isReadOnlyProcedure(procedure) {
+  const p = procedure.toLowerCase();
+  return p.endsWith("list") || p.endsWith("byid") || p.endsWith("bycode") || p.endsWith("stats") || p.endsWith("get") || p.endsWith("search") || p.endsWith("report") || p.endsWith("preview") || p.endsWith("suggest") || p.endsWith("needs") || p.endsWith("logs") || p.endsWith("trace") || p.endsWith("formaterial") || p.endsWith("params");
+}
+function canRun(role, path) {
+  const [router, procedure = ""] = path.split(".");
+  const r = rankOf(role);
+  if (r === 0) return false;
+  if (path === "appUsers.appUsersMe") return true;
+  if (isReadOnlyProcedure(procedure)) {
+    if (router === "appUsers") return atLeast(role, "admin");
+    return true;
+  }
+  if (isDestructive(procedure)) return atLeast(role, "admin");
+  const min2 = WRITE_ROLE_BY_ROUTER[router] ?? "manager";
+  return atLeast(role, min2);
+}
+
 // api/middleware.ts
 var t = initTRPC.context().create({
   transformer: dist_default
 });
 var createRouter = t.router;
-var publicQuery = t.procedure;
+var enforcePermissions = t.middleware(async ({ ctx, path, next }) => {
+  if (!process.env.APP_PASSWORD) return next({ ctx });
+  const actor = ctx.actor;
+  if (!actor) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "\u041D\u0430\u0458\u0430\u0432\u0438 \u0441\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E" });
+  }
+  if (!canRun(actor.role, path)) {
+    const roleLabel = ROLES[actor.role]?.label ?? actor.role;
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: `\u041D\u0435\u043C\u0430\u0448 \u0434\u043E\u0437\u0432\u043E\u043B\u0430 \u0437\u0430 \u043E\u0432\u0430 (\u0443\u043B\u043E\u0433\u0430: ${roleLabel})`
+    });
+  }
+  return next({ ctx });
+});
+var publicQuery = t.procedure.use(enforcePermissions);
 var requireAuth = t.middleware(async (opts) => {
   const { ctx, next } = opts;
   return next({ ctx });
@@ -34251,1509 +36272,8 @@ init_drizzle_orm();
 init_connection();
 init_schema2();
 
-// node_modules/jose/dist/webapi/lib/buffer_utils.js
-var encoder = new TextEncoder();
-var decoder = new TextDecoder();
-var MAX_INT32 = 2 ** 32;
-function concat(...buffers) {
-  const size = buffers.reduce((acc, { length }) => acc + length, 0);
-  const buf = new Uint8Array(size);
-  let i = 0;
-  for (const buffer of buffers) {
-    buf.set(buffer, i);
-    i += buffer.length;
-  }
-  return buf;
-}
-function encode3(string4) {
-  const bytes = new Uint8Array(string4.length);
-  for (let i = 0; i < string4.length; i++) {
-    const code = string4.charCodeAt(i);
-    if (code > 127) {
-      throw new TypeError("non-ASCII string encountered in encode()");
-    }
-    bytes[i] = code;
-  }
-  return bytes;
-}
-
-// node_modules/jose/dist/webapi/lib/base64.js
-function encodeBase64(input) {
-  if (Uint8Array.prototype.toBase64) {
-    return input.toBase64();
-  }
-  const CHUNK_SIZE = 32768;
-  const arr = [];
-  for (let i = 0; i < input.length; i += CHUNK_SIZE) {
-    arr.push(String.fromCharCode.apply(null, input.subarray(i, i + CHUNK_SIZE)));
-  }
-  return btoa(arr.join(""));
-}
-function decodeBase64(encoded) {
-  if (Uint8Array.fromBase64) {
-    return Uint8Array.fromBase64(encoded);
-  }
-  const binary = atob(encoded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-// node_modules/jose/dist/webapi/util/base64url.js
-function decode3(input) {
-  if (Uint8Array.fromBase64) {
-    return Uint8Array.fromBase64(typeof input === "string" ? input : decoder.decode(input), {
-      alphabet: "base64url"
-    });
-  }
-  let encoded = input;
-  if (encoded instanceof Uint8Array) {
-    encoded = decoder.decode(encoded);
-  }
-  encoded = encoded.replace(/-/g, "+").replace(/_/g, "/");
-  try {
-    return decodeBase64(encoded);
-  } catch {
-    throw new TypeError("The input to be decoded is not correctly encoded.");
-  }
-}
-function encode4(input) {
-  let unencoded = input;
-  if (typeof unencoded === "string") {
-    unencoded = encoder.encode(unencoded);
-  }
-  if (Uint8Array.prototype.toBase64) {
-    return unencoded.toBase64({ alphabet: "base64url", omitPadding: true });
-  }
-  return encodeBase64(unencoded).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
-
-// node_modules/jose/dist/webapi/util/errors.js
-var JOSEError = class extends Error {
-  static code = "ERR_JOSE_GENERIC";
-  code = "ERR_JOSE_GENERIC";
-  constructor(message2, options) {
-    super(message2, options);
-    this.name = this.constructor.name;
-    Error.captureStackTrace?.(this, this.constructor);
-  }
-};
-var JWTClaimValidationFailed = class extends JOSEError {
-  static code = "ERR_JWT_CLAIM_VALIDATION_FAILED";
-  code = "ERR_JWT_CLAIM_VALIDATION_FAILED";
-  claim;
-  reason;
-  payload;
-  constructor(message2, payload, claim = "unspecified", reason = "unspecified") {
-    super(message2, { cause: { claim, reason, payload } });
-    this.claim = claim;
-    this.reason = reason;
-    this.payload = payload;
-  }
-};
-var JWTExpired = class extends JOSEError {
-  static code = "ERR_JWT_EXPIRED";
-  code = "ERR_JWT_EXPIRED";
-  claim;
-  reason;
-  payload;
-  constructor(message2, payload, claim = "unspecified", reason = "unspecified") {
-    super(message2, { cause: { claim, reason, payload } });
-    this.claim = claim;
-    this.reason = reason;
-    this.payload = payload;
-  }
-};
-var JOSEAlgNotAllowed = class extends JOSEError {
-  static code = "ERR_JOSE_ALG_NOT_ALLOWED";
-  code = "ERR_JOSE_ALG_NOT_ALLOWED";
-};
-var JOSENotSupported = class extends JOSEError {
-  static code = "ERR_JOSE_NOT_SUPPORTED";
-  code = "ERR_JOSE_NOT_SUPPORTED";
-};
-var JWSInvalid = class extends JOSEError {
-  static code = "ERR_JWS_INVALID";
-  code = "ERR_JWS_INVALID";
-};
-var JWTInvalid = class extends JOSEError {
-  static code = "ERR_JWT_INVALID";
-  code = "ERR_JWT_INVALID";
-};
-var JWSSignatureVerificationFailed = class extends JOSEError {
-  static code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
-  code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
-  constructor(message2 = "signature verification failed", options) {
-    super(message2, options);
-  }
-};
-
-// node_modules/jose/dist/webapi/lib/crypto_key.js
-var unusable = (name2, prop = "algorithm.name") => new TypeError(`CryptoKey does not support this operation, its ${prop} must be ${name2}`);
-var isAlgorithm = (algorithm, name2) => algorithm.name === name2;
-function getHashLength(hash2) {
-  return parseInt(hash2.name.slice(4), 10);
-}
-function getNamedCurve(alg) {
-  switch (alg) {
-    case "ES256":
-      return "P-256";
-    case "ES384":
-      return "P-384";
-    case "ES512":
-      return "P-521";
-    default:
-      throw new Error("unreachable");
-  }
-}
-function checkUsage(key, usage) {
-  if (usage && !key.usages.includes(usage)) {
-    throw new TypeError(`CryptoKey does not support this operation, its usages must include ${usage}.`);
-  }
-}
-function checkSigCryptoKey(key, alg, usage) {
-  switch (alg) {
-    case "HS256":
-    case "HS384":
-    case "HS512": {
-      if (!isAlgorithm(key.algorithm, "HMAC"))
-        throw unusable("HMAC");
-      const expected = parseInt(alg.slice(2), 10);
-      const actual = getHashLength(key.algorithm.hash);
-      if (actual !== expected)
-        throw unusable(`SHA-${expected}`, "algorithm.hash");
-      break;
-    }
-    case "RS256":
-    case "RS384":
-    case "RS512": {
-      if (!isAlgorithm(key.algorithm, "RSASSA-PKCS1-v1_5"))
-        throw unusable("RSASSA-PKCS1-v1_5");
-      const expected = parseInt(alg.slice(2), 10);
-      const actual = getHashLength(key.algorithm.hash);
-      if (actual !== expected)
-        throw unusable(`SHA-${expected}`, "algorithm.hash");
-      break;
-    }
-    case "PS256":
-    case "PS384":
-    case "PS512": {
-      if (!isAlgorithm(key.algorithm, "RSA-PSS"))
-        throw unusable("RSA-PSS");
-      const expected = parseInt(alg.slice(2), 10);
-      const actual = getHashLength(key.algorithm.hash);
-      if (actual !== expected)
-        throw unusable(`SHA-${expected}`, "algorithm.hash");
-      break;
-    }
-    case "Ed25519":
-    case "EdDSA": {
-      if (!isAlgorithm(key.algorithm, "Ed25519"))
-        throw unusable("Ed25519");
-      break;
-    }
-    case "ML-DSA-44":
-    case "ML-DSA-65":
-    case "ML-DSA-87": {
-      if (!isAlgorithm(key.algorithm, alg))
-        throw unusable(alg);
-      break;
-    }
-    case "ES256":
-    case "ES384":
-    case "ES512": {
-      if (!isAlgorithm(key.algorithm, "ECDSA"))
-        throw unusable("ECDSA");
-      const expected = getNamedCurve(alg);
-      const actual = key.algorithm.namedCurve;
-      if (actual !== expected)
-        throw unusable(expected, "algorithm.namedCurve");
-      break;
-    }
-    default:
-      throw new TypeError("CryptoKey does not support this operation");
-  }
-  checkUsage(key, usage);
-}
-
-// node_modules/jose/dist/webapi/lib/invalid_key_input.js
-function message(msg, actual, ...types2) {
-  types2 = types2.filter(Boolean);
-  if (types2.length > 2) {
-    const last = types2.pop();
-    msg += `one of type ${types2.join(", ")}, or ${last}.`;
-  } else if (types2.length === 2) {
-    msg += `one of type ${types2[0]} or ${types2[1]}.`;
-  } else {
-    msg += `of type ${types2[0]}.`;
-  }
-  if (actual == null) {
-    msg += ` Received ${actual}`;
-  } else if (typeof actual === "function" && actual.name) {
-    msg += ` Received function ${actual.name}`;
-  } else if (typeof actual === "object" && actual != null) {
-    if (actual.constructor?.name) {
-      msg += ` Received an instance of ${actual.constructor.name}`;
-    }
-  }
-  return msg;
-}
-var invalidKeyInput = (actual, ...types2) => message("Key must be ", actual, ...types2);
-var withAlg = (alg, actual, ...types2) => message(`Key for the ${alg} algorithm must be `, actual, ...types2);
-
-// node_modules/jose/dist/webapi/lib/is_key_like.js
-var isCryptoKey = (key) => {
-  if (key?.[Symbol.toStringTag] === "CryptoKey")
-    return true;
-  try {
-    return key instanceof CryptoKey;
-  } catch {
-    return false;
-  }
-};
-var isKeyObject = (key) => key?.[Symbol.toStringTag] === "KeyObject";
-var isKeyLike = (key) => isCryptoKey(key) || isKeyObject(key);
-
-// node_modules/jose/dist/webapi/lib/is_disjoint.js
-function isDisjoint(...headers) {
-  const sources = headers.filter(Boolean);
-  if (sources.length === 0 || sources.length === 1) {
-    return true;
-  }
-  let acc;
-  for (const header of sources) {
-    const parameters = Object.keys(header);
-    if (!acc || acc.size === 0) {
-      acc = new Set(parameters);
-      continue;
-    }
-    for (const parameter of parameters) {
-      if (acc.has(parameter)) {
-        return false;
-      }
-      acc.add(parameter);
-    }
-  }
-  return true;
-}
-
-// node_modules/jose/dist/webapi/lib/is_object.js
-var isObjectLike = (value) => typeof value === "object" && value !== null;
-function isObject3(input) {
-  if (!isObjectLike(input) || Object.prototype.toString.call(input) !== "[object Object]") {
-    return false;
-  }
-  if (Object.getPrototypeOf(input) === null) {
-    return true;
-  }
-  let proto = input;
-  while (Object.getPrototypeOf(proto) !== null) {
-    proto = Object.getPrototypeOf(proto);
-  }
-  return Object.getPrototypeOf(input) === proto;
-}
-
-// node_modules/jose/dist/webapi/lib/check_key_length.js
-function checkKeyLength(alg, key) {
-  if (alg.startsWith("RS") || alg.startsWith("PS")) {
-    const { modulusLength } = key.algorithm;
-    if (typeof modulusLength !== "number" || modulusLength < 2048) {
-      throw new TypeError(`${alg} requires key modulusLength to be 2048 bits or larger`);
-    }
-  }
-}
-
-// node_modules/jose/dist/webapi/lib/asn1.js
-var bytesEqual = (a, b) => {
-  if (a.byteLength !== b.length)
-    return false;
-  for (let i = 0; i < a.byteLength; i++) {
-    if (a[i] !== b[i])
-      return false;
-  }
-  return true;
-};
-var createASN1State = (data) => ({ data, pos: 0 });
-var parseLength = (state) => {
-  const first = state.data[state.pos++];
-  if (first & 128) {
-    const lengthOfLen = first & 127;
-    let length = 0;
-    for (let i = 0; i < lengthOfLen; i++) {
-      length = length << 8 | state.data[state.pos++];
-    }
-    return length;
-  }
-  return first;
-};
-var expectTag = (state, expectedTag, errorMessage) => {
-  if (state.data[state.pos++] !== expectedTag) {
-    throw new Error(errorMessage);
-  }
-};
-var getSubarray = (state, length) => {
-  const result = state.data.subarray(state.pos, state.pos + length);
-  state.pos += length;
-  return result;
-};
-var parseAlgorithmOID = (state) => {
-  expectTag(state, 6, "Expected algorithm OID");
-  const oidLen = parseLength(state);
-  return getSubarray(state, oidLen);
-};
-function parsePKCS8Header(state) {
-  expectTag(state, 48, "Invalid PKCS#8 structure");
-  parseLength(state);
-  expectTag(state, 2, "Expected version field");
-  const verLen = parseLength(state);
-  state.pos += verLen;
-  expectTag(state, 48, "Expected algorithm identifier");
-  const algIdLen = parseLength(state);
-  const algIdStart = state.pos;
-  return { algIdStart, algIdLength: algIdLen };
-}
-var parseECAlgorithmIdentifier = (state) => {
-  const algOid = parseAlgorithmOID(state);
-  if (bytesEqual(algOid, [43, 101, 110])) {
-    return "X25519";
-  }
-  if (!bytesEqual(algOid, [42, 134, 72, 206, 61, 2, 1])) {
-    throw new Error("Unsupported key algorithm");
-  }
-  expectTag(state, 6, "Expected curve OID");
-  const curveOidLen = parseLength(state);
-  const curveOid = getSubarray(state, curveOidLen);
-  for (const { name: name2, oid } of [
-    { name: "P-256", oid: [42, 134, 72, 206, 61, 3, 1, 7] },
-    { name: "P-384", oid: [43, 129, 4, 0, 34] },
-    { name: "P-521", oid: [43, 129, 4, 0, 35] }
-  ]) {
-    if (bytesEqual(curveOid, oid)) {
-      return name2;
-    }
-  }
-  throw new Error("Unsupported named curve");
-};
-var genericImport = async (keyFormat, keyData, alg, options) => {
-  let algorithm;
-  let keyUsages;
-  const isPublic = keyFormat === "spki";
-  const getSigUsages = () => isPublic ? ["verify"] : ["sign"];
-  const getEncUsages = () => isPublic ? ["encrypt", "wrapKey"] : ["decrypt", "unwrapKey"];
-  switch (alg) {
-    case "PS256":
-    case "PS384":
-    case "PS512":
-      algorithm = { name: "RSA-PSS", hash: `SHA-${alg.slice(-3)}` };
-      keyUsages = getSigUsages();
-      break;
-    case "RS256":
-    case "RS384":
-    case "RS512":
-      algorithm = { name: "RSASSA-PKCS1-v1_5", hash: `SHA-${alg.slice(-3)}` };
-      keyUsages = getSigUsages();
-      break;
-    case "RSA-OAEP":
-    case "RSA-OAEP-256":
-    case "RSA-OAEP-384":
-    case "RSA-OAEP-512":
-      algorithm = {
-        name: "RSA-OAEP",
-        hash: `SHA-${parseInt(alg.slice(-3), 10) || 1}`
-      };
-      keyUsages = getEncUsages();
-      break;
-    case "ES256":
-    case "ES384":
-    case "ES512": {
-      const curveMap = { ES256: "P-256", ES384: "P-384", ES512: "P-521" };
-      algorithm = { name: "ECDSA", namedCurve: curveMap[alg] };
-      keyUsages = getSigUsages();
-      break;
-    }
-    case "ECDH-ES":
-    case "ECDH-ES+A128KW":
-    case "ECDH-ES+A192KW":
-    case "ECDH-ES+A256KW": {
-      try {
-        const namedCurve = options.getNamedCurve(keyData);
-        algorithm = namedCurve === "X25519" ? { name: "X25519" } : { name: "ECDH", namedCurve };
-      } catch (cause) {
-        throw new JOSENotSupported("Invalid or unsupported key format");
-      }
-      keyUsages = isPublic ? [] : ["deriveBits"];
-      break;
-    }
-    case "Ed25519":
-    case "EdDSA":
-      algorithm = { name: "Ed25519" };
-      keyUsages = getSigUsages();
-      break;
-    case "ML-DSA-44":
-    case "ML-DSA-65":
-    case "ML-DSA-87":
-      algorithm = { name: alg };
-      keyUsages = getSigUsages();
-      break;
-    default:
-      throw new JOSENotSupported('Invalid or unsupported "alg" (Algorithm) value');
-  }
-  return crypto.subtle.importKey(keyFormat, keyData, algorithm, options?.extractable ?? (isPublic ? true : false), keyUsages);
-};
-var processPEMData = (pem, pattern) => {
-  return decodeBase64(pem.replace(pattern, ""));
-};
-var fromPKCS8 = (pem, alg, options) => {
-  const keyData = processPEMData(pem, /(?:-----(?:BEGIN|END) PRIVATE KEY-----|\s)/g);
-  let opts = options;
-  if (alg?.startsWith?.("ECDH-ES")) {
-    opts ||= {};
-    opts.getNamedCurve = (keyData2) => {
-      const state = createASN1State(keyData2);
-      parsePKCS8Header(state);
-      return parseECAlgorithmIdentifier(state);
-    };
-  }
-  return genericImport("pkcs8", keyData, alg, opts);
-};
-
-// node_modules/jose/dist/webapi/lib/jwk_to_key.js
-function subtleMapping(jwk) {
-  let algorithm;
-  let keyUsages;
-  switch (jwk.kty) {
-    case "AKP": {
-      switch (jwk.alg) {
-        case "ML-DSA-44":
-        case "ML-DSA-65":
-        case "ML-DSA-87":
-          algorithm = { name: jwk.alg };
-          keyUsages = jwk.priv ? ["sign"] : ["verify"];
-          break;
-        default:
-          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
-      }
-      break;
-    }
-    case "RSA": {
-      switch (jwk.alg) {
-        case "PS256":
-        case "PS384":
-        case "PS512":
-          algorithm = { name: "RSA-PSS", hash: `SHA-${jwk.alg.slice(-3)}` };
-          keyUsages = jwk.d ? ["sign"] : ["verify"];
-          break;
-        case "RS256":
-        case "RS384":
-        case "RS512":
-          algorithm = { name: "RSASSA-PKCS1-v1_5", hash: `SHA-${jwk.alg.slice(-3)}` };
-          keyUsages = jwk.d ? ["sign"] : ["verify"];
-          break;
-        case "RSA-OAEP":
-        case "RSA-OAEP-256":
-        case "RSA-OAEP-384":
-        case "RSA-OAEP-512":
-          algorithm = {
-            name: "RSA-OAEP",
-            hash: `SHA-${parseInt(jwk.alg.slice(-3), 10) || 1}`
-          };
-          keyUsages = jwk.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"];
-          break;
-        default:
-          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
-      }
-      break;
-    }
-    case "EC": {
-      switch (jwk.alg) {
-        case "ES256":
-          algorithm = { name: "ECDSA", namedCurve: "P-256" };
-          keyUsages = jwk.d ? ["sign"] : ["verify"];
-          break;
-        case "ES384":
-          algorithm = { name: "ECDSA", namedCurve: "P-384" };
-          keyUsages = jwk.d ? ["sign"] : ["verify"];
-          break;
-        case "ES512":
-          algorithm = { name: "ECDSA", namedCurve: "P-521" };
-          keyUsages = jwk.d ? ["sign"] : ["verify"];
-          break;
-        case "ECDH-ES":
-        case "ECDH-ES+A128KW":
-        case "ECDH-ES+A192KW":
-        case "ECDH-ES+A256KW":
-          algorithm = { name: "ECDH", namedCurve: jwk.crv };
-          keyUsages = jwk.d ? ["deriveBits"] : [];
-          break;
-        default:
-          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
-      }
-      break;
-    }
-    case "OKP": {
-      switch (jwk.alg) {
-        case "Ed25519":
-        case "EdDSA":
-          algorithm = { name: "Ed25519" };
-          keyUsages = jwk.d ? ["sign"] : ["verify"];
-          break;
-        case "ECDH-ES":
-        case "ECDH-ES+A128KW":
-        case "ECDH-ES+A192KW":
-        case "ECDH-ES+A256KW":
-          algorithm = { name: jwk.crv };
-          keyUsages = jwk.d ? ["deriveBits"] : [];
-          break;
-        default:
-          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
-      }
-      break;
-    }
-    default:
-      throw new JOSENotSupported('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
-  }
-  return { algorithm, keyUsages };
-}
-async function jwkToKey(jwk) {
-  if (!jwk.alg) {
-    throw new TypeError('"alg" argument is required when "jwk.alg" is not present');
-  }
-  const { algorithm, keyUsages } = subtleMapping(jwk);
-  const keyData = { ...jwk };
-  if (keyData.kty !== "AKP") {
-    delete keyData.alg;
-  }
-  delete keyData.use;
-  return crypto.subtle.importKey("jwk", keyData, algorithm, jwk.ext ?? (jwk.d || jwk.priv ? false : true), jwk.key_ops ?? keyUsages);
-}
-
-// node_modules/jose/dist/webapi/key/import.js
-async function importPKCS8(pkcs8, alg, options) {
-  if (typeof pkcs8 !== "string" || pkcs8.indexOf("-----BEGIN PRIVATE KEY-----") !== 0) {
-    throw new TypeError('"pkcs8" must be PKCS#8 formatted string');
-  }
-  return fromPKCS8(pkcs8, alg, options);
-}
-
-// node_modules/jose/dist/webapi/lib/validate_crit.js
-function validateCrit(Err, recognizedDefault, recognizedOption, protectedHeader, joseHeader) {
-  if (joseHeader.crit !== void 0 && protectedHeader?.crit === void 0) {
-    throw new Err('"crit" (Critical) Header Parameter MUST be integrity protected');
-  }
-  if (!protectedHeader || protectedHeader.crit === void 0) {
-    return /* @__PURE__ */ new Set();
-  }
-  if (!Array.isArray(protectedHeader.crit) || protectedHeader.crit.length === 0 || protectedHeader.crit.some((input) => typeof input !== "string" || input.length === 0)) {
-    throw new Err('"crit" (Critical) Header Parameter MUST be an array of non-empty strings when present');
-  }
-  let recognized;
-  if (recognizedOption !== void 0) {
-    recognized = new Map([...Object.entries(recognizedOption), ...recognizedDefault.entries()]);
-  } else {
-    recognized = recognizedDefault;
-  }
-  for (const parameter of protectedHeader.crit) {
-    if (!recognized.has(parameter)) {
-      throw new JOSENotSupported(`Extension Header Parameter "${parameter}" is not recognized`);
-    }
-    if (joseHeader[parameter] === void 0) {
-      throw new Err(`Extension Header Parameter "${parameter}" is missing`);
-    }
-    if (recognized.get(parameter) && protectedHeader[parameter] === void 0) {
-      throw new Err(`Extension Header Parameter "${parameter}" MUST be integrity protected`);
-    }
-  }
-  return new Set(protectedHeader.crit);
-}
-
-// node_modules/jose/dist/webapi/lib/validate_algorithms.js
-function validateAlgorithms(option, algorithms) {
-  if (algorithms !== void 0 && (!Array.isArray(algorithms) || algorithms.some((s) => typeof s !== "string"))) {
-    throw new TypeError(`"${option}" option must be an array of strings`);
-  }
-  if (!algorithms) {
-    return void 0;
-  }
-  return new Set(algorithms);
-}
-
-// node_modules/jose/dist/webapi/lib/is_jwk.js
-var isJWK = (key) => isObject3(key) && typeof key.kty === "string";
-var isPrivateJWK = (key) => key.kty !== "oct" && (key.kty === "AKP" && typeof key.priv === "string" || typeof key.d === "string");
-var isPublicJWK = (key) => key.kty !== "oct" && key.d === void 0 && key.priv === void 0;
-var isSecretJWK = (key) => key.kty === "oct" && typeof key.k === "string";
-
-// node_modules/jose/dist/webapi/lib/normalize_key.js
-var cache;
-var handleJWK = async (key, jwk, alg, freeze = false) => {
-  cache ||= /* @__PURE__ */ new WeakMap();
-  let cached2 = cache.get(key);
-  if (cached2?.[alg]) {
-    return cached2[alg];
-  }
-  const cryptoKey = await jwkToKey({ ...jwk, alg });
-  if (freeze)
-    Object.freeze(key);
-  if (!cached2) {
-    cache.set(key, { [alg]: cryptoKey });
-  } else {
-    cached2[alg] = cryptoKey;
-  }
-  return cryptoKey;
-};
-var handleKeyObject = (keyObject, alg) => {
-  cache ||= /* @__PURE__ */ new WeakMap();
-  let cached2 = cache.get(keyObject);
-  if (cached2?.[alg]) {
-    return cached2[alg];
-  }
-  const isPublic = keyObject.type === "public";
-  const extractable = isPublic ? true : false;
-  let cryptoKey;
-  if (keyObject.asymmetricKeyType === "x25519") {
-    switch (alg) {
-      case "ECDH-ES":
-      case "ECDH-ES+A128KW":
-      case "ECDH-ES+A192KW":
-      case "ECDH-ES+A256KW":
-        break;
-      default:
-        throw new TypeError("given KeyObject instance cannot be used for this algorithm");
-    }
-    cryptoKey = keyObject.toCryptoKey(keyObject.asymmetricKeyType, extractable, isPublic ? [] : ["deriveBits"]);
-  }
-  if (keyObject.asymmetricKeyType === "ed25519") {
-    if (alg !== "EdDSA" && alg !== "Ed25519") {
-      throw new TypeError("given KeyObject instance cannot be used for this algorithm");
-    }
-    cryptoKey = keyObject.toCryptoKey(keyObject.asymmetricKeyType, extractable, [
-      isPublic ? "verify" : "sign"
-    ]);
-  }
-  switch (keyObject.asymmetricKeyType) {
-    case "ml-dsa-44":
-    case "ml-dsa-65":
-    case "ml-dsa-87": {
-      if (alg !== keyObject.asymmetricKeyType.toUpperCase()) {
-        throw new TypeError("given KeyObject instance cannot be used for this algorithm");
-      }
-      cryptoKey = keyObject.toCryptoKey(keyObject.asymmetricKeyType, extractable, [
-        isPublic ? "verify" : "sign"
-      ]);
-    }
-  }
-  if (keyObject.asymmetricKeyType === "rsa") {
-    let hash2;
-    switch (alg) {
-      case "RSA-OAEP":
-        hash2 = "SHA-1";
-        break;
-      case "RS256":
-      case "PS256":
-      case "RSA-OAEP-256":
-        hash2 = "SHA-256";
-        break;
-      case "RS384":
-      case "PS384":
-      case "RSA-OAEP-384":
-        hash2 = "SHA-384";
-        break;
-      case "RS512":
-      case "PS512":
-      case "RSA-OAEP-512":
-        hash2 = "SHA-512";
-        break;
-      default:
-        throw new TypeError("given KeyObject instance cannot be used for this algorithm");
-    }
-    if (alg.startsWith("RSA-OAEP")) {
-      return keyObject.toCryptoKey({
-        name: "RSA-OAEP",
-        hash: hash2
-      }, extractable, isPublic ? ["encrypt"] : ["decrypt"]);
-    }
-    cryptoKey = keyObject.toCryptoKey({
-      name: alg.startsWith("PS") ? "RSA-PSS" : "RSASSA-PKCS1-v1_5",
-      hash: hash2
-    }, extractable, [isPublic ? "verify" : "sign"]);
-  }
-  if (keyObject.asymmetricKeyType === "ec") {
-    const nist = /* @__PURE__ */ new Map([
-      ["prime256v1", "P-256"],
-      ["secp384r1", "P-384"],
-      ["secp521r1", "P-521"]
-    ]);
-    const namedCurve = nist.get(keyObject.asymmetricKeyDetails?.namedCurve);
-    if (!namedCurve) {
-      throw new TypeError("given KeyObject instance cannot be used for this algorithm");
-    }
-    if (alg === "ES256" && namedCurve === "P-256") {
-      cryptoKey = keyObject.toCryptoKey({
-        name: "ECDSA",
-        namedCurve
-      }, extractable, [isPublic ? "verify" : "sign"]);
-    }
-    if (alg === "ES384" && namedCurve === "P-384") {
-      cryptoKey = keyObject.toCryptoKey({
-        name: "ECDSA",
-        namedCurve
-      }, extractable, [isPublic ? "verify" : "sign"]);
-    }
-    if (alg === "ES512" && namedCurve === "P-521") {
-      cryptoKey = keyObject.toCryptoKey({
-        name: "ECDSA",
-        namedCurve
-      }, extractable, [isPublic ? "verify" : "sign"]);
-    }
-    if (alg.startsWith("ECDH-ES")) {
-      cryptoKey = keyObject.toCryptoKey({
-        name: "ECDH",
-        namedCurve
-      }, extractable, isPublic ? [] : ["deriveBits"]);
-    }
-  }
-  if (!cryptoKey) {
-    throw new TypeError("given KeyObject instance cannot be used for this algorithm");
-  }
-  if (!cached2) {
-    cache.set(keyObject, { [alg]: cryptoKey });
-  } else {
-    cached2[alg] = cryptoKey;
-  }
-  return cryptoKey;
-};
-async function normalizeKey(key, alg) {
-  if (key instanceof Uint8Array) {
-    return key;
-  }
-  if (isCryptoKey(key)) {
-    return key;
-  }
-  if (isKeyObject(key)) {
-    if (key.type === "secret") {
-      return key.export();
-    }
-    if ("toCryptoKey" in key && typeof key.toCryptoKey === "function") {
-      try {
-        return handleKeyObject(key, alg);
-      } catch (err) {
-        if (err instanceof TypeError) {
-          throw err;
-        }
-      }
-    }
-    let jwk = key.export({ format: "jwk" });
-    return handleJWK(key, jwk, alg);
-  }
-  if (isJWK(key)) {
-    if (key.k) {
-      return decode3(key.k);
-    }
-    return handleJWK(key, key, alg, true);
-  }
-  throw new Error("unreachable");
-}
-
-// node_modules/jose/dist/webapi/lib/check_key_type.js
-var tag = (key) => key?.[Symbol.toStringTag];
-var jwkMatchesOp = (alg, key, usage) => {
-  if (key.use !== void 0) {
-    let expected;
-    switch (usage) {
-      case "sign":
-      case "verify":
-        expected = "sig";
-        break;
-      case "encrypt":
-      case "decrypt":
-        expected = "enc";
-        break;
-    }
-    if (key.use !== expected) {
-      throw new TypeError(`Invalid key for this operation, its "use" must be "${expected}" when present`);
-    }
-  }
-  if (key.alg !== void 0 && key.alg !== alg) {
-    throw new TypeError(`Invalid key for this operation, its "alg" must be "${alg}" when present`);
-  }
-  if (Array.isArray(key.key_ops)) {
-    let expectedKeyOp;
-    switch (true) {
-      case (usage === "sign" || usage === "verify"):
-      case alg === "dir":
-      case alg.includes("CBC-HS"):
-        expectedKeyOp = usage;
-        break;
-      case alg.startsWith("PBES2"):
-        expectedKeyOp = "deriveBits";
-        break;
-      case /^A\d{3}(?:GCM)?(?:KW)?$/.test(alg):
-        if (!alg.includes("GCM") && alg.endsWith("KW")) {
-          expectedKeyOp = usage === "encrypt" ? "wrapKey" : "unwrapKey";
-        } else {
-          expectedKeyOp = usage;
-        }
-        break;
-      case (usage === "encrypt" && alg.startsWith("RSA")):
-        expectedKeyOp = "wrapKey";
-        break;
-      case usage === "decrypt":
-        expectedKeyOp = alg.startsWith("RSA") ? "unwrapKey" : "deriveBits";
-        break;
-    }
-    if (expectedKeyOp && key.key_ops?.includes?.(expectedKeyOp) === false) {
-      throw new TypeError(`Invalid key for this operation, its "key_ops" must include "${expectedKeyOp}" when present`);
-    }
-  }
-  return true;
-};
-var symmetricTypeCheck = (alg, key, usage) => {
-  if (key instanceof Uint8Array)
-    return;
-  if (isJWK(key)) {
-    if (isSecretJWK(key) && jwkMatchesOp(alg, key, usage))
-      return;
-    throw new TypeError(`JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present`);
-  }
-  if (!isKeyLike(key)) {
-    throw new TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key", "Uint8Array"));
-  }
-  if (key.type !== "secret") {
-    throw new TypeError(`${tag(key)} instances for symmetric algorithms must be of type "secret"`);
-  }
-};
-var asymmetricTypeCheck = (alg, key, usage) => {
-  if (isJWK(key)) {
-    switch (usage) {
-      case "decrypt":
-      case "sign":
-        if (isPrivateJWK(key) && jwkMatchesOp(alg, key, usage))
-          return;
-        throw new TypeError(`JSON Web Key for this operation must be a private JWK`);
-      case "encrypt":
-      case "verify":
-        if (isPublicJWK(key) && jwkMatchesOp(alg, key, usage))
-          return;
-        throw new TypeError(`JSON Web Key for this operation must be a public JWK`);
-    }
-  }
-  if (!isKeyLike(key)) {
-    throw new TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key"));
-  }
-  if (key.type === "secret") {
-    throw new TypeError(`${tag(key)} instances for asymmetric algorithms must not be of type "secret"`);
-  }
-  if (key.type === "public") {
-    switch (usage) {
-      case "sign":
-        throw new TypeError(`${tag(key)} instances for asymmetric algorithm signing must be of type "private"`);
-      case "decrypt":
-        throw new TypeError(`${tag(key)} instances for asymmetric algorithm decryption must be of type "private"`);
-    }
-  }
-  if (key.type === "private") {
-    switch (usage) {
-      case "verify":
-        throw new TypeError(`${tag(key)} instances for asymmetric algorithm verifying must be of type "public"`);
-      case "encrypt":
-        throw new TypeError(`${tag(key)} instances for asymmetric algorithm encryption must be of type "public"`);
-    }
-  }
-};
-function checkKeyType(alg, key, usage) {
-  switch (alg.substring(0, 2)) {
-    case "A1":
-    case "A2":
-    case "di":
-    case "HS":
-    case "PB":
-      symmetricTypeCheck(alg, key, usage);
-      break;
-    default:
-      asymmetricTypeCheck(alg, key, usage);
-  }
-}
-
-// node_modules/jose/dist/webapi/lib/subtle_dsa.js
-function subtleAlgorithm(alg, algorithm) {
-  const hash2 = `SHA-${alg.slice(-3)}`;
-  switch (alg) {
-    case "HS256":
-    case "HS384":
-    case "HS512":
-      return { hash: hash2, name: "HMAC" };
-    case "PS256":
-    case "PS384":
-    case "PS512":
-      return { hash: hash2, name: "RSA-PSS", saltLength: parseInt(alg.slice(-3), 10) >> 3 };
-    case "RS256":
-    case "RS384":
-    case "RS512":
-      return { hash: hash2, name: "RSASSA-PKCS1-v1_5" };
-    case "ES256":
-    case "ES384":
-    case "ES512":
-      return { hash: hash2, name: "ECDSA", namedCurve: algorithm.namedCurve };
-    case "Ed25519":
-    case "EdDSA":
-      return { name: "Ed25519" };
-    case "ML-DSA-44":
-    case "ML-DSA-65":
-    case "ML-DSA-87":
-      return { name: alg };
-    default:
-      throw new JOSENotSupported(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
-  }
-}
-
-// node_modules/jose/dist/webapi/lib/get_sign_verify_key.js
-async function getSigKey(alg, key, usage) {
-  if (key instanceof Uint8Array) {
-    if (!alg.startsWith("HS")) {
-      throw new TypeError(invalidKeyInput(key, "CryptoKey", "KeyObject", "JSON Web Key"));
-    }
-    return crypto.subtle.importKey("raw", key, { hash: `SHA-${alg.slice(-3)}`, name: "HMAC" }, false, [usage]);
-  }
-  checkSigCryptoKey(key, alg, usage);
-  return key;
-}
-
-// node_modules/jose/dist/webapi/lib/verify.js
-async function verify(alg, key, signature, data) {
-  const cryptoKey = await getSigKey(alg, key, "verify");
-  checkKeyLength(alg, cryptoKey);
-  const algorithm = subtleAlgorithm(alg, cryptoKey.algorithm);
-  try {
-    return await crypto.subtle.verify(algorithm, cryptoKey, signature, data);
-  } catch {
-    return false;
-  }
-}
-
-// node_modules/jose/dist/webapi/jws/flattened/verify.js
-async function flattenedVerify(jws, key, options) {
-  if (!isObject3(jws)) {
-    throw new JWSInvalid("Flattened JWS must be an object");
-  }
-  if (jws.protected === void 0 && jws.header === void 0) {
-    throw new JWSInvalid('Flattened JWS must have either of the "protected" or "header" members');
-  }
-  if (jws.protected !== void 0 && typeof jws.protected !== "string") {
-    throw new JWSInvalid("JWS Protected Header incorrect type");
-  }
-  if (jws.payload === void 0) {
-    throw new JWSInvalid("JWS Payload missing");
-  }
-  if (typeof jws.signature !== "string") {
-    throw new JWSInvalid("JWS Signature missing or incorrect type");
-  }
-  if (jws.header !== void 0 && !isObject3(jws.header)) {
-    throw new JWSInvalid("JWS Unprotected Header incorrect type");
-  }
-  let parsedProt = {};
-  if (jws.protected) {
-    try {
-      const protectedHeader = decode3(jws.protected);
-      parsedProt = JSON.parse(decoder.decode(protectedHeader));
-    } catch {
-      throw new JWSInvalid("JWS Protected Header is invalid");
-    }
-  }
-  if (!isDisjoint(parsedProt, jws.header)) {
-    throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
-  }
-  const joseHeader = {
-    ...parsedProt,
-    ...jws.header
-  };
-  const extensions = validateCrit(JWSInvalid, /* @__PURE__ */ new Map([["b64", true]]), options?.crit, parsedProt, joseHeader);
-  let b64 = true;
-  if (extensions.has("b64")) {
-    b64 = parsedProt.b64;
-    if (typeof b64 !== "boolean") {
-      throw new JWSInvalid('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
-    }
-  }
-  const { alg } = joseHeader;
-  if (typeof alg !== "string" || !alg) {
-    throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
-  }
-  const algorithms = options && validateAlgorithms("algorithms", options.algorithms);
-  if (algorithms && !algorithms.has(alg)) {
-    throw new JOSEAlgNotAllowed('"alg" (Algorithm) Header Parameter value not allowed');
-  }
-  if (b64) {
-    if (typeof jws.payload !== "string") {
-      throw new JWSInvalid("JWS Payload must be a string");
-    }
-  } else if (typeof jws.payload !== "string" && !(jws.payload instanceof Uint8Array)) {
-    throw new JWSInvalid("JWS Payload must be a string or an Uint8Array instance");
-  }
-  let resolvedKey = false;
-  if (typeof key === "function") {
-    key = await key(parsedProt, jws);
-    resolvedKey = true;
-  }
-  checkKeyType(alg, key, "verify");
-  const data = concat(jws.protected !== void 0 ? encode3(jws.protected) : new Uint8Array(), encode3("."), typeof jws.payload === "string" ? b64 ? encode3(jws.payload) : encoder.encode(jws.payload) : jws.payload);
-  let signature;
-  try {
-    signature = decode3(jws.signature);
-  } catch {
-    throw new JWSInvalid("Failed to base64url decode the signature");
-  }
-  const k = await normalizeKey(key, alg);
-  const verified = await verify(alg, k, signature, data);
-  if (!verified) {
-    throw new JWSSignatureVerificationFailed();
-  }
-  let payload;
-  if (b64) {
-    try {
-      payload = decode3(jws.payload);
-    } catch {
-      throw new JWSInvalid("Failed to base64url decode the payload");
-    }
-  } else if (typeof jws.payload === "string") {
-    payload = encoder.encode(jws.payload);
-  } else {
-    payload = jws.payload;
-  }
-  const result = { payload };
-  if (jws.protected !== void 0) {
-    result.protectedHeader = parsedProt;
-  }
-  if (jws.header !== void 0) {
-    result.unprotectedHeader = jws.header;
-  }
-  if (resolvedKey) {
-    return { ...result, key: k };
-  }
-  return result;
-}
-
-// node_modules/jose/dist/webapi/jws/compact/verify.js
-async function compactVerify(jws, key, options) {
-  if (jws instanceof Uint8Array) {
-    jws = decoder.decode(jws);
-  }
-  if (typeof jws !== "string") {
-    throw new JWSInvalid("Compact JWS must be a string or Uint8Array");
-  }
-  const { 0: protectedHeader, 1: payload, 2: signature, length } = jws.split(".");
-  if (length !== 3) {
-    throw new JWSInvalid("Invalid Compact JWS");
-  }
-  const verified = await flattenedVerify({ payload, protected: protectedHeader, signature }, key, options);
-  const result = { payload: verified.payload, protectedHeader: verified.protectedHeader };
-  if (typeof key === "function") {
-    return { ...result, key: verified.key };
-  }
-  return result;
-}
-
-// node_modules/jose/dist/webapi/lib/jwt_claims_set.js
-var epoch = (date6) => Math.floor(date6.getTime() / 1e3);
-var minute = 60;
-var hour = minute * 60;
-var day = hour * 24;
-var week = day * 7;
-var year = day * 365.25;
-var REGEX = /^(\+|\-)? ?(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)(?: (ago|from now))?$/i;
-function secs(str) {
-  const matched = REGEX.exec(str);
-  if (!matched || matched[4] && matched[1]) {
-    throw new TypeError("Invalid time period format");
-  }
-  const value = parseFloat(matched[2]);
-  const unit = matched[3].toLowerCase();
-  let numericDate;
-  switch (unit) {
-    case "sec":
-    case "secs":
-    case "second":
-    case "seconds":
-    case "s":
-      numericDate = Math.round(value);
-      break;
-    case "minute":
-    case "minutes":
-    case "min":
-    case "mins":
-    case "m":
-      numericDate = Math.round(value * minute);
-      break;
-    case "hour":
-    case "hours":
-    case "hr":
-    case "hrs":
-    case "h":
-      numericDate = Math.round(value * hour);
-      break;
-    case "day":
-    case "days":
-    case "d":
-      numericDate = Math.round(value * day);
-      break;
-    case "week":
-    case "weeks":
-    case "w":
-      numericDate = Math.round(value * week);
-      break;
-    default:
-      numericDate = Math.round(value * year);
-      break;
-  }
-  if (matched[1] === "-" || matched[4] === "ago") {
-    return -numericDate;
-  }
-  return numericDate;
-}
-function validateInput(label, input) {
-  if (!Number.isFinite(input)) {
-    throw new TypeError(`Invalid ${label} input`);
-  }
-  return input;
-}
-var normalizeTyp = (value) => {
-  if (value.includes("/")) {
-    return value.toLowerCase();
-  }
-  return `application/${value.toLowerCase()}`;
-};
-var checkAudiencePresence = (audPayload, audOption) => {
-  if (typeof audPayload === "string") {
-    return audOption.includes(audPayload);
-  }
-  if (Array.isArray(audPayload)) {
-    return audOption.some(Set.prototype.has.bind(new Set(audPayload)));
-  }
-  return false;
-};
-function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
-  let payload;
-  try {
-    payload = JSON.parse(decoder.decode(encodedPayload));
-  } catch {
-  }
-  if (!isObject3(payload)) {
-    throw new JWTInvalid("JWT Claims Set must be a top-level JSON object");
-  }
-  const { typ } = options;
-  if (typ && (typeof protectedHeader.typ !== "string" || normalizeTyp(protectedHeader.typ) !== normalizeTyp(typ))) {
-    throw new JWTClaimValidationFailed('unexpected "typ" JWT header value', payload, "typ", "check_failed");
-  }
-  const { requiredClaims = [], issuer, subject, audience, maxTokenAge } = options;
-  const presenceCheck = [...requiredClaims];
-  if (maxTokenAge !== void 0)
-    presenceCheck.push("iat");
-  if (audience !== void 0)
-    presenceCheck.push("aud");
-  if (subject !== void 0)
-    presenceCheck.push("sub");
-  if (issuer !== void 0)
-    presenceCheck.push("iss");
-  for (const claim of new Set(presenceCheck.reverse())) {
-    if (!(claim in payload)) {
-      throw new JWTClaimValidationFailed(`missing required "${claim}" claim`, payload, claim, "missing");
-    }
-  }
-  if (issuer && !(Array.isArray(issuer) ? issuer : [issuer]).includes(payload.iss)) {
-    throw new JWTClaimValidationFailed('unexpected "iss" claim value', payload, "iss", "check_failed");
-  }
-  if (subject && payload.sub !== subject) {
-    throw new JWTClaimValidationFailed('unexpected "sub" claim value', payload, "sub", "check_failed");
-  }
-  if (audience && !checkAudiencePresence(payload.aud, typeof audience === "string" ? [audience] : audience)) {
-    throw new JWTClaimValidationFailed('unexpected "aud" claim value', payload, "aud", "check_failed");
-  }
-  let tolerance;
-  switch (typeof options.clockTolerance) {
-    case "string":
-      tolerance = secs(options.clockTolerance);
-      break;
-    case "number":
-      tolerance = options.clockTolerance;
-      break;
-    case "undefined":
-      tolerance = 0;
-      break;
-    default:
-      throw new TypeError("Invalid clockTolerance option type");
-  }
-  const { currentDate } = options;
-  const now = epoch(currentDate || /* @__PURE__ */ new Date());
-  if ((payload.iat !== void 0 || maxTokenAge) && typeof payload.iat !== "number") {
-    throw new JWTClaimValidationFailed('"iat" claim must be a number', payload, "iat", "invalid");
-  }
-  if (payload.nbf !== void 0) {
-    if (typeof payload.nbf !== "number") {
-      throw new JWTClaimValidationFailed('"nbf" claim must be a number', payload, "nbf", "invalid");
-    }
-    if (payload.nbf > now + tolerance) {
-      throw new JWTClaimValidationFailed('"nbf" claim timestamp check failed', payload, "nbf", "check_failed");
-    }
-  }
-  if (payload.exp !== void 0) {
-    if (typeof payload.exp !== "number") {
-      throw new JWTClaimValidationFailed('"exp" claim must be a number', payload, "exp", "invalid");
-    }
-    if (payload.exp <= now - tolerance) {
-      throw new JWTExpired('"exp" claim timestamp check failed', payload, "exp", "check_failed");
-    }
-  }
-  if (maxTokenAge) {
-    const age = now - payload.iat;
-    const max2 = typeof maxTokenAge === "number" ? maxTokenAge : secs(maxTokenAge);
-    if (age - tolerance > max2) {
-      throw new JWTExpired('"iat" claim timestamp check failed (too far in the past)', payload, "iat", "check_failed");
-    }
-    if (age < 0 - tolerance) {
-      throw new JWTClaimValidationFailed('"iat" claim timestamp check failed (it should be in the past)', payload, "iat", "check_failed");
-    }
-  }
-  return payload;
-}
-var JWTClaimsBuilder = class {
-  #payload;
-  constructor(payload) {
-    if (!isObject3(payload)) {
-      throw new TypeError("JWT Claims Set MUST be an object");
-    }
-    this.#payload = structuredClone(payload);
-  }
-  data() {
-    return encoder.encode(JSON.stringify(this.#payload));
-  }
-  get iss() {
-    return this.#payload.iss;
-  }
-  set iss(value) {
-    this.#payload.iss = value;
-  }
-  get sub() {
-    return this.#payload.sub;
-  }
-  set sub(value) {
-    this.#payload.sub = value;
-  }
-  get aud() {
-    return this.#payload.aud;
-  }
-  set aud(value) {
-    this.#payload.aud = value;
-  }
-  set jti(value) {
-    this.#payload.jti = value;
-  }
-  set nbf(value) {
-    if (typeof value === "number") {
-      this.#payload.nbf = validateInput("setNotBefore", value);
-    } else if (value instanceof Date) {
-      this.#payload.nbf = validateInput("setNotBefore", epoch(value));
-    } else {
-      this.#payload.nbf = epoch(/* @__PURE__ */ new Date()) + secs(value);
-    }
-  }
-  set exp(value) {
-    if (typeof value === "number") {
-      this.#payload.exp = validateInput("setExpirationTime", value);
-    } else if (value instanceof Date) {
-      this.#payload.exp = validateInput("setExpirationTime", epoch(value));
-    } else {
-      this.#payload.exp = epoch(/* @__PURE__ */ new Date()) + secs(value);
-    }
-  }
-  set iat(value) {
-    if (value === void 0) {
-      this.#payload.iat = epoch(/* @__PURE__ */ new Date());
-    } else if (value instanceof Date) {
-      this.#payload.iat = validateInput("setIssuedAt", epoch(value));
-    } else if (typeof value === "string") {
-      this.#payload.iat = validateInput("setIssuedAt", epoch(/* @__PURE__ */ new Date()) + secs(value));
-    } else {
-      this.#payload.iat = validateInput("setIssuedAt", value);
-    }
-  }
-};
-
-// node_modules/jose/dist/webapi/jwt/verify.js
-async function jwtVerify(jwt2, key, options) {
-  const verified = await compactVerify(jwt2, key, options);
-  if (verified.protectedHeader.crit?.includes("b64") && verified.protectedHeader.b64 === false) {
-    throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
-  }
-  const payload = validateClaimsSet(verified.protectedHeader, verified.payload, options);
-  const result = { payload, protectedHeader: verified.protectedHeader };
-  if (typeof key === "function") {
-    return { ...result, key: verified.key };
-  }
-  return result;
-}
-
-// node_modules/jose/dist/webapi/lib/sign.js
-async function sign(alg, key, data) {
-  const cryptoKey = await getSigKey(alg, key, "sign");
-  checkKeyLength(alg, cryptoKey);
-  const signature = await crypto.subtle.sign(subtleAlgorithm(alg, cryptoKey.algorithm), cryptoKey, data);
-  return new Uint8Array(signature);
-}
-
-// node_modules/jose/dist/webapi/jws/flattened/sign.js
-var FlattenedSign = class {
-  #payload;
-  #protectedHeader;
-  #unprotectedHeader;
-  constructor(payload) {
-    if (!(payload instanceof Uint8Array)) {
-      throw new TypeError("payload must be an instance of Uint8Array");
-    }
-    this.#payload = payload;
-  }
-  setProtectedHeader(protectedHeader) {
-    if (this.#protectedHeader) {
-      throw new TypeError("setProtectedHeader can only be called once");
-    }
-    this.#protectedHeader = protectedHeader;
-    return this;
-  }
-  setUnprotectedHeader(unprotectedHeader) {
-    if (this.#unprotectedHeader) {
-      throw new TypeError("setUnprotectedHeader can only be called once");
-    }
-    this.#unprotectedHeader = unprotectedHeader;
-    return this;
-  }
-  async sign(key, options) {
-    if (!this.#protectedHeader && !this.#unprotectedHeader) {
-      throw new JWSInvalid("either setProtectedHeader or setUnprotectedHeader must be called before #sign()");
-    }
-    if (!isDisjoint(this.#protectedHeader, this.#unprotectedHeader)) {
-      throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
-    }
-    const joseHeader = {
-      ...this.#protectedHeader,
-      ...this.#unprotectedHeader
-    };
-    const extensions = validateCrit(JWSInvalid, /* @__PURE__ */ new Map([["b64", true]]), options?.crit, this.#protectedHeader, joseHeader);
-    let b64 = true;
-    if (extensions.has("b64")) {
-      b64 = this.#protectedHeader.b64;
-      if (typeof b64 !== "boolean") {
-        throw new JWSInvalid('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
-      }
-    }
-    const { alg } = joseHeader;
-    if (typeof alg !== "string" || !alg) {
-      throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
-    }
-    checkKeyType(alg, key, "sign");
-    let payloadS;
-    let payloadB;
-    if (b64) {
-      payloadS = encode4(this.#payload);
-      payloadB = encode3(payloadS);
-    } else {
-      payloadB = this.#payload;
-      payloadS = "";
-    }
-    let protectedHeaderString;
-    let protectedHeaderBytes;
-    if (this.#protectedHeader) {
-      protectedHeaderString = encode4(JSON.stringify(this.#protectedHeader));
-      protectedHeaderBytes = encode3(protectedHeaderString);
-    } else {
-      protectedHeaderString = "";
-      protectedHeaderBytes = new Uint8Array();
-    }
-    const data = concat(protectedHeaderBytes, encode3("."), payloadB);
-    const k = await normalizeKey(key, alg);
-    const signature = await sign(alg, k, data);
-    const jws = {
-      signature: encode4(signature),
-      payload: payloadS
-    };
-    if (this.#unprotectedHeader) {
-      jws.header = this.#unprotectedHeader;
-    }
-    if (this.#protectedHeader) {
-      jws.protected = protectedHeaderString;
-    }
-    return jws;
-  }
-};
-
-// node_modules/jose/dist/webapi/jws/compact/sign.js
-var CompactSign = class {
-  #flattened;
-  constructor(payload) {
-    this.#flattened = new FlattenedSign(payload);
-  }
-  setProtectedHeader(protectedHeader) {
-    this.#flattened.setProtectedHeader(protectedHeader);
-    return this;
-  }
-  async sign(key, options) {
-    const jws = await this.#flattened.sign(key, options);
-    if (jws.payload === void 0) {
-      throw new TypeError("use the flattened module for creating JWS with b64: false");
-    }
-    return `${jws.protected}.${jws.payload}.${jws.signature}`;
-  }
-};
-
-// node_modules/jose/dist/webapi/jwt/sign.js
-var SignJWT = class {
-  #protectedHeader;
-  #jwt;
-  constructor(payload = {}) {
-    this.#jwt = new JWTClaimsBuilder(payload);
-  }
-  setIssuer(issuer) {
-    this.#jwt.iss = issuer;
-    return this;
-  }
-  setSubject(subject) {
-    this.#jwt.sub = subject;
-    return this;
-  }
-  setAudience(audience) {
-    this.#jwt.aud = audience;
-    return this;
-  }
-  setJti(jwtId) {
-    this.#jwt.jti = jwtId;
-    return this;
-  }
-  setNotBefore(input) {
-    this.#jwt.nbf = input;
-    return this;
-  }
-  setExpirationTime(input) {
-    this.#jwt.exp = input;
-    return this;
-  }
-  setIssuedAt(input) {
-    this.#jwt.iat = input;
-    return this;
-  }
-  setProtectedHeader(protectedHeader) {
-    this.#protectedHeader = protectedHeader;
-    return this;
-  }
-  async sign(key, options) {
-    const sig = new CompactSign(this.#jwt.data());
-    sig.setProtectedHeader(this.#protectedHeader);
-    if (Array.isArray(this.#protectedHeader?.crit) && this.#protectedHeader.crit.includes("b64") && this.#protectedHeader.b64 === false) {
-      throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
-    }
-    return sig.sign(key, options);
-  }
-};
-
 // api/ujp-service.ts
+init_webapi();
 init_connection();
 init_schema2();
 init_drizzle_orm();
@@ -39456,6 +39976,115 @@ var certificatesRouter = createRouter({
   })
 });
 
+// api/app-users-router.ts
+init_drizzle_orm();
+init_connection();
+init_schema2();
+init_context();
+var roleEnum = external_exports.enum(["admin", "manager", "operator", "viewer"]);
+var appUsersRouter = createRouter({
+  /** Кој сум јас — интерфејсот го користи за да знае што да покаже */
+  appUsersMe: publicQuery.query(async ({ ctx }) => {
+    const a = ctx.actor;
+    return a ? { name: a.name, role: a.role, id: a.id, gate: !!process.env.APP_PASSWORD } : { name: "\u041D\u0435\u043F\u043E\u0437\u043D\u0430\u0442", role: "viewer", id: null, gate: !!process.env.APP_PASSWORD };
+  }),
+  appUsersList: publicQuery.query(async () => {
+    const db2 = getDb();
+    const rows = await db2.select().from(appUsers).orderBy(appUsers.name);
+    return rows.map((u) => ({
+      id: u.id,
+      name: u.name,
+      role: u.role,
+      isActive: u.isActive,
+      note: u.note,
+      lastSeenAt: u.lastSeenAt,
+      passcodeHint: u.passcode ? `\u2022\u2022\u2022\u2022${String(u.passcode).slice(-2)}` : ""
+    }));
+  }),
+  /** Целиот код — само кога администратор свесно бара да го види */
+  appUsersRevealCode: publicQuery.input(external_exports.object({ id: external_exports.number() })).query(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(appUsers).where(eq(appUsers.id, input.id));
+    return { passcode: rows[0]?.passcode ?? null };
+  }),
+  appUsersCreate: publicQuery.input(
+    external_exports.object({
+      name: external_exports.string().min(2),
+      passcode: external_exports.string().min(4).max(120),
+      role: roleEnum.default("operator"),
+      note: external_exports.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const existing = await db2.select().from(appUsers).where(eq(appUsers.passcode, input.passcode));
+    if (existing.length > 0) throw new Error("\u041E\u0432\u043E\u0458 \u043A\u043E\u0434 \u0432\u0435\u045C\u0435 \u0433\u043E \u043A\u043E\u0440\u0438\u0441\u0442\u0438 \u0434\u0440\u0443\u0433 \u043A\u043E\u0440\u0438\u0441\u043D\u0438\u043A");
+    const res = await db2.insert(appUsers).values({
+      name: input.name,
+      passcode: input.passcode,
+      role: input.role,
+      note: input.note ?? null,
+      isActive: "active"
+    }).returning();
+    clearActorCache();
+    await logAudit({
+      action: "CREATE",
+      entityType: "app_user",
+      entityId: res[0]?.id,
+      description: `\u041D\u043E\u0432 \u043A\u043E\u0440\u0438\u0441\u043D\u0438\u043A ${input.name} (${input.role})`
+    }).catch(() => {
+    });
+    return { success: true, id: res[0]?.id };
+  }),
+  appUsersUpdate: publicQuery.input(
+    external_exports.object({
+      id: external_exports.number(),
+      name: external_exports.string().min(2).optional(),
+      passcode: external_exports.string().min(4).max(120).optional(),
+      role: roleEnum.optional(),
+      isActive: external_exports.enum(["active", "inactive"]).optional(),
+      note: external_exports.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const { id, ...rest } = input;
+    if (rest.passcode) {
+      const clash = await db2.select().from(appUsers).where(eq(appUsers.passcode, rest.passcode));
+      if (clash.length > 0 && clash[0].id !== id) {
+        throw new Error("\u041E\u0432\u043E\u0458 \u043A\u043E\u0434 \u0432\u0435\u045C\u0435 \u0433\u043E \u043A\u043E\u0440\u0438\u0441\u0442\u0438 \u0434\u0440\u0443\u0433 \u043A\u043E\u0440\u0438\u0441\u043D\u0438\u043A");
+      }
+    }
+    if (rest.role && rest.role !== "admin") {
+      const all = await db2.select().from(appUsers);
+      const admins = all.filter(
+        (u) => u.role === "admin" && u.isActive === "active" && u.id !== id
+      );
+      const current = all.find((u) => u.id === id);
+      if (current?.role === "admin" && admins.length === 0) {
+        throw new Error("\u041C\u043E\u0440\u0430 \u0434\u0430 \u043E\u0441\u0442\u0430\u043D\u0435 \u0431\u0430\u0440\u0435\u043C \u0435\u0434\u0435\u043D \u0430\u043A\u0442\u0438\u0432\u0435\u043D \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440");
+      }
+    }
+    const patch = { updatedAt: /* @__PURE__ */ new Date() };
+    for (const [k, v] of Object.entries(rest)) if (v !== void 0) patch[k] = v;
+    await db2.update(appUsers).set(patch).where(eq(appUsers.id, id));
+    clearActorCache();
+    return { success: true };
+  }),
+  appUsersDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const all = await db2.select().from(appUsers);
+    const target = all.find((u) => u.id === input.id);
+    if (target?.role === "admin") {
+      const others = all.filter(
+        (u) => u.role === "admin" && u.isActive === "active" && u.id !== input.id
+      );
+      if (others.length === 0) throw new Error("\u041C\u043E\u0440\u0430 \u0434\u0430 \u043E\u0441\u0442\u0430\u043D\u0435 \u0431\u0430\u0440\u0435\u043C \u0435\u0434\u0435\u043D \u0430\u043A\u0442\u0438\u0432\u0435\u043D \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440");
+    }
+    await db2.delete(appUsers).where(eq(appUsers.id, input.id));
+    clearActorCache();
+    return { success: true };
+  })
+});
+
 // api/router.ts
 var appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -39473,97 +40102,12 @@ var appRouter = createRouter({
   ocr: ocrRouter,
   email: emailRouter,
   remnants: remnantsRouter,
-  certificates: certificatesRouter
+  certificates: certificatesRouter,
+  appUsers: appUsersRouter
 });
 
-// api/kimi/auth.ts
-var cookie2 = __toESM(require_dist(), 1);
-
-// api/lib/env.ts
-var import_config = require("dotenv/config");
-var env = {
-  appId: process.env.APP_ID ?? "",
-  appSecret: process.env.APP_SECRET ?? "",
-  isProduction: process.env.NODE_ENV === "production",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  kimiAuthUrl: process.env.KIMI_AUTH_URL ?? "",
-  kimiOpenUrl: process.env.KIMI_OPEN_URL ?? "",
-  ownerUnionId: process.env.OWNER_UNION_ID ?? ""
-};
-
-// contracts/errors.ts
-function appError(status, message2) {
-  return { tag: "app_error", status, message: message2 };
-}
-var Errors = {
-  badRequest: (msg) => appError(400, msg),
-  unauthorized: (msg) => appError(401, msg),
-  forbidden: (msg) => appError(403, msg),
-  notFound: (msg) => appError(404, msg),
-  internal: (msg) => appError(500, msg)
-};
-
-// api/kimi/session.ts
-var JWT_ALG = "HS256";
-async function verifySessionToken(token) {
-  if (!token) {
-    console.warn("[session] No token provided for verification.");
-    return null;
-  }
-  try {
-    const secret = new TextEncoder().encode(env.appSecret);
-    const { payload } = await jwtVerify(token, secret, {
-      algorithms: [JWT_ALG]
-    });
-    const { unionId, clientId } = payload;
-    if (!unionId || !clientId) {
-      console.warn("[session] JWT payload missing required fields.");
-      return null;
-    }
-    return { unionId, clientId };
-  } catch (error51) {
-    console.warn("[session] JWT verification failed:", error51);
-    return null;
-  }
-}
-
-// api/queries/users.ts
-init_drizzle_orm();
-init_schema2();
-init_connection();
-async function findUserByUnionId(unionId) {
-  const rows = await getDb().select().from(users).where(eq(users.unionId, unionId)).limit(1);
-  return rows.at(0);
-}
-
-// api/kimi/auth.ts
-async function authenticateRequest(headers) {
-  const cookies = cookie2.parse(headers.get("cookie") || "");
-  const token = cookies[Session.cookieName];
-  if (!token) {
-    console.warn("[auth] No session cookie found in request.");
-    throw Errors.forbidden("Invalid authentication token.");
-  }
-  const claim = await verifySessionToken(token);
-  if (!claim) {
-    throw Errors.forbidden("Invalid authentication token.");
-  }
-  const user = await findUserByUnionId(claim.unionId);
-  if (!user) {
-    throw Errors.forbidden("User not found. Please re-login.");
-  }
-  return user;
-}
-
-// api/context.ts
-async function createContext(opts) {
-  const ctx = { req: opts.req, resHeaders: opts.resHeaders };
-  try {
-    ctx.user = await authenticateRequest(opts.req.headers);
-  } catch {
-  }
-  return ctx;
-}
+// api/railway.ts
+init_context();
 
 // node_modules/hono/dist/middleware/cors/index.js
 var cors = (options) => {
@@ -39651,15 +40195,22 @@ var cors = (options) => {
 var app = new Hono2();
 app.post("/api/auth-check", async (c) => {
   const pw = process.env.APP_PASSWORD;
-  if (!pw) return c.json({ ok: true, gate: false });
+  if (!pw) return c.json({ ok: true, gate: false, name: "\u041E\u0442\u0432\u043E\u0440\u0435\u043D \u043F\u0440\u0438\u0441\u0442\u0430\u043F", role: "admin" });
   const body = await c.req.json().catch(() => ({}));
   const provided = body?.password ?? c.req.header("x-app-key") ?? "";
-  return c.json({ ok: provided === pw, gate: true });
+  const { resolveActor: resolveActor2 } = await Promise.resolve().then(() => (init_context(), context_exports));
+  const actor = await resolveActor2(provided);
+  if (!actor) return c.json({ ok: false, gate: true });
+  return c.json({ ok: true, gate: true, name: actor.name, role: actor.role });
 });
 app.use("/api/trpc/*", async (c, next) => {
   const pw = process.env.APP_PASSWORD;
-  if (pw && c.req.header("x-app-key") !== pw) {
-    return c.json({ error: { json: { message: "\u041D\u0430\u0458\u0430\u0432\u0438 \u0441\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E (\u043F\u043E\u0433\u0440\u0435\u0448\u043D\u0430 \u043B\u043E\u0437\u0438\u043D\u043A\u0430)", code: -32001, data: { code: "UNAUTHORIZED", httpStatus: 401 } } } }, 401);
+  if (!pw) return await next();
+  const key = c.req.header("x-app-key") ?? "";
+  const { resolveActor: resolveActor2 } = await Promise.resolve().then(() => (init_context(), context_exports));
+  const actor = await resolveActor2(key);
+  if (!actor) {
+    return c.json({ error: { json: { message: "\u041D\u0430\u0458\u0430\u0432\u0438 \u0441\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E (\u043F\u043E\u0433\u0440\u0435\u0448\u0435\u043D \u043A\u043E\u0434)", code: -32001, data: { code: "UNAUTHORIZED", httpStatus: 401 } } } }, 401);
   }
   await next();
 });

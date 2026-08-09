@@ -43,6 +43,22 @@ export const companySettings = pgTable("company_settings", {
 export type CompanySetting = typeof companySettings.$inferSelect;
 
 // ============= USERS =============
+// ============= КОРИСНИЦИ НА АПЛИКАЦИЈАТА (улоги и пристап) =============
+// Секој има свој код за влез. Улогата одредува што смее.
+export const appUsers = pgTable("app_users", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  passcode: varchar("passcode", { length: 120 }).notNull().unique(),
+  role: varchar("role", { length: 20 }).notNull().default("operator"),
+  isActive: varchar("is_active", { length: 20 }).notNull().default("active"),
+  note: text("note"),
+  lastSeenAt: timestamp("last_seen_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type AppUser = typeof appUsers.$inferSelect;
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   unionId: varchar("union_id", { length: 255 }).notNull().unique(),

@@ -1,3 +1,4 @@
+import UsersTab from "@/components/UsersTab";
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Building2, Ruler, ArrowRightLeft, Save, Shield, Upload, KeyRound } from "lucide-react";
+import { Building2, Ruler, ArrowRightLeft, Save, Shield, Upload, KeyRound, Users } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
@@ -71,6 +72,7 @@ export default function SettingsPage() {
           <TabsTrigger value="units"><Ruler className="h-4 w-4 mr-1" /> Единици</TabsTrigger>
           <TabsTrigger value="conversions"><ArrowRightLeft className="h-4 w-4 mr-1" /> Конверзии</TabsTrigger>
           <TabsTrigger value="certificates"><Shield className="h-4 w-4 mr-1" /> Сертификати</TabsTrigger>
+          <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Корисници</TabsTrigger>
         </TabsList>
 
         <TabsContent value="company" className="space-y-4">
@@ -172,6 +174,10 @@ export default function SettingsPage() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="users" className="space-y-4">
+          <UsersTab />
         </TabsContent>
 
         <TabsContent value="certificates" className="space-y-4">

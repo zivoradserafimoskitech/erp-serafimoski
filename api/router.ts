@@ -13,6 +13,7 @@ import { ocrRouter } from "./ocr-router";
 import { emailRouter } from "./email-router";
 import { remnantsRouter } from "./remnants-router";
 import { certificatesRouter } from "./certificates-router";
+import { appUsersRouter } from "./app-users-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -32,6 +33,7 @@ export const appRouter = createRouter({
   email: emailRouter,
   remnants: remnantsRouter,
   certificates: certificatesRouter,
+  appUsers: appUsersRouter,
 });
 
 export type AppRouter = typeof appRouter;

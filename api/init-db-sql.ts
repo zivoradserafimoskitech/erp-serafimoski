@@ -1301,5 +1301,19 @@ export function getInitSql(): string[] {
 );`,
     `CREATE INDEX IF NOT EXISTS "op_time_logs_op_idx" ON "operation_time_logs" ("operation_id")`,
     `CREATE INDEX IF NOT EXISTS "op_time_logs_wo_idx" ON "operation_time_logs" ("work_order_id")`,
+
+    // ===== КОРИСНИЦИ И УЛОГИ =====
+    `CREATE TABLE IF NOT EXISTS "app_users" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"passcode" varchar(120) NOT NULL,
+	"role" varchar(20) DEFAULT 'operator' NOT NULL,
+	"is_active" varchar(20) DEFAULT 'active' NOT NULL,
+	"note" text,
+	"last_seen_at" timestamp,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "app_users_passcode_uq" ON "app_users" ("passcode")`,
   ];
 }

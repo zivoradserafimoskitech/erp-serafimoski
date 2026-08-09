@@ -1,3 +1,5 @@
+import { trpc } from "@/providers/trpc";
+import { ROLES, type Role } from "@contracts/roles";
 import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,6 +36,7 @@ const navItems = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  const { data: me } = trpc.appUsers.appUsersMe.useQuery();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -74,12 +77,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="px-4 py-3 border-b border-slate-700">
           <div className="flex items-center gap-2 text-sm">
             <ShieldCheck className="h-4 w-4 text-amber-400" />
-            <span className="text-slate-300">
-              {user?.name || "Корисник"}
-            </span>
+            <span className="text-slate-300">{me?.name || user?.name || "Корисник"}</span>
           </div>
-          <div className="text-xs text-slate-500 mt-1 capitalize">
-            Улога: {user?.role === "admin" ? "Администратор" : user?.role === "office" ? "Канцеларија" : user?.role === "production" ? "Производство" : user?.role === "warehouse" ? "Магацин" : "Оператер"}
+          <div className="text-xs text-slate-500 mt-1 flex items-center justify-between gap-2">
+            <span>Улога: {ROLES[(me?.role ?? "viewer") as Role]?.label ?? "Преглед"}</span>
+            {me?.gate && (
+              <button
+                className="text-slate-400 hover:text-amber-400 underline"
+                onClick={() => {
+                  window.localStorage.removeItem("appKey");
+                  window.localStorage.removeItem("appUserName");
+                  window.localStorage.removeItem("appUserRole");
+                  window.location.reload();
+                }}
+              >
+                одјави
+              </button>
+            )}
           </div>
         </div>
 

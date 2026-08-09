@@ -17,6 +17,8 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
       const d = await res.json();
       if (!d.gate || d.ok) {
         if (candidate) window.localStorage.setItem("appKey", candidate);
+        if (d.name) window.localStorage.setItem("appUserName", d.name);
+        if (d.role) window.localStorage.setItem("appUserRole", d.role);
         setState("open");
         return true;
       }
@@ -45,20 +47,20 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
           e.preventDefault();
           setErr("");
           const ok = await verify(pw);
-          if (!ok) setErr("Погрешна лозинка");
+          if (!ok) setErr("Погрешен код — провери со администраторот");
         }}
       >
         <div className="text-center">
           <img src="/logo.png" alt="" className="h-12 mx-auto mb-2" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
           <h1 className="text-lg font-bold text-slate-800">Serafimoski Tech ERP</h1>
-          <p className="text-xs text-slate-500">Внеси лозинка за пристап</p>
+          <p className="text-xs text-slate-500">Внеси го својот код за пристап</p>
         </div>
         <input
           type="password"
           value={pw}
           onChange={(e) => setPw(e.target.value)}
           className="w-full border rounded-lg px-3 py-2 text-sm"
-          placeholder="Лозинка"
+          placeholder="Личен код или лозинка"
           autoFocus
         />
         {err && <p className="text-xs text-red-500 text-center">{err}</p>}
