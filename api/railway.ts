@@ -309,6 +309,9 @@ app.get("*", async (c) => {
           ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
           ".svg": "image/svg+xml", ".ico": "image/x-icon", ".webp": "image/webp",
           ".txt": "text/plain", ".json": "application/json",
+          ".js": "application/javascript", ".mjs": "application/javascript",
+          ".css": "text/css", ".map": "application/json",
+          ".woff": "font/woff", ".woff2": "font/woff2",
         };
         return c.body(fs.readFileSync(p), 200, {
           "Content-Type": mime[ext] || "application/octet-stream",
@@ -318,10 +321,17 @@ app.get("*", async (c) => {
     } catch { /* падни на SPA fallback */ }
   }
   // Serve index.html for all other routes (SPA)
+  // НЕ смее да се кешира: тој кажува кој бундл да се вчита. Ако прелистувачот
+  // задржи стар index.html, деплојот не се гледа додека не се направи Ctrl+Shift+R.
   try {
     const fs = await import("fs");
     const html = fs.readFileSync(STATIC_ROOT + "/index.html", "utf-8");
-    return c.html(html);
+    return c.body(html, 200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
+    });
   } catch {
     return c.json({ error: "index.html not found" }, 500);
   }
