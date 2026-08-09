@@ -1361,5 +1361,43 @@ export function getInitSql(): string[] {
     `CREATE INDEX IF NOT EXISTS "bank_tx_date_idx" ON "bank_transactions" ("tx_date")`,
     `CREATE INDEX IF NOT EXISTS "bank_tx_status_idx" ON "bank_transactions" ("match_status")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "bank_stmt_uq" ON "bank_statements" ("account_number", "statement_date", "statement_no")`,
+
+    // ===== ОСНОВНИ СРЕДСТВА =====
+    `CREATE TABLE IF NOT EXISTS "fixed_assets" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"inventory_no" varchar(40) NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"category" varchar(60) DEFAULT 'machine' NOT NULL,
+	"description" text,
+	"location" varchar(150),
+	"supplier_id" bigint,
+	"invoice_ref" varchar(80),
+	"acquisition_date" date NOT NULL,
+	"acquisition_value" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"salvage_value" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"useful_life_years" numeric(6, 2) DEFAULT '5' NOT NULL,
+	"rate" numeric(6, 2) DEFAULT '20' NOT NULL,
+	"method" varchar(20) DEFAULT 'linear' NOT NULL,
+	"depreciation_start" date,
+	"status" varchar(20) DEFAULT 'active' NOT NULL,
+	"disposal_date" date,
+	"disposal_value" numeric(16, 2) DEFAULT '0',
+	"disposal_note" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "fixed_assets_inv_uq" ON "fixed_assets" ("inventory_no")`,
+    `CREATE TABLE IF NOT EXISTS "depreciation_entries" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"asset_id" bigint NOT NULL,
+	"year" integer NOT NULL,
+	"months" integer DEFAULT 12 NOT NULL,
+	"amount" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"accumulated_after" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"book_value_after" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"posted_at" timestamp DEFAULT now() NOT NULL,
+	"note" text
+);`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "depr_asset_year_uq" ON "depreciation_entries" ("asset_id", "year")`,
   ];
 }

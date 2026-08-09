@@ -9043,6 +9043,7 @@ __export(schema_exports, {
   companySettings: () => companySettings,
   customers: () => customers,
   deliveryNotes: () => deliveryNotes,
+  depreciationEntries: () => depreciationEntries,
   digitalCertificates: () => digitalCertificates,
   dnCertificates: () => dnCertificates,
   docCounters: () => docCounters,
@@ -9050,6 +9051,7 @@ __export(schema_exports, {
   eInvoices: () => eInvoices,
   emailInvoices: () => emailInvoices,
   finishedGoodsStock: () => finishedGoodsStock,
+  fixedAssets: () => fixedAssets,
   incomingInvoices: () => incomingInvoices,
   inventoryCountItems: () => inventoryCountItems,
   inventoryCounts: () => inventoryCounts,
@@ -9087,7 +9089,7 @@ __export(schema_exports, {
   workOrderOperations: () => workOrderOperations,
   workOrders: () => workOrders
 });
-var companySettings, bankStatements, bankTransactions, appUsers, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
+var companySettings, fixedAssets, depreciationEntries, bankStatements, bankTransactions, appUsers, users, auditLog, units, unitConversions, warehouses, materials, materialStock, materialLots, dnCertificates, materialRemnants, inventoryTransactions, stockTransfers, stockTransferItems, inventoryCounts, inventoryCountItems, customers, orders, orderItems, suppliers, purchaseOrders, purchaseOrderItems, workOrders, workOrderOperations, operationTimeLogs, workOrderMaterials, machines, laborRates, overhead, services, products, productComponents, quotations, quotationItems, invoices, incomingInvoices, documentItems, receipts, receiptItems, deliveryNotes, eInvoices, parsedInvoices, parsedReceiptItems, finishedGoodsStock, digitalCertificates, docCounters, emailInvoices;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_pg_core();
@@ -9117,6 +9119,43 @@ var init_schema2 = __esm({
       minRemnantMm: decimal("min_remnant_mm", { precision: 8, scale: 1 }).default("300"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    fixedAssets = pgTable("fixed_assets", {
+      id: serial("id").primaryKey(),
+      inventoryNo: varchar("inventory_no", { length: 40 }).notNull().unique(),
+      name: varchar("name", { length: 255 }).notNull(),
+      category: varchar("category", { length: 60 }).notNull().default("machine"),
+      description: text("description"),
+      location: varchar("location", { length: 150 }),
+      supplierId: bigint4("supplier_id", { mode: "number", unsigned: true }),
+      invoiceRef: varchar("invoice_ref", { length: 80 }),
+      // Набавка
+      acquisitionDate: date5("acquisition_date").notNull(),
+      acquisitionValue: decimal("acquisition_value", { precision: 16, scale: 2 }).notNull().default("0"),
+      salvageValue: decimal("salvage_value", { precision: 16, scale: 2 }).notNull().default("0"),
+      // Амортизација
+      usefulLifeYears: decimal("useful_life_years", { precision: 6, scale: 2 }).notNull().default("5"),
+      rate: decimal("rate", { precision: 6, scale: 2 }).notNull().default("20"),
+      method: varchar("method", { length: 20 }).notNull().default("linear"),
+      depreciationStart: date5("depreciation_start"),
+      // Состојба
+      status: varchar("status", { length: 20 }).notNull().default("active"),
+      disposalDate: date5("disposal_date"),
+      disposalValue: decimal("disposal_value", { precision: 16, scale: 2 }).default("0"),
+      disposalNote: text("disposal_note"),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    depreciationEntries = pgTable("depreciation_entries", {
+      id: serial("id").primaryKey(),
+      assetId: bigint4("asset_id", { mode: "number", unsigned: true }).notNull(),
+      year: integer2("year").notNull(),
+      months: integer2("months").notNull().default(12),
+      amount: decimal("amount", { precision: 16, scale: 2 }).notNull().default("0"),
+      accumulatedAfter: decimal("accumulated_after", { precision: 16, scale: 2 }).notNull().default("0"),
+      bookValueAfter: decimal("book_value_after", { precision: 16, scale: 2 }).notNull().default("0"),
+      postedAt: timestamp("posted_at").defaultNow().notNull(),
+      note: text("note")
     });
     bankStatements = pgTable("bank_statements", {
       id: serial("id").primaryKey(),
@@ -13459,7 +13498,44 @@ function getInitSql() {
     `CREATE UNIQUE INDEX IF NOT EXISTS "bank_tx_dedupe_uq" ON "bank_transactions" ("dedupe_key")`,
     `CREATE INDEX IF NOT EXISTS "bank_tx_date_idx" ON "bank_transactions" ("tx_date")`,
     `CREATE INDEX IF NOT EXISTS "bank_tx_status_idx" ON "bank_transactions" ("match_status")`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS "bank_stmt_uq" ON "bank_statements" ("account_number", "statement_date", "statement_no")`
+    `CREATE UNIQUE INDEX IF NOT EXISTS "bank_stmt_uq" ON "bank_statements" ("account_number", "statement_date", "statement_no")`,
+    // ===== ОСНОВНИ СРЕДСТВА =====
+    `CREATE TABLE IF NOT EXISTS "fixed_assets" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"inventory_no" varchar(40) NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"category" varchar(60) DEFAULT 'machine' NOT NULL,
+	"description" text,
+	"location" varchar(150),
+	"supplier_id" bigint,
+	"invoice_ref" varchar(80),
+	"acquisition_date" date NOT NULL,
+	"acquisition_value" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"salvage_value" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"useful_life_years" numeric(6, 2) DEFAULT '5' NOT NULL,
+	"rate" numeric(6, 2) DEFAULT '20' NOT NULL,
+	"method" varchar(20) DEFAULT 'linear' NOT NULL,
+	"depreciation_start" date,
+	"status" varchar(20) DEFAULT 'active' NOT NULL,
+	"disposal_date" date,
+	"disposal_value" numeric(16, 2) DEFAULT '0',
+	"disposal_note" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "fixed_assets_inv_uq" ON "fixed_assets" ("inventory_no")`,
+    `CREATE TABLE IF NOT EXISTS "depreciation_entries" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"asset_id" bigint NOT NULL,
+	"year" integer NOT NULL,
+	"months" integer DEFAULT 12 NOT NULL,
+	"amount" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"accumulated_after" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"book_value_after" numeric(16, 2) DEFAULT '0' NOT NULL,
+	"posted_at" timestamp DEFAULT now() NOT NULL,
+	"note" text
+);`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "depr_asset_year_uq" ON "depreciation_entries" ("asset_id", "year")`
   ];
 }
 var init_init_db_sql = __esm({
@@ -20046,6 +20122,7 @@ var WRITE_ROLE_BY_ROUTER = {
   email: "manager",
   dashboard: "manager",
   bank: "manager",
+  assets: "manager",
   // Подесувања — само администратор
   settings: "admin",
   appUsers: "admin"
@@ -40791,6 +40868,331 @@ var bankRouter = createRouter({
   })
 });
 
+// api/assets-router.ts
+init_drizzle_orm();
+init_connection();
+init_schema2();
+
+// contracts/depreciation.ts
+var round2 = (v) => Math.round(v * 100) / 100;
+function startOf(a) {
+  const s = a.depreciationStart || a.acquisitionDate;
+  return /* @__PURE__ */ new Date(s + "T00:00:00");
+}
+function depreciationSchedule(a, untilYear) {
+  const base = Math.max(0, (a.acquisitionValue || 0) - (a.salvageValue || 0));
+  const rate = (a.rate || 0) / 100;
+  if (base <= 0 || rate <= 0) return [];
+  const perYear = base * rate;
+  const perMonth = perYear / 12;
+  const start = startOf(a);
+  const startYear = start.getFullYear();
+  const startMonth = start.getMonth();
+  const endLimit = untilYear ?? (/* @__PURE__ */ new Date()).getFullYear();
+  const disposal = a.disposalDate ? /* @__PURE__ */ new Date(a.disposalDate + "T00:00:00") : null;
+  const rows = [];
+  let accumulated = 0;
+  let year2 = startYear;
+  for (let guard = 0; guard < 60; guard++) {
+    if (year2 > endLimit + 40) break;
+    let months = 12;
+    if (year2 === startYear) months = 12 - startMonth;
+    if (disposal && year2 === disposal.getFullYear()) {
+      const upto = disposal.getMonth() + 1;
+      months = year2 === startYear ? upto - startMonth : upto;
+    }
+    if (months <= 0) break;
+    let amount = round2(perMonth * months);
+    const remaining = round2(base - accumulated);
+    if (amount >= remaining) amount = remaining;
+    if (amount > 0) {
+      accumulated = round2(accumulated + amount);
+      rows.push({
+        year: year2,
+        months,
+        amount,
+        accumulated,
+        bookValue: round2((a.acquisitionValue || 0) - accumulated)
+      });
+    }
+    if (accumulated >= base - 5e-3) break;
+    if (disposal && year2 >= disposal.getFullYear()) break;
+    year2++;
+  }
+  return rows;
+}
+function assetState(a, asOfYear) {
+  const y = asOfYear ?? (/* @__PURE__ */ new Date()).getFullYear();
+  const sched = depreciationSchedule(a, y);
+  const upTo = sched.filter((r) => r.year <= y);
+  const accumulated = upTo.length ? upTo[upTo.length - 1].accumulated : 0;
+  const bookValue = round2((a.acquisitionValue || 0) - accumulated);
+  const thisYear = sched.find((r) => r.year === y);
+  const fullyDepreciated = accumulated >= (a.acquisitionValue || 0) - (a.salvageValue || 0) - 5e-3;
+  return {
+    accumulated,
+    bookValue,
+    currentYearAmount: thisYear?.amount ?? 0,
+    monthlyAmount: round2(
+      ((a.acquisitionValue || 0) - (a.salvageValue || 0)) * ((a.rate || 0) / 100) / 12
+    ),
+    fullyDepreciated,
+    finishesIn: sched.length ? sched[sched.length - 1].year : null
+  };
+}
+
+// api/assets-router.ts
+var toInput = (a) => ({
+  acquisitionValue: Number(a.acquisitionValue ?? 0),
+  salvageValue: Number(a.salvageValue ?? 0),
+  rate: Number(a.rate ?? 0),
+  acquisitionDate: String(a.acquisitionDate),
+  depreciationStart: a.depreciationStart ? String(a.depreciationStart) : null,
+  status: a.status,
+  disposalDate: a.disposalDate ? String(a.disposalDate) : null
+});
+var assetsRouter = createRouter({
+  assetsList: publicQuery.input(
+    external_exports.object({
+      search: external_exports.string().optional(),
+      category: external_exports.string().optional(),
+      status: external_exports.enum(["all", "active", "disposed"]).optional()
+    }).optional()
+  ).query(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(fixedAssets).orderBy(desc(fixedAssets.acquisitionDate));
+    const sups = await db2.select().from(suppliers);
+    const smap = new Map(sups.map((s) => [s.id, s.name]));
+    let out = rows.map((a) => ({
+      ...a,
+      supplierName: a.supplierId ? smap.get(a.supplierId) ?? null : null,
+      ...assetState(toInput(a))
+    }));
+    const st = input?.status ?? "active";
+    if (st !== "all") out = out.filter((a) => a.status === st);
+    if (input?.category && input.category !== "all") out = out.filter((a) => a.category === input.category);
+    if (input?.search) {
+      const s = input.search.toLowerCase();
+      out = out.filter(
+        (a) => (a.name ?? "").toLowerCase().includes(s) || (a.inventoryNo ?? "").toLowerCase().includes(s) || (a.location ?? "").toLowerCase().includes(s) || (a.invoiceRef ?? "").toLowerCase().includes(s)
+      );
+    }
+    return out;
+  }),
+  assetsStats: publicQuery.input(external_exports.object({ year: external_exports.number().optional() }).optional()).query(async ({ input }) => {
+    const db2 = getDb();
+    const year2 = input?.year ?? (/* @__PURE__ */ new Date()).getFullYear();
+    const rows = await db2.select().from(fixedAssets);
+    const active = rows.filter((a) => a.status === "active");
+    let acquisition = 0, accumulated = 0, bookValue = 0, yearAmount = 0, monthly = 0;
+    for (const a of active) {
+      const st = assetState(toInput(a), year2);
+      acquisition += Number(a.acquisitionValue ?? 0);
+      accumulated += st.accumulated;
+      bookValue += st.bookValue;
+      yearAmount += st.currentYearAmount;
+      if (!st.fullyDepreciated) monthly += st.monthlyAmount;
+    }
+    return {
+      count: active.length,
+      disposed: rows.filter((a) => a.status === "disposed").length,
+      acquisition: Math.round(acquisition * 100) / 100,
+      accumulated: Math.round(accumulated * 100) / 100,
+      bookValue: Math.round(bookValue * 100) / 100,
+      yearAmount: Math.round(yearAmount * 100) / 100,
+      monthly: Math.round(monthly * 100) / 100,
+      fullyDepreciated: active.filter((a) => assetState(toInput(a), year2).fullyDepreciated).length,
+      year: year2
+    };
+  }),
+  assetById: publicQuery.input(external_exports.object({ id: external_exports.number() })).query(async ({ input }) => {
+    const db2 = getDb();
+    const a = (await db2.select().from(fixedAssets).where(eq(fixedAssets.id, input.id)))[0];
+    if (!a) return null;
+    const entries = await db2.select().from(depreciationEntries).where(eq(depreciationEntries.assetId, input.id)).orderBy(depreciationEntries.year);
+    return {
+      ...a,
+      ...assetState(toInput(a)),
+      schedule: depreciationSchedule(toInput(a), (/* @__PURE__ */ new Date()).getFullYear() + 40),
+      posted: entries
+    };
+  }),
+  assetCreate: publicQuery.input(
+    external_exports.object({
+      inventoryNo: external_exports.string().min(1),
+      name: external_exports.string().min(2),
+      category: external_exports.string().default("machine"),
+      description: external_exports.string().optional(),
+      location: external_exports.string().optional(),
+      supplierId: external_exports.number().nullable().optional(),
+      invoiceRef: external_exports.string().optional(),
+      acquisitionDate: external_exports.string(),
+      acquisitionValue: external_exports.string(),
+      salvageValue: external_exports.string().default("0"),
+      usefulLifeYears: external_exports.string().default("5"),
+      rate: external_exports.string().default("20"),
+      depreciationStart: external_exports.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const dup = await db2.select().from(fixedAssets).where(eq(fixedAssets.inventoryNo, input.inventoryNo));
+    if (dup.length > 0) throw new Error("\u0418\u043D\u0432\u0435\u043D\u0442\u0430\u0440\u043D\u0438\u043E\u0442 \u0431\u0440\u043E\u0458 \u0432\u0435\u045C\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
+    const res = await db2.insert(fixedAssets).values({
+      ...input,
+      supplierId: input.supplierId ?? null,
+      depreciationStart: input.depreciationStart || input.acquisitionDate,
+      status: "active"
+    }).returning();
+    await logAudit({
+      action: "CREATE",
+      entityType: "fixed_asset",
+      entityId: res[0]?.id,
+      description: `\u041D\u043E\u0432\u043E \u043E\u0441\u043D\u043E\u0432\u043D\u043E \u0441\u0440\u0435\u0434\u0441\u0442\u0432\u043E ${input.inventoryNo} \u2014 ${input.name}`
+    }).catch(() => {
+    });
+    return { success: true, id: res[0]?.id };
+  }),
+  assetUpdate: publicQuery.input(
+    external_exports.object({
+      id: external_exports.number(),
+      name: external_exports.string().optional(),
+      category: external_exports.string().optional(),
+      description: external_exports.string().optional(),
+      location: external_exports.string().optional(),
+      supplierId: external_exports.number().nullable().optional(),
+      invoiceRef: external_exports.string().optional(),
+      acquisitionDate: external_exports.string().optional(),
+      acquisitionValue: external_exports.string().optional(),
+      salvageValue: external_exports.string().optional(),
+      usefulLifeYears: external_exports.string().optional(),
+      rate: external_exports.string().optional(),
+      depreciationStart: external_exports.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const { id, ...rest } = input;
+    const patch = { updatedAt: /* @__PURE__ */ new Date() };
+    for (const [k, v] of Object.entries(rest)) if (v !== void 0) patch[k] = v;
+    await db2.update(fixedAssets).set(patch).where(eq(fixedAssets.id, id));
+    return { success: true };
+  }),
+  assetDispose: publicQuery.input(external_exports.object({
+    id: external_exports.number(),
+    disposalDate: external_exports.string(),
+    disposalValue: external_exports.string().default("0"),
+    disposalNote: external_exports.string().optional()
+  })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const a = (await db2.select().from(fixedAssets).where(eq(fixedAssets.id, input.id)))[0];
+    if (!a) throw new Error("\u0421\u0440\u0435\u0434\u0441\u0442\u0432\u043E\u0442\u043E \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438");
+    const st = assetState({ ...toInput(a), disposalDate: input.disposalDate });
+    await db2.update(fixedAssets).set({
+      status: "disposed",
+      disposalDate: input.disposalDate,
+      disposalValue: input.disposalValue,
+      disposalNote: input.disposalNote ?? null,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(fixedAssets.id, input.id));
+    const gain = Number(input.disposalValue) - st.bookValue;
+    await logAudit({
+      action: "UPDATE",
+      entityType: "fixed_asset",
+      entityId: input.id,
+      description: `\u0420\u0430\u0441\u0445\u043E\u0434\u0443\u0432\u0430\u043D\u043E ${a.inventoryNo}; \u0441\u0435\u0433\u0430\u0448\u043D\u0430 \u0432\u0440\u0435\u0434\u043D\u043E\u0441\u0442 ${st.bookValue}, \u043F\u0440\u043E\u0434\u0430\u0434\u0435\u043D\u043E \u0437\u0430 ${input.disposalValue}`
+    }).catch(() => {
+    });
+    return { success: true, bookValue: st.bookValue, gain: Math.round(gain * 100) / 100 };
+  }),
+  assetRestore: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    await db2.update(fixedAssets).set({
+      status: "active",
+      disposalDate: null,
+      disposalValue: "0",
+      disposalNote: null,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(fixedAssets.id, input.id));
+    return { success: true };
+  }),
+  assetDelete: publicQuery.input(external_exports.object({ id: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    await db2.delete(depreciationEntries).where(eq(depreciationEntries.assetId, input.id));
+    await db2.delete(fixedAssets).where(eq(fixedAssets.id, input.id));
+    return { success: true };
+  }),
+  // ═══════════ ГОДИШНА ПРЕСМЕТКА ═══════════
+  depreciationRun: publicQuery.input(external_exports.object({ year: external_exports.number(), commit: external_exports.boolean().default(false) })).query(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(fixedAssets);
+    const posted = await db2.select().from(depreciationEntries);
+    const postedSet = new Set(posted.map((p) => `${p.assetId}|${p.year}`));
+    const lines = rows.map((a) => {
+      const sched = depreciationSchedule(toInput(a), input.year);
+      const row = sched.find((r) => r.year === input.year);
+      if (!row) return null;
+      return {
+        assetId: a.id,
+        inventoryNo: a.inventoryNo,
+        name: a.name,
+        category: a.category,
+        acquisitionValue: Number(a.acquisitionValue),
+        rate: Number(a.rate),
+        months: row.months,
+        amount: row.amount,
+        accumulated: row.accumulated,
+        bookValue: row.bookValue,
+        alreadyPosted: postedSet.has(`${a.id}|${input.year}`)
+      };
+    }).filter(Boolean);
+    return {
+      year: input.year,
+      lines,
+      total: Math.round(lines.reduce((s, l) => s + l.amount, 0) * 100) / 100,
+      newCount: lines.filter((l) => !l.alreadyPosted).length
+    };
+  }),
+  depreciationPost: publicQuery.input(external_exports.object({ year: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(fixedAssets);
+    const posted = await db2.select().from(depreciationEntries);
+    const postedSet = new Set(posted.map((p) => `${p.assetId}|${p.year}`));
+    let count2 = 0, total = 0;
+    for (const a of rows) {
+      if (postedSet.has(`${a.id}|${input.year}`)) continue;
+      const sched = depreciationSchedule(toInput(a), input.year);
+      const row = sched.find((r) => r.year === input.year);
+      if (!row || row.amount <= 0) continue;
+      await db2.insert(depreciationEntries).values({
+        assetId: a.id,
+        year: input.year,
+        months: row.months,
+        amount: String(row.amount),
+        accumulatedAfter: String(row.accumulated),
+        bookValueAfter: String(row.bookValue)
+      });
+      count2++;
+      total += row.amount;
+    }
+    await logAudit({
+      action: "CREATE",
+      entityType: "depreciation",
+      description: `\u041F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430 \u0430\u043C\u043E\u0440\u0442\u0438\u0437\u0430\u0446\u0438\u0458\u0430 \u0437\u0430 ${input.year}: ${count2} \u0441\u0440\u0435\u0434\u0441\u0442\u0432\u0430, ${total.toFixed(2)} \u0434\u0435\u043D`
+    }).catch(() => {
+    });
+    return { success: true, count: count2, total: Math.round(total * 100) / 100 };
+  }),
+  depreciationUnpost: publicQuery.input(external_exports.object({ year: external_exports.number() })).mutation(async ({ input }) => {
+    const db2 = getDb();
+    const rows = await db2.select().from(depreciationEntries);
+    let removed = 0;
+    for (const r of rows.filter((x) => x.year === input.year)) {
+      await db2.delete(depreciationEntries).where(eq(depreciationEntries.id, r.id));
+      removed++;
+    }
+    return { success: true, removed };
+  })
+});
+
 // api/router.ts
 var appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -40810,7 +41212,8 @@ var appRouter = createRouter({
   remnants: remnantsRouter,
   certificates: certificatesRouter,
   appUsers: appUsersRouter,
-  bank: bankRouter
+  bank: bankRouter,
+  assets: assetsRouter
 });
 
 // api/railway.ts

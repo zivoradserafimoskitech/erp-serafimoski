@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   Settings,
   BookOpen,
+  Building2,
 } from "lucide-react";
 
 const navItems = [
@@ -32,6 +33,7 @@ const navItems = [
   { path: "/ponudi", label: "Понуди", icon: FileText },
   { path: "/priemnici", label: "Приемници", icon: ClipboardCheck },
   { path: "/katalog", label: "Каталог", icon: BookOpen },
+  { path: "/sredstva", label: "Основни средства", icon: Building2 },
   { path: "/podesuvanja", label: "Подесувања", icon: Settings },
 ];
 

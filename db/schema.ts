@@ -43,6 +43,51 @@ export const companySettings = pgTable("company_settings", {
 export type CompanySetting = typeof companySettings.$inferSelect;
 
 // ============= USERS =============
+// ============= ОСНОВНИ СРЕДСТВА =============
+export const fixedAssets = pgTable("fixed_assets", {
+  id: serial("id").primaryKey(),
+  inventoryNo: varchar("inventory_no", { length: 40 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 60 }).notNull().default("machine"),
+  description: text("description"),
+  location: varchar("location", { length: 150 }),
+  supplierId: bigint("supplier_id", { mode: "number", unsigned: true }),
+  invoiceRef: varchar("invoice_ref", { length: 80 }),
+  // Набавка
+  acquisitionDate: date("acquisition_date").notNull(),
+  acquisitionValue: decimal("acquisition_value", { precision: 16, scale: 2 }).notNull().default("0"),
+  salvageValue: decimal("salvage_value", { precision: 16, scale: 2 }).notNull().default("0"),
+  // Амортизација
+  usefulLifeYears: decimal("useful_life_years", { precision: 6, scale: 2 }).notNull().default("5"),
+  rate: decimal("rate", { precision: 6, scale: 2 }).notNull().default("20"),
+  method: varchar("method", { length: 20 }).notNull().default("linear"),
+  depreciationStart: date("depreciation_start"),
+  // Состојба
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  disposalDate: date("disposal_date"),
+  disposalValue: decimal("disposal_value", { precision: 16, scale: 2 }).default("0"),
+  disposalNote: text("disposal_note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type FixedAsset = typeof fixedAssets.$inferSelect;
+
+// Пресметана амортизација по година — се запишува кога ќе се затвори годината
+export const depreciationEntries = pgTable("depreciation_entries", {
+  id: serial("id").primaryKey(),
+  assetId: bigint("asset_id", { mode: "number", unsigned: true }).notNull(),
+  year: integer("year").notNull(),
+  months: integer("months").notNull().default(12),
+  amount: decimal("amount", { precision: 16, scale: 2 }).notNull().default("0"),
+  accumulatedAfter: decimal("accumulated_after", { precision: 16, scale: 2 }).notNull().default("0"),
+  bookValueAfter: decimal("book_value_after", { precision: 16, scale: 2 }).notNull().default("0"),
+  postedAt: timestamp("posted_at").defaultNow().notNull(),
+  note: text("note"),
+});
+
+export type DepreciationEntry = typeof depreciationEntries.$inferSelect;
+
 // ============= БАНКА: ИЗВОДИ И СТАВКИ =============
 export const bankStatements = pgTable("bank_statements", {
   id: serial("id").primaryKey(),

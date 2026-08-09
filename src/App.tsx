@@ -14,6 +14,7 @@ import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 import RemnantScan from "@/pages/RemnantScan";
 import WorkOrderScan from "@/pages/WorkOrderScan";
+import Assets from "@/pages/Assets";
 
 export default function App() {
   return (
@@ -99,6 +100,14 @@ export default function App() {
         element={
           <Layout>
             <CatalogPage />
+          </Layout>
+        }
+      />
+      <Route
+        path="/sredstva"
+        element={
+          <Layout>
+            <Assets />
           </Layout>
         }
       />
