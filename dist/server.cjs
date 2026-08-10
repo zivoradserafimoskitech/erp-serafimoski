@@ -10195,24 +10195,48 @@ __export(counters_helper_exports, {
   getNextDocNumberTxn: () => getNextDocNumberTxn,
   peekNextDocNumber: () => peekNextDocNumber
 });
+function formatNumber(kind, value, year2) {
+  const prefix = PREFIXES[kind] ?? "";
+  const num2 = String(value).padStart(3, "0");
+  return kind === "invoice" ? `${num2}/${year2}` : `${prefix}-${num2}/${year2}`;
+}
+async function takenNumbers(kind, year2) {
+  const src = NUMBER_SOURCE[kind];
+  const taken = /* @__PURE__ */ new Set();
+  if (!src) return taken;
+  try {
+    const db2 = getDb();
+    const { sql: sql2 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
+    const rows = await db2.execute(
+      sql2.raw(`SELECT "${src.column}" AS n FROM "${src.table}" WHERE "${src.column}" LIKE '%/${year2}'`)
+    );
+    const list = rows?.rows ?? rows ?? [];
+    for (const r of list) {
+      const m = String(r.n ?? "").match(/(\d+)\s*\/\s*\d{4}$/);
+      if (m) taken.add(parseInt(m[1], 10));
+    }
+  } catch {
+  }
+  return taken;
+}
 async function getNextDocNumber(kind, year2) {
   const db2 = getDb();
   const y = year2 ?? (/* @__PURE__ */ new Date()).getFullYear();
   const existing = await db2.select().from(docCounters).where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
-  let nextVal;
+  const current = existing.length === 0 ? 0 : existing[0].value;
+  const taken = await takenNumbers(kind, y);
+  let nextVal = current + 1;
+  let guard = 0;
+  while (taken.has(nextVal) && guard < 1e4) {
+    nextVal++;
+    guard++;
+  }
   if (existing.length === 0) {
-    await db2.insert(docCounters).values({ kind, year: y, value: 1 });
-    nextVal = 1;
+    await db2.insert(docCounters).values({ kind, year: y, value: nextVal });
   } else {
-    nextVal = existing[0].value + 1;
     await db2.update(docCounters).set({ value: nextVal, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
   }
-  const prefix = PREFIXES[kind] ?? "";
-  const num2 = String(nextVal).padStart(3, "0");
-  if (kind === "invoice") {
-    return `${num2}/${y}`;
-  }
-  return `${prefix}-${num2}/${y}`;
+  return formatNumber(kind, nextVal, y);
 }
 async function getNextDocNumberTxn(db2, kind, year2) {
   const y = year2 ?? (/* @__PURE__ */ new Date()).getFullYear();
@@ -10254,7 +10278,7 @@ async function bumpDocCounter(kind, usedNumber, year2) {
     await db2.update(docCounters).set({ value: used, updatedAt: /* @__PURE__ */ new Date() }).where(eq(docCounters.id, existing[0].id));
   }
 }
-var PREFIXES;
+var PREFIXES, NUMBER_SOURCE;
 var init_counters_helper = __esm({
   "api/counters-helper.ts"() {
     init_drizzle_orm();
@@ -10273,6 +10297,15 @@ var init_counters_helper = __esm({
       count: "\u041F\u041F",
       order: "\u041D\u0410\u0420",
       po: "\u041D\u041D"
+    };
+    NUMBER_SOURCE = {
+      workOrder: { table: "work_orders", column: "wo_number" },
+      quote: { table: "quotations", column: "quote_number" },
+      deliveryNote: { table: "delivery_notes", column: "dn_number" },
+      receipt: { table: "receipts", column: "receipt_number" },
+      order: { table: "orders", column: "order_number" },
+      po: { table: "purchase_orders", column: "po_number" },
+      invoice: { table: "invoices", column: "invoice_number" }
     };
   }
 });
