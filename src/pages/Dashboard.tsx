@@ -43,6 +43,9 @@ export default function Dashboard() {
       icon: AlertTriangle,
       color: "text-red-600",
       bg: "bg-red-50",
+      hint: (stats?.storage.noMinStock ?? 0) > 0
+        ? `${stats?.storage.noMinStock} материјали немаат поставен минимум`
+        : undefined,
     },
     {
       title: "Активни клиенти",
@@ -92,6 +95,9 @@ export default function Dashboard() {
                   <div className="space-y-2">
                     <p className="text-sm text-gray-500">{card.title}</p>
                     <p className="text-2xl font-bold text-gray-800">{card.value}</p>
+                    {(card as any).hint && (
+                      <p className="text-[11px] text-gray-400 mt-0.5">{(card as any).hint}</p>
+                    )}
                   </div>
                   <div className={`${card.bg} p-2.5 rounded-lg`}>
                     <Icon className={`h-5 w-5 ${card.color}`} />

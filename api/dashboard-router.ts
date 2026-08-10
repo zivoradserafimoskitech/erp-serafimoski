@@ -5,6 +5,7 @@ import {
   invoices, incomingInvoices, warehouses, materialStock,
   quotations,
 } from "@db/schema";
+import { isLowStock } from "@contracts/stock";
 
 export const dashboardRouter = createRouter({
   stats: publicQuery.query(async () => {
@@ -36,9 +37,9 @@ export const dashboardRouter = createRouter({
 
     // Storage
     const totalMaterials = allMaterials.length;
-    const lowStockCount = allMaterials.filter(
-      (m) => parseFloat(m.currentStock) <= parseFloat(m.minStock)
-    ).length;
+    const lowStockCount = allMaterials.filter(isLowStock).length;
+    // Материјали без поставен минимум — не се аларм, но вреди да се знае колку се
+    const noMinStock = allMaterials.filter((m) => (parseFloat(m.minStock) || 0) <= 0).length;
     const totalInventoryValue = allStock.reduce(
       (sum, s) => sum + parseFloat(s.quantity) * parseFloat(s.avgCost), 0
     );
@@ -91,6 +92,7 @@ export const dashboardRouter = createRouter({
       storage: {
         totalMaterials,
         lowStock: lowStockCount,
+        noMinStock,
         inventoryValue: totalInventoryValue.toFixed(2),
         warehouseCount,
       },

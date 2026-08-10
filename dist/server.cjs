@@ -34779,6 +34779,14 @@ async function recalcWorkOrderCost(workOrderId) {
 // api/storage-router.ts
 init_schema2();
 
+// contracts/stock.ts
+function isLowStock(m) {
+  const min2 = parseFloat(String(m.minStock ?? "0")) || 0;
+  if (min2 <= 0) return false;
+  const cur = parseFloat(String(m.currentStock ?? "0")) || 0;
+  return cur <= min2;
+}
+
 // api/audit-helper.ts
 init_connection();
 init_schema2();
@@ -34825,7 +34833,7 @@ var storageRouter = createRouter({
     }
     if (input?.type) result = result.filter((r) => r.type === input.type);
     if (input?.lowStock) {
-      result = result.filter((m) => parseFloat(m.currentStock) <= parseFloat(m.minStock));
+      result = result.filter(isLowStock);
     }
     return result;
   }),
@@ -35184,7 +35192,7 @@ var storageRouter = createRouter({
     const db2 = getDb();
     const allMaterials = await db2.select().from(materials).where(eq(materials.isActive, "active"));
     const totalItems = allMaterials.length;
-    const lowStockItems = allMaterials.filter((m) => parseFloat(m.currentStock) <= parseFloat(m.minStock)).length;
+    const lowStockItems = allMaterials.filter(isLowStock).length;
     const totalValue = allMaterials.reduce((sum2, m) => sum2 + parseFloat(m.currentStock) * parseFloat(m.avgCost), 0);
     return { totalItems, lowStockItems, totalValue: totalValue.toFixed(2) };
   }),
@@ -36389,9 +36397,8 @@ var dashboardRouter = createRouter({
     const completedWO = allWorkOrders.filter((w) => w.status === "completed").length;
     const onHoldWO = allWorkOrders.filter((w) => w.status === "on_hold").length;
     const totalMaterials = allMaterials.length;
-    const lowStockCount = allMaterials.filter(
-      (m) => parseFloat(m.currentStock) <= parseFloat(m.minStock)
-    ).length;
+    const lowStockCount = allMaterials.filter(isLowStock).length;
+    const noMinStock = allMaterials.filter((m) => (parseFloat(m.minStock) || 0) <= 0).length;
     const totalInventoryValue = allStock.reduce(
       (sum2, s) => sum2 + parseFloat(s.quantity) * parseFloat(s.avgCost),
       0
@@ -36428,6 +36435,7 @@ var dashboardRouter = createRouter({
       storage: {
         totalMaterials,
         lowStock: lowStockCount,
+        noMinStock,
         inventoryValue: totalInventoryValue.toFixed(2),
         warehouseCount
       },

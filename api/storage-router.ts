@@ -8,6 +8,7 @@ import {
   materials, materialStock, materialLots,
   inventoryTransactions, warehouses,
 } from "@db/schema";
+import { isLowStock } from "@contracts/stock";
 import { logAudit } from "./audit-helper";
 
 export const storageRouter = createRouter({
@@ -45,7 +46,7 @@ export const storageRouter = createRouter({
       }
       if (input?.type) result = result.filter(r => r.type === input.type);
       if (input?.lowStock) {
-        result = result.filter(m => parseFloat(m.currentStock) <= parseFloat(m.minStock));
+        result = result.filter(isLowStock);
       }
       return result;
     }),
@@ -462,7 +463,7 @@ export const storageRouter = createRouter({
     const db = getDb();
     const allMaterials = await db.select().from(materials).where(eq(materials.isActive, "active"));
     const totalItems = allMaterials.length;
-    const lowStockItems = allMaterials.filter(m => parseFloat(m.currentStock) <= parseFloat(m.minStock)).length;
+    const lowStockItems = allMaterials.filter(isLowStock).length;
     const totalValue = allMaterials.reduce((sum, m) => sum + parseFloat(m.currentStock) * parseFloat(m.avgCost), 0);
 
     return { totalItems, lowStockItems, totalValue: totalValue.toFixed(2) };
