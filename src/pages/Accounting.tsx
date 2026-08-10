@@ -906,20 +906,61 @@ export default function Accounting() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow><TableHead>Фајл</TableHead><TableHead>Добавувач</TableHead><TableHead>Број</TableHead><TableHead>Износ</TableHead><TableHead>Датум</TableHead><TableHead>Статус</TableHead></TableRow>
+                  <TableRow><TableHead>Фајл</TableHead><TableHead>Добавувач</TableHead><TableHead>Број</TableHead><TableHead className="text-right">Износ</TableHead><TableHead>Датум</TableHead><TableHead>Статус</TableHead></TableRow>
                 </TableHeader>
                 <TableBody>
                   {!parsedData?.length ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема парсирани фактури</TableCell></TableRow> :
                     parsedData.map((p) => (
                       <TableRow key={p.id}>
-                        <TableCell className="max-w-xs truncate">{p.originalFileName}</TableCell>
-                        <TableCell>{p.supplierName || "-"}</TableCell>
-                        <TableCell className="font-mono text-sm">{p.invoiceNumber || "-"}</TableCell>
-                        <TableCell className="font-medium">{p.totalAmount || "-"}</TableCell>
-                        <TableCell className="text-gray-500">{p.issueDate ? String(p.issueDate).split("T")[0] : "-"}</TableCell>
-                        <TableCell><Badge className={p.status === "imported" ? "bg-emerald-100 text-emerald-700" : p.status === "verified" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"}>
-                          {p.status === "imported" ? "Импортирана" : p.status === "verified" ? "Верифицирана" : "Парсирана"}
-                        </Badge></TableCell>
+                        <TableCell className="max-w-[220px] truncate text-xs">{p.originalFileName}</TableCell>
+                        <TableCell>
+                          <div className="text-sm">{p.supplierName || <span className="text-gray-300">не е препознаен</span>}</div>
+                          {(p as any).supplierTaxId && (
+                            <div className="text-[11px] text-gray-400 font-mono">
+                              ЕДБ {(p as any).supplierTaxId}
+                              {!(p as any).matchedSupplierId && <span className="text-amber-600"> · нема во системот</span>}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{p.invoiceNumber || <span className="text-gray-300">—</span>}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="font-medium">{p.totalAmount ? Number(p.totalAmount).toLocaleString("mk-MK", { minimumFractionDigits: 2 }) : "—"}</div>
+                          {(p as any).baseAmount && (
+                            <div className="text-[11px] text-gray-400">
+                              основа {Number((p as any).baseAmount).toLocaleString("mk-MK")}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-gray-500 text-sm">
+                          {p.issueDate ? String(p.issueDate).split("T")[0] : "—"}
+                          {(p as any).dueDate && (
+                            <div className="text-[11px] text-gray-400">
+                              рок {String((p as any).dueDate).split("T")[0]}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={
+                            p.status === "imported" ? "bg-emerald-100 text-emerald-700"
+                              : p.status === "verified" ? "bg-blue-100 text-blue-700"
+                              : p.status === "needs_review" ? "bg-amber-100 text-amber-800"
+                              : "bg-gray-100 text-gray-700"}>
+                            {p.status === "imported" ? "Импортирана"
+                              : p.status === "verified" ? "Верифицирана"
+                              : p.status === "needs_review" ? "За проверка"
+                              : "Прочитана"}
+                          </Badge>
+                          {typeof (p as any).confidence === "number" && (
+                            <div className={`text-[11px] mt-0.5 ${(p as any).confidence >= 80 ? "text-emerald-600" : (p as any).confidence >= 60 ? "text-gray-400" : "text-amber-600"}`}>
+                              сигурност {(p as any).confidence}%
+                            </div>
+                          )}
+                          {(p as any).parseNotes && (
+                            <div className="text-[10px] text-amber-700 max-w-[220px] leading-tight mt-0.5">
+                              {(p as any).parseNotes}
+                            </div>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                 </TableBody>

@@ -33,7 +33,7 @@ export const ocrRouter = createRouter({
       // Parse PDF
       const parsed = await parsePdfDocument(buffer);
 
-      if (!parsed.rawText || parsed.items.length === 0) {
+      if (!parsed.rawText || parsed.rawText.trim().length < 20) {
         return {
           success: false,
           message: "Не може да се извлече текст од PDF документот. Проверете дали документот содржи текст (не е скенирана слика).",
@@ -41,21 +41,66 @@ export const ocrRouter = createRouter({
         };
       }
 
-      // Match items to materials
-      const matchedItems = await matchItemsToMaterials(parsed.items);
+      // ── Читање на заглавието со препознавање по даночен број ──
+      const { parseInvoiceText } = await import("./invoice-parser");
+      const { companySettings, suppliers } = await import("@db/schema");
+      const settingsRows = await db.select().from(companySettings);
+      const own: any = settingsRows[0] ?? {};
+      const head = parseInvoiceText(parsed.rawText, own.edb ?? own.taxNumber ?? null, own.name ?? null);
+
+      // Поврзи го добавувачот по ЕДБ, инаку по име
+      let matchedSupplierId: number | null = null;
+      const allSuppliers = (await db.select().from(suppliers)) as any[];
+      if (head.supplierTaxId) {
+        const bare = (v: any) => String(v ?? "").replace(/\D/g, "");
+        const hit = allSuppliers.find((sp) => bare(sp.edb) === head.supplierTaxId);
+        if (hit) matchedSupplierId = hit.id;
+      }
+      if (!matchedSupplierId && head.supplierName) {
+        const key = head.supplierName.toUpperCase().replace(/[^А-ЯЀ-ӿA-Z]/g, "").slice(0, 8);
+        if (key.length >= 5) {
+          const hit = allSuppliers.find((sp) =>
+            String(sp.name).toUpperCase().replace(/[^А-ЯЀ-ӿA-Z]/g, "").includes(key)
+          );
+          if (hit) matchedSupplierId = hit.id;
+        }
+      }
+      if (!matchedSupplierId && head.supplierTaxId) {
+        head.notes.push("Добавувачот не постои во системот — додај го со ЕДБ " + head.supplierTaxId + " за следниот пат да се препознае сам.");
+      }
+
+      // Ставките: новиот парсер е поточен за македонските распореди
+      const rawItems = head.items.length > 0
+        ? head.items.map((it) => ({
+            rawDescription: it.description,
+            quantity: it.quantity !== null ? String(it.quantity) : "0",
+            unit: it.unit ?? "",
+            unitPrice: it.unitPrice !== null ? String(it.unitPrice) : "0",
+            totalPrice: it.total !== null ? String(it.total) : "0",
+            vatRate: it.vatRate !== null ? String(it.vatRate) : "18",
+          }))
+        : parsed.items;
+      const matchedItems = await matchItemsToMaterials(rawItems as any);
 
       // Save parsed document
       const result = await db.insert(parsedInvoices).values({
         originalFileName: input.fileName,
-        supplierName: parsed.supplierName,
-        invoiceNumber: parsed.documentNumber,
-        issueDate: parsed.issueDate ? new Date(parsed.issueDate) : null,
-        totalAmount: parsed.totalAmount,
-        vatAmount: parsed.vatAmount,
-        currency: parsed.currency ?? "MKD",
+        supplierName: head.supplierName ?? parsed.supplierName,
+        supplierTaxId: head.supplierTaxId,
+        matchedSupplierId,
+        invoiceNumber: head.invoiceNumber ?? parsed.documentNumber,
+        issueDate: head.issueDate ?? (parsed.issueDate ? String(parsed.issueDate).slice(0, 10) : null),
+        dueDate: head.dueDate,
+        baseAmount: head.baseAmount !== null ? String(head.baseAmount) : null,
+        totalAmount: head.totalAmount !== null ? String(head.totalAmount) : parsed.totalAmount,
+        vatAmount: head.vatAmount !== null ? String(head.vatAmount) : parsed.vatAmount,
+        currency: head.currency,
         rawText: parsed.rawText,
         documentType: input.documentType,
-        status: "parsed",
+        confidence: head.confidence,
+        parseNotes: [...head.notes, ...(head.missing.length ? ["Не е препознаено: " + head.missing.join(", ")] : [])].join(" | ") || null,
+        // Под 60% бара човек да провери пред да се користи
+        status: head.confidence >= 60 ? "parsed" : "needs_review",
       } as any);
       const parsedId = Number(result[0].insertId);
 
@@ -80,7 +125,10 @@ export const ocrRouter = createRouter({
 
       return {
         success: true,
-        message: `Успешно парсирани ${matchedItems.length} ставки`,
+        message: head.confidence >= 60
+          ? `Прочитано: ${head.supplierName ?? "непознат добавувач"}, ${head.invoiceNumber ?? "без број"}, ${head.totalAmount ?? "?"} ден · ${matchedItems.length} ставки`
+          : `Делумно прочитано (${head.confidence}%) — провери ги податоците`,
+        head,
         parsedId,
         document: {
           ...parsed,
@@ -169,6 +217,12 @@ export const ocrRouter = createRouter({
           supplierName: parsedInvoices.supplierName,
           invoiceNumber: parsedInvoices.invoiceNumber,
           issueDate: parsedInvoices.issueDate,
+          dueDate: parsedInvoices.dueDate,
+          supplierTaxId: parsedInvoices.supplierTaxId,
+          matchedSupplierId: parsedInvoices.matchedSupplierId,
+          baseAmount: parsedInvoices.baseAmount,
+          confidence: parsedInvoices.confidence,
+          parseNotes: parsedInvoices.parseNotes,
           totalAmount: parsedInvoices.totalAmount,
           vatAmount: parsedInvoices.vatAmount,
           currency: parsedInvoices.currency,

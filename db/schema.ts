@@ -952,6 +952,12 @@ export const parsedInvoices = pgTable("parsed_invoices", {
   documentType: varchar("document_type", { length: 50 }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   matchedInvoiceId: bigint("matched_invoice_id", { mode: "number", unsigned: true }),
+  // Резултат од читањето
+  supplierTaxId: varchar("supplier_tax_id", { length: 20 }),
+  matchedSupplierId: bigint("matched_supplier_id", { mode: "number", unsigned: true }),
+  baseAmount: decimal("base_amount", { precision: 14, scale: 2 }),
+  confidence: integer("confidence").default(0),
+  parseNotes: text("parse_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

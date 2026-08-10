@@ -9827,6 +9827,12 @@ var init_schema2 = __esm({
       documentType: varchar("document_type", { length: 50 }).notNull(),
       status: varchar("status", { length: 50 }).notNull().default("pending"),
       matchedInvoiceId: bigint4("matched_invoice_id", { mode: "number", unsigned: true }),
+      // Резултат од читањето
+      supplierTaxId: varchar("supplier_tax_id", { length: 20 }),
+      matchedSupplierId: bigint4("matched_supplier_id", { mode: "number", unsigned: true }),
+      baseAmount: decimal("base_amount", { precision: 14, scale: 2 }),
+      confidence: integer2("confidence").default(0),
+      parseNotes: text("parse_notes"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
     parsedReceiptItems = pgTable("parsed_receipt_items", {
@@ -11966,6 +11972,283 @@ var init_webapi = __esm({
   }
 });
 
+// api/invoice-parser.ts
+var invoice_parser_exports = {};
+__export(invoice_parser_exports, {
+  extractTaxIds: () => extractTaxIds,
+  parseAmount: () => parseAmount,
+  parseInvoiceText: () => parseInvoiceText
+});
+function parseAmount(raw2) {
+  if (!raw2) return null;
+  const s = String(raw2).trim().replace(/\s/g, "");
+  if (!/\d/.test(s)) return null;
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  let normalized;
+  if (lastComma > lastDot) {
+    normalized = s.replace(/\./g, "").replace(",", ".");
+  } else if (lastDot > lastComma) {
+    normalized = s.replace(/,/g, "");
+  } else {
+    normalized = s;
+  }
+  const v = parseFloat(normalized);
+  return Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
+}
+function allAmounts(text2) {
+  const out = [];
+  const re = /\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\b|\b\d+[.,]\d{2}\b/g;
+  let m;
+  while ((m = re.exec(text2)) !== null) {
+    const v = parseAmount(m[0]);
+    if (v !== null && v > 0) out.push({ value: v, index: m.index });
+  }
+  return out;
+}
+function labelBlockMap(text2) {
+  const out = /* @__PURE__ */ new Map();
+  const lines = text2.split("\n").map((l) => l.trim());
+  for (let i = 0; i < lines.length; i++) {
+    if (!/:$/.test(lines[i])) continue;
+    const labels = [];
+    let j = i;
+    while (j < lines.length && /:$/.test(lines[j]) && lines[j].length > 2) {
+      labels.push(lines[j].replace(/:$/, "").trim());
+      j++;
+    }
+    if (labels.length < 2) continue;
+    const values = [];
+    while (j < lines.length && values.length < labels.length) {
+      if (lines[j] && !/:$/.test(lines[j])) values.push(lines[j]);
+      else break;
+      j++;
+    }
+    if (values.length === labels.length) {
+      labels.forEach((l, k) => out.set(l.toLowerCase(), values[k]));
+    }
+    i = j - 1;
+  }
+  return out;
+}
+function extractTaxIds(text2) {
+  const out = /* @__PURE__ */ new Set();
+  const re = /(?:МК|MK)?\s?(40\d{11})\b/g;
+  let m;
+  while ((m = re.exec(text2)) !== null) out.add(m[1]);
+  return Array.from(out);
+}
+function parseInvoiceText(text2, ownTaxId, ownName) {
+  const notes = [];
+  const missing = [];
+  const lines = text2.split("\n").map((l) => l.trim()).filter(Boolean);
+  const labelMap = labelBlockMap(text2);
+  const fromLabels = (...keys) => {
+    for (const [k, v] of labelMap) {
+      if (keys.some((want) => k.includes(want))) return v;
+    }
+    return null;
+  };
+  const taxIds = extractTaxIds(text2);
+  const own = (ownTaxId ?? "").replace(/\D/g, "");
+  const supplierTaxId = taxIds.find((t2) => t2 !== own) ?? null;
+  if (taxIds.length > 0 && !supplierTaxId) {
+    notes.push("\u0412\u043E \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u043E\u0442 \u0435 \u043D\u0430\u0458\u0434\u0435\u043D \u0441\u0430\u043C\u043E \u043D\u0430\u0448\u0438\u043E\u0442 \u0434\u0430\u043D\u043E\u0447\u0435\u043D \u0431\u0440\u043E\u0458 \u2014 \u0434\u043E\u0431\u0430\u0432\u0443\u0432\u0430\u0447\u043E\u0442 \u043D\u0435 \u0435 \u043F\u0440\u0435\u043F\u043E\u0437\u043D\u0430\u0435\u043D \u043F\u043E \u0415\u0414\u0411.");
+  }
+  let supplierName = null;
+  const LEGAL = /(ДООЕЛ|Д\.?О\.?О\.?Е\.?Л|ДОО|АД\b|ТП\b|LLC|LTD|GmbH)/i;
+  const cleanName = (l) => l.replace(/(?:ЕДБ|Број ДДВ|ЕМБС|Даночен број)[:\s]*.*$/i, "").replace(/\s+(?:НЛБ|Халк|Комерцијална|Стопанска|Шпаркасе|Тутунска|Капитал|ПроКредит|Уни|Централна)\s*Банка.*$/i, "").replace(/\s+Жиро\s*с?-?ки.*$/i, "").replace(/\s*\d{4,}.*$/, "").replace(/[|“”"]/g, " ").replace(/\s{2,}/g, " ").trim();
+  const ownKey = (ownName ?? "").toUpperCase().replace(/[^А-ЯЀ-ӿA-Z]/g, "").slice(0, 12);
+  const buyerLines = /* @__PURE__ */ new Set();
+  lines.forEach((l, i) => {
+    if (/^(купувач|корисник|примач|наручител)\s*:?/i.test(l)) {
+      for (let k = i; k <= Math.min(lines.length - 1, i + 5); k++) buyerLines.add(k);
+    }
+    if (ownKey && l.toUpperCase().replace(/[^А-ЯЀ-ӿA-Z]/g, "").includes(ownKey)) buyerLines.add(i);
+  });
+  if (supplierTaxId) {
+    const idx = lines.findIndex((l) => l.replace(/\s/g, "").includes(supplierTaxId));
+    if (idx >= 0) {
+      let best = null;
+      for (let i = Math.max(0, idx - 6); i <= Math.min(lines.length - 1, idx + 6); i++) {
+        const c = cleanName(lines[i]);
+        if (c.length < 5 || !LEGAL.test(c)) continue;
+        if (/купувач|корисник|адреса|примач/i.test(c)) continue;
+        if (buyerLines.has(i)) continue;
+        const dist = Math.abs(i - idx);
+        if (!best || dist < best.dist) best = { name: c, dist };
+      }
+      if (best) supplierName = best.name.slice(0, 120);
+    }
+  }
+  if (!supplierName) {
+    const cand = lines.slice(0, 15).find((l, i) => LEGAL.test(l) && !/купувач|корисник|адреса/i.test(l) && !buyerLines.has(i));
+    if (cand) supplierName = cleanName(cand).slice(0, 120);
+  }
+  if (!supplierName && lines.length > 0) {
+    const c = cleanName(lines[0]);
+    if (c.length > 4) supplierName = c.slice(0, 120);
+  }
+  if (!supplierName) missing.push("\u0434\u043E\u0431\u0430\u0432\u0443\u0432\u0430\u0447");
+  const hasDigit = (v) => !!v && /\d/.test(v);
+  let invoiceNumber = fromLabels("\u0444\u0430\u043A\u0442\u0443\u0440\u0430 \u0431\u0440\u043E\u0458", "\u0431\u0440\u043E\u0458 \u043D\u0430 \u0444\u0430\u043A\u0442\u0443\u0440\u0430", "\u0444\u0430\u043A\u0442\u0443\u0440\u0430 \u0431\u0440");
+  if (!hasDigit(invoiceNumber)) invoiceNumber = null;
+  if (!invoiceNumber) invoiceNumber = firstMatch(text2, [
+    /ФАКТУРА\s*(?:бр\.?|број)\s*[:№#]?\s*([0-9A-ZА-ЯЀ-ӿ][0-9A-ZА-ЯЀ-ӿ\-\/]{2,30})/i,
+    /Фактура\s*број\s*[:№#]?\s*\n?\s*([0-9][0-9A-ZА-ЯЀ-ӿ\-\/ ]{2,30})/i,
+    /\n(\d{1,2}-[A-ZА-Я]-\d{2,6})\n/,
+    // МЕТАЛ-НЕТ: 7-A-3464
+    /(?:фактура|сметка|invoice)\s*(?:бр\.?|број|no\.?|#)\s*[:]?\s*([0-9A-Z][0-9A-Z\-\/]{2,30})/i
+  ]);
+  if (!hasDigit(invoiceNumber)) invoiceNumber = null;
+  if (invoiceNumber) invoiceNumber = invoiceNumber.replace(/\s*-\s*/g, "-").trim();
+  if (!invoiceNumber) missing.push("\u0431\u0440\u043E\u0458 \u043D\u0430 \u0444\u0430\u043A\u0442\u0443\u0440\u0430");
+  const issueRaw = (fromLabels("\u0434\u0430\u0442\u0443\u043C \u043D\u0430 \u0438\u0437\u0434\u0430\u0432\u0430\u045A\u0435", "\u043C\u0435\u0441\u0442\u043E \u0438 \u0434\u0430\u0442\u0443\u043C") ?? "").match(/\d{1,2}[./-]\d{1,2}[./-]\d{4}/)?.[0] ?? firstMatch(text2, [
+    /(?:датум\s*на\s*издавање|место\s*и\s*датум\s*на\s*издавање)[:\s]*[^\n\d]*(\d{1,2}[./-]\d{1,2}[./-]\d{4})/i,
+    /(?:^|\n)\s*датум[:\s]+(\d{1,2}[./-]\d{1,2}[./-]\d{4})/i,
+    /(\d{1,2}[./-]\d{1,2}[./-]\d{4})/
+  ]);
+  const issueDate = issueRaw ? toIso(issueRaw) : null;
+  if (!issueDate) missing.push("\u0434\u0430\u0442\u0443\u043C");
+  const dueRaw = firstMatch(text2, [
+    /(?:доспева|рок\s*на\s*плаќање|валута|доспеаност)[:\s]*(\d{1,2}[./-]\d{1,2}[./-]\d{4})/i,
+    /со\s*рок\s*до\s*(\d{1,2}[./-]\d{1,2}[./-]\d{4})/i
+  ]);
+  const dueDate = dueRaw ? toIso(dueRaw) : null;
+  const amt = (patterns) => {
+    const raw2 = firstMatch(text2, patterns);
+    return raw2 ? parseAmount(raw2) : null;
+  };
+  let baseAmount = amt([
+    /ОСНОВА[^\S\n]*:[^\S\n]*([\d.,]+)/i,
+    /(?:вкупно[^\S\n]*без[^\S\n]*ддв|основица|даночна[^\S\n]*основа)[^\S\n]*:?[^\S\n]*([\d.,]+)/i
+  ]);
+  let vatAmount = amt([
+    /(?:^|\n)[^\S\n]*ДДВ[^\S\n]*:[^\S\n]*([\d.,]+)/im,
+    /ДДВ[^\S\n]*\([^\S\n]*18[^\S\n]*%?[^\S\n]*\)[^\S\n]*:[^\S\n]*([\d.,]+)/i,
+    /ДДВ\D{0,3}18[^\S\n]*%[^\S\n]*([\d.,]+)/i
+  ]);
+  let totalAmount = amt([
+    /ЗА[^\S\n]*НАПЛАТА[^\S\n]*:[^\S\n]*([\d.,]+)/i,
+    /(?:вкупно[^\S\n]*со[^\S\n]*ддв)[^\S\n]*:?[^\S\n]*([\d.,]+)/i,
+    /износ[^\S\n]*за[^\S\n]*плаќање[^\S\n]*по[^\S\n]*фактура[^\n]*?(\d[\d.,]*)[^\S\n]*$/im
+  ]);
+  const hasOldDebt = /заостанат\s*долг/i.test(text2);
+  if (totalAmount === null) {
+    const loose = amt([/вкупно[^\S\n]*за[^\S\n]*плаќање[^\S\n]*:?[^\S\n]*([\d.,]+)/i]);
+    if (loose !== null) {
+      totalAmount = loose;
+      if (hasOldDebt) {
+        notes.push("\u0418\u0437\u043D\u043E\u0441\u043E\u0442 \u0435 \u0437\u0435\u043C\u0435\u043D \u043E\u0434 \u201E\u0412\u043A\u0443\u043F\u043D\u043E \u0437\u0430 \u043F\u043B\u0430\u045C\u0430\u045A\u0435\u201C \u043A\u043E\u0458 \u043A\u0430\u0458 \u0441\u043C\u0435\u0442\u043A\u0438\u0442\u0435 \u0437\u0430 \u0441\u0442\u0440\u0443\u0458\u0430 \u043C\u043E\u0436\u0435 \u0434\u0430 \u0432\u043A\u043B\u0443\u0447\u0443\u0432\u0430 \u0437\u0430\u043E\u0441\u0442\u0430\u043D\u0430\u0442 \u0434\u043E\u043B\u0433 \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u0438.");
+      }
+    }
+  }
+  const nums2 = allAmounts(text2);
+  const fits = (b, v, t2) => Math.abs(b + v - t2) <= 1.01 && b > 0 && v > 0 && Math.abs(v / b - 0.18) < 0.02;
+  if (totalAmount === null || baseAmount === null || vatAmount === null) {
+    let best = null;
+    for (let i = 0; i < nums2.length; i++) {
+      for (let j = i + 1; j < Math.min(nums2.length, i + 6); j++) {
+        for (let k = j + 1; k < Math.min(nums2.length, j + 6); k++) {
+          const [b, v, t2] = [nums2[i].value, nums2[j].value, nums2[k].value];
+          if (!fits(b, v, t2)) continue;
+          const span = nums2[k].index - nums2[i].index;
+          if (!best || t2 > best.t) best = { b, v, t: t2, span };
+        }
+      }
+    }
+    if (best) {
+      if (baseAmount === null) baseAmount = best.b;
+      if (vatAmount === null) vatAmount = best.v;
+      if (totalAmount === null) totalAmount = best.t;
+      notes.push("\u0418\u0437\u043D\u043E\u0441\u0438\u0442\u0435 \u0441\u0435 \u043F\u0440\u0435\u0441\u043C\u0435\u0442\u0430\u043D\u0438 \u043F\u043E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043E\u0441\u043D\u043E\u0432\u0430 + \u0414\u0414\u0412 = \u0432\u043A\u0443\u043F\u043D\u043E, \u043D\u0435 \u0441\u0435 \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u0438 \u043E\u0434 \u0435\u0442\u0438\u043A\u0435\u0442\u0430.");
+    }
+  }
+  if (totalAmount === null) missing.push("\u0432\u043A\u0443\u043F\u0435\u043D \u0438\u0437\u043D\u043E\u0441");
+  if (baseAmount && vatAmount && totalAmount && Math.abs(baseAmount + vatAmount - totalAmount) > 1.01) {
+    notes.push(`\u041E\u0441\u043D\u043E\u0432\u0430 ${baseAmount} + \u0414\u0414\u0412 ${vatAmount} \u043D\u0435 \u0434\u0430\u0432\u0430 ${totalAmount} \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u0438 \u0433\u0438 \u0438\u0437\u043D\u043E\u0441\u0438\u0442\u0435.`);
+  }
+  const items = parseItems(text2);
+  let confidence = 0;
+  if (supplierName) confidence += 20;
+  if (supplierTaxId) confidence += 15;
+  if (invoiceNumber) confidence += 25;
+  if (issueDate) confidence += 15;
+  if (totalAmount) confidence += 25;
+  return {
+    supplierName,
+    supplierTaxId,
+    invoiceNumber,
+    issueDate,
+    dueDate,
+    baseAmount,
+    vatAmount,
+    totalAmount,
+    currency: "MKD",
+    items,
+    confidence,
+    missing,
+    notes
+  };
+}
+function parseItems(text2) {
+  const items = [];
+  const metalNet = /^(\d{3,6})\s+(\d{1,2})\s+([А-ЯЀ-ӿA-Z]{2,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+(\d{1,3})\s+([\d.,]+)\s+(.+)$/;
+  for (const raw2 of text2.split("\n")) {
+    const line2 = raw2.replace(/\t/g, " ").replace(/\s+/g, " ").trim();
+    const m = line2.match(metalNet);
+    if (m) {
+      items.push({
+        code: m[1],
+        description: m[10].trim(),
+        unit: m[3],
+        quantity: parseAmount(m[4]),
+        unitPrice: parseAmount(m[5]),
+        vatRate: Number(m[2]),
+        total: parseAmount(m[6])
+      });
+    }
+  }
+  if (items.length > 0) return items;
+  const generic = /^(\d{1,2})\s+(.{4,80}?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/;
+  for (const raw2 of text2.split("\n")) {
+    const line2 = raw2.replace(/\s+/g, " ").trim();
+    const m = line2.match(generic);
+    if (!m) continue;
+    const total = parseAmount(m[5]);
+    if (total === null || total <= 0) continue;
+    items.push({
+      code: null,
+      description: m[2].trim(),
+      unit: null,
+      quantity: null,
+      unitPrice: parseAmount(m[3]),
+      vatRate: null,
+      total
+    });
+  }
+  return items;
+}
+var toIso, firstMatch;
+var init_invoice_parser = __esm({
+  "api/invoice-parser.ts"() {
+    toIso = (d) => {
+      const m = d.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+      if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      const m2 = d.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+      if (m2) return `${m2[1]}-${m2[2].padStart(2, "0")}-${m2[3].padStart(2, "0")}`;
+      return null;
+    };
+    firstMatch = (text2, patterns) => {
+      for (const re of patterns) {
+        const m = text2.match(re);
+        if (m) return (m[1] ?? m[0]).trim();
+      }
+      return null;
+    };
+  }
+});
+
 // node_modules/hono/dist/utils/cookie.js
 var init_cookie = __esm({
   "node_modules/hono/dist/utils/cookie.js"() {
@@ -13560,7 +13843,14 @@ function getInitSql() {
 	"created_at" timestamp DEFAULT now() NOT NULL
 );`,
     `CREATE INDEX IF NOT EXISTS "pay_alloc_tx_idx" ON "payment_allocations" ("tx_id")`,
-    `CREATE INDEX IF NOT EXISTS "pay_alloc_doc_idx" ON "payment_allocations" ("doc_type", "doc_id")`
+    `CREATE INDEX IF NOT EXISTS "pay_alloc_doc_idx" ON "payment_allocations" ("doc_type", "doc_id")`,
+    // ===== ЧИТАЊЕ НА ФАКТУРИ ОД PDF =====
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "supplier_tax_id" varchar(20)`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "matched_supplier_id" bigint`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "base_amount" numeric(14, 2)`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "confidence" integer DEFAULT 0`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "parse_notes" text`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "due_date" date`
   ];
 }
 var init_init_db_sql = __esm({
@@ -39196,25 +39486,64 @@ var ocrRouter = createRouter({
     const db2 = getDb();
     const buffer = Buffer.from(input.base64Data, "base64");
     const parsed = await parsePdfDocument(buffer);
-    if (!parsed.rawText || parsed.items.length === 0) {
+    if (!parsed.rawText || parsed.rawText.trim().length < 20) {
       return {
         success: false,
         message: "\u041D\u0435 \u043C\u043E\u0436\u0435 \u0434\u0430 \u0441\u0435 \u0438\u0437\u0432\u043B\u0435\u0447\u0435 \u0442\u0435\u043A\u0441\u0442 \u043E\u0434 PDF \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u043E\u0442. \u041F\u0440\u043E\u0432\u0435\u0440\u0435\u0442\u0435 \u0434\u0430\u043B\u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u043E\u0442 \u0441\u043E\u0434\u0440\u0436\u0438 \u0442\u0435\u043A\u0441\u0442 (\u043D\u0435 \u0435 \u0441\u043A\u0435\u043D\u0438\u0440\u0430\u043D\u0430 \u0441\u043B\u0438\u043A\u0430).",
         parsed: null
       };
     }
-    const matchedItems = await matchItemsToMaterials(parsed.items);
+    const { parseInvoiceText: parseInvoiceText2 } = await Promise.resolve().then(() => (init_invoice_parser(), invoice_parser_exports));
+    const { companySettings: companySettings2, suppliers: suppliers4 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
+    const settingsRows = await db2.select().from(companySettings2);
+    const own = settingsRows[0] ?? {};
+    const head = parseInvoiceText2(parsed.rawText, own.edb ?? own.taxNumber ?? null, own.name ?? null);
+    let matchedSupplierId = null;
+    const allSuppliers = await db2.select().from(suppliers4);
+    if (head.supplierTaxId) {
+      const bare = (v) => String(v ?? "").replace(/\D/g, "");
+      const hit = allSuppliers.find((sp) => bare(sp.edb) === head.supplierTaxId);
+      if (hit) matchedSupplierId = hit.id;
+    }
+    if (!matchedSupplierId && head.supplierName) {
+      const key = head.supplierName.toUpperCase().replace(/[^А-ЯЀ-ӿA-Z]/g, "").slice(0, 8);
+      if (key.length >= 5) {
+        const hit = allSuppliers.find(
+          (sp) => String(sp.name).toUpperCase().replace(/[^А-ЯЀ-ӿA-Z]/g, "").includes(key)
+        );
+        if (hit) matchedSupplierId = hit.id;
+      }
+    }
+    if (!matchedSupplierId && head.supplierTaxId) {
+      head.notes.push("\u0414\u043E\u0431\u0430\u0432\u0443\u0432\u0430\u0447\u043E\u0442 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u0438 \u0432\u043E \u0441\u0438\u0441\u0442\u0435\u043C\u043E\u0442 \u2014 \u0434\u043E\u0434\u0430\u0458 \u0433\u043E \u0441\u043E \u0415\u0414\u0411 " + head.supplierTaxId + " \u0437\u0430 \u0441\u043B\u0435\u0434\u043D\u0438\u043E\u0442 \u043F\u0430\u0442 \u0434\u0430 \u0441\u0435 \u043F\u0440\u0435\u043F\u043E\u0437\u043D\u0430\u0435 \u0441\u0430\u043C.");
+    }
+    const rawItems = head.items.length > 0 ? head.items.map((it) => ({
+      rawDescription: it.description,
+      quantity: it.quantity !== null ? String(it.quantity) : "0",
+      unit: it.unit ?? "",
+      unitPrice: it.unitPrice !== null ? String(it.unitPrice) : "0",
+      totalPrice: it.total !== null ? String(it.total) : "0",
+      vatRate: it.vatRate !== null ? String(it.vatRate) : "18"
+    })) : parsed.items;
+    const matchedItems = await matchItemsToMaterials(rawItems);
     const result = await db2.insert(parsedInvoices).values({
       originalFileName: input.fileName,
-      supplierName: parsed.supplierName,
-      invoiceNumber: parsed.documentNumber,
-      issueDate: parsed.issueDate ? new Date(parsed.issueDate) : null,
-      totalAmount: parsed.totalAmount,
-      vatAmount: parsed.vatAmount,
-      currency: parsed.currency ?? "MKD",
+      supplierName: head.supplierName ?? parsed.supplierName,
+      supplierTaxId: head.supplierTaxId,
+      matchedSupplierId,
+      invoiceNumber: head.invoiceNumber ?? parsed.documentNumber,
+      issueDate: head.issueDate ?? (parsed.issueDate ? String(parsed.issueDate).slice(0, 10) : null),
+      dueDate: head.dueDate,
+      baseAmount: head.baseAmount !== null ? String(head.baseAmount) : null,
+      totalAmount: head.totalAmount !== null ? String(head.totalAmount) : parsed.totalAmount,
+      vatAmount: head.vatAmount !== null ? String(head.vatAmount) : parsed.vatAmount,
+      currency: head.currency,
       rawText: parsed.rawText,
       documentType: input.documentType,
-      status: "parsed"
+      confidence: head.confidence,
+      parseNotes: [...head.notes, ...head.missing.length ? ["\u041D\u0435 \u0435 \u043F\u0440\u0435\u043F\u043E\u0437\u043D\u0430\u0435\u043D\u043E: " + head.missing.join(", ")] : []].join(" | ") || null,
+      // Под 60% бара човек да провери пред да се користи
+      status: head.confidence >= 60 ? "parsed" : "needs_review"
     });
     const parsedId = Number(result[0].insertId);
     if (matchedItems.length > 0) {
@@ -39236,7 +39565,8 @@ var ocrRouter = createRouter({
     }
     return {
       success: true,
-      message: `\u0423\u0441\u043F\u0435\u0448\u043D\u043E \u043F\u0430\u0440\u0441\u0438\u0440\u0430\u043D\u0438 ${matchedItems.length} \u0441\u0442\u0430\u0432\u043A\u0438`,
+      message: head.confidence >= 60 ? `\u041F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043E: ${head.supplierName ?? "\u043D\u0435\u043F\u043E\u0437\u043D\u0430\u0442 \u0434\u043E\u0431\u0430\u0432\u0443\u0432\u0430\u0447"}, ${head.invoiceNumber ?? "\u0431\u0435\u0437 \u0431\u0440\u043E\u0458"}, ${head.totalAmount ?? "?"} \u0434\u0435\u043D \xB7 ${matchedItems.length} \u0441\u0442\u0430\u0432\u043A\u0438` : `\u0414\u0435\u043B\u0443\u043C\u043D\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043E (${head.confidence}%) \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u0438 \u0433\u0438 \u043F\u043E\u0434\u0430\u0442\u043E\u0446\u0438\u0442\u0435`,
+      head,
       parsedId,
       document: {
         ...parsed,
@@ -39312,6 +39642,12 @@ var ocrRouter = createRouter({
       supplierName: parsedInvoices.supplierName,
       invoiceNumber: parsedInvoices.invoiceNumber,
       issueDate: parsedInvoices.issueDate,
+      dueDate: parsedInvoices.dueDate,
+      supplierTaxId: parsedInvoices.supplierTaxId,
+      matchedSupplierId: parsedInvoices.matchedSupplierId,
+      baseAmount: parsedInvoices.baseAmount,
+      confidence: parsedInvoices.confidence,
+      parseNotes: parsedInvoices.parseNotes,
       totalAmount: parsedInvoices.totalAmount,
       vatAmount: parsedInvoices.vatAmount,
       currency: parsedInvoices.currency,

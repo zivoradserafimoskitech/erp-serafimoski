@@ -1413,5 +1413,13 @@ export function getInitSql(): string[] {
 );`,
     `CREATE INDEX IF NOT EXISTS "pay_alloc_tx_idx" ON "payment_allocations" ("tx_id")`,
     `CREATE INDEX IF NOT EXISTS "pay_alloc_doc_idx" ON "payment_allocations" ("doc_type", "doc_id")`,
+
+    // ===== ЧИТАЊЕ НА ФАКТУРИ ОД PDF =====
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "supplier_tax_id" varchar(20)`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "matched_supplier_id" bigint`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "base_amount" numeric(14, 2)`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "confidence" integer DEFAULT 0`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "parse_notes" text`,
+    `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "due_date" date`,
   ];
 }
