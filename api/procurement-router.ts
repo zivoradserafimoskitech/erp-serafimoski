@@ -159,17 +159,38 @@ export const procurementRouter = createRouter({
         reserved.set(r.materialId, cur);
       }
 
+      // Веќе нарачано, но сеуште не примено (отворени набавни нарачки)
+      const openPO = await db
+        .select({
+          materialId: purchaseOrderItems.materialId,
+          quantity: purchaseOrderItems.quantity,
+          receivedQuantity: purchaseOrderItems.receivedQuantity,
+          poStatus: purchaseOrders.status,
+        })
+        .from(purchaseOrderItems)
+        .leftJoin(purchaseOrders, eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id));
+
+      const incoming = new Map<number, number>();
+      for (const r of openPO as any[]) {
+        if (r.poStatus !== "sent" && r.poStatus !== "confirmed") continue;
+        const remain = (Number(r.quantity) || 0) - (Number(r.receivedQuantity) || 0);
+        if (remain <= 0) continue;
+        incoming.set(r.materialId, (incoming.get(r.materialId) ?? 0) + remain);
+      }
+
       const rows = (mats as any[]).map((m) => {
         const stock = Number(m.currentStock ?? 0) || 0;
         const min = Number(m.minStock ?? 0) || 0;
         const res = reserved.get(m.id);
         const reservedQty = res?.qty ?? 0;
-        const need = reservedQty + (useMin ? min : 0) - stock;
+        const inc = Math.round((incoming.get(m.id) ?? 0) * 1000) / 1000;
+        const need = reservedQty + (useMin ? min : 0) - stock - inc;
         const price = Number(m.lastPurchasePrice ?? 0) || Number(m.avgCost ?? 0) || 0;
         return {
           id: m.id, code: m.code, name: m.name, unit: m.unit,
           currentStock: stock, minStock: min,
           reservedQty: Math.round(reservedQty * 1000) / 1000,
+          incoming: inc,
           workOrders: res ? Array.from(res.wos) : [],
           shortage: Math.round(Math.max(0, need) * 1000) / 1000,
           lastPrice: price,

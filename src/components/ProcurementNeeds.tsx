@@ -134,6 +134,7 @@ export default function ProcurementNeeds() {
                 <TableHead>Материјал</TableHead>
                 <TableHead className="text-right w-24">На залиха</TableHead>
                 <TableHead className="text-right w-28">Бараат налози</TableHead>
+                <TableHead className="text-right w-28">Веќе нарачано</TableHead>
                 <TableHead className="text-right w-28">Недостига</TableHead>
                 <TableHead className="w-44">Добавувач</TableHead>
                 <TableHead className="text-right w-28">Проц. цена</TableHead>
@@ -173,6 +174,11 @@ export default function ProcurementNeeds() {
                     <TableCell className="text-right text-sm">
                       {r.reservedQty > 0 ? (
                         <span className="font-medium text-amber-700">{r.reservedQty.toLocaleString("mk-MK")}</span>
+                      ) : <span className="text-gray-300">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right text-sm">
+                      {r.incoming > 0 ? (
+                        <span className="font-medium text-blue-600">{r.incoming.toLocaleString("mk-MK")}</span>
                       ) : <span className="text-gray-300">—</span>}
                     </TableCell>
                     <TableCell className="text-right">
