@@ -65,6 +65,16 @@ export default function CatalogPage() {
   const [bomForm, setBomForm] = useState({ kind: "material" as string, refId: "", perUnit: "", wastePct: "0", scale: "area" as string, notes: "", sortOrder: 0 });
   const bomCreate = trpc.catalog.bomCreate.useMutation({ onSuccess: () => utils.catalog.bomList.invalidate() });
   const bomDelete = trpc.catalog.bomDelete.useMutation({ onSuccess: () => utils.catalog.bomList.invalidate() });
+  const productRecalc = trpc.catalog.productRecalc.useMutation({
+    onSuccess: (d) => {
+      utils.quotation.productList.invalidate();
+      toast.success(
+        `Прекалкулирано: материјал ${d.materialCost} ден. · труд/услуги ${d.laborCost} ден. · вкупно ${d.totalCost} ден.`
+        + (d.skippedPerimeter > 0 ? ` (${d.skippedPerimeter} ставки по периметар прескокнати -- бараат димензии од конкретна понуда)` : "")
+      );
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   return (
     <div className="space-y-4">
@@ -300,8 +310,26 @@ export default function CatalogPage() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle>Норматив за производот</CardTitle></CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <CardTitle>Норматив за производот</CardTitle>
+                {activeProduct && (
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={productRecalc.isPending}
+                    onClick={() => productRecalc.mutate({ productId: activeProduct })}>
+                    <Calculator className="h-3.5 w-3.5 mr-1" />{productRecalc.isPending ? "Прекалкулирам..." : "Прекалкулирај"}
+                  </Button>
+                )}
+              </CardHeader>
               <CardContent>
+                {activeProduct && (() => {
+                  const p = productsData?.find(x => x.id === activeProduct);
+                  return p ? (
+                    <div className="text-xs text-gray-500 mb-3 flex gap-4">
+                      <span>Материјал: <b className="text-gray-800">{p.materialCost} ден.</b></span>
+                      <span>Труд/услуги: <b className="text-gray-800">{p.laborCost} ден.</b></span>
+                      <span>Вкупно: <b className="text-gray-800">{p.totalCost} ден.</b></span>
+                    </div>
+                  ) : null;
+                })()}
                 {bomData && bomData.length > 0 ? (
                   <Table>
                     <TableHeader><TableRow><TableHead>Тип</TableHead><TableHead>Ставка</TableHead><TableHead>По ед.</TableHead><TableHead>Отпад</TableHead><TableHead>Скала</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>

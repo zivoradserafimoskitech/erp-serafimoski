@@ -5,7 +5,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
   machines, laborRates, overhead,
-  productComponents, services, materials,
+  productComponents, services, materials, products,
 } from "@db/schema";
 
 export const catalogRouter = createRouter({
@@ -222,6 +222,57 @@ export const catalogRouter = createRouter({
       const db = getDb();
       await db.delete(productComponents).where(eq(productComponents.id, input.id));
       return { success: true };
+    }),
+
+  // Прекалкулирај ги трошоците на производот од вистинскиот норматив (по 1 референтна единица од basis-от).
+  // scale='perimeter' компоненти се прескокнуваат тука -- бараат конкретни димензии на панел, достапни
+  // само во моментот на естимирање во понуда (quotationRouter.estimateProduct), не и тука.
+  productRecalc: publicQuery
+    .input(z.object({ productId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const comps = await db.select().from(productComponents).where(eq(productComponents.productId, input.productId));
+      const prod = await db.select().from(products).where(eq(products.id, input.productId));
+      if (!prod[0]) throw new Error("Производот не постои");
+
+      let materialCost = 0;
+      let laborCost = 0;
+      let skippedPerimeter = 0;
+
+      for (const c of comps) {
+        if (c.scale === "perimeter") { skippedPerimeter++; continue; }
+        const perUnit = parseFloat(c.perUnit) || 0;
+        const waste = 1 + (parseFloat(c.wastePct) || 0) / 100;
+        const qty = perUnit * waste; // по 1 референтна единица (fixed-компонентите веќе се апсолутна количина)
+
+        let unitCost = 0;
+        if (c.kind === "material") {
+          const m = await db.select().from(materials).where(eq(materials.id, c.refId));
+          unitCost = parseFloat(m[0]?.price ?? "0");
+          materialCost += qty * unitCost;
+        } else {
+          const s = await db.select().from(services).where(eq(services.id, c.refId));
+          unitCost = parseFloat(s[0]?.costRate ?? "0");
+          laborCost += qty * unitCost;
+        }
+      }
+
+      const machineCost = parseFloat(prod[0].machineCost ?? "0");
+      const overheadCost = parseFloat(prod[0].overheadCost ?? "0");
+      const totalCost = materialCost + laborCost + machineCost + overheadCost;
+
+      await db.update(products).set({
+        materialCost: materialCost.toFixed(2),
+        laborCost: laborCost.toFixed(2),
+        totalCost: totalCost.toFixed(2),
+      }).where(eq(products.id, input.productId));
+
+      return {
+        materialCost: materialCost.toFixed(2),
+        laborCost: laborCost.toFixed(2),
+        totalCost: totalCost.toFixed(2),
+        skippedPerimeter,
+      };
     }),
 
   // ===== MACHINE HOUR CALCULATOR =====
