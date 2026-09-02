@@ -1,4 +1,5 @@
 import UsersTab from "@/components/UsersTab";
+import { formatDate } from "@/lib/utils";
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -314,7 +315,7 @@ export default function SettingsPage() {
                             )}
                           </TableCell>
                           <TableCell>{cert.issuer ?? "-"}</TableCell>
-                          <TableCell>{cert.validTo ? new Date(cert.validTo).toLocaleDateString("mk-MK") : "-"}</TableCell>
+                          <TableCell>{formatDate(cert.validTo)}</TableCell>
                           <TableCell className="font-mono text-xs">{cert.edb ?? "-"}</TableCell>
                           <TableCell>
                             {cert.isActive === "active" ? (

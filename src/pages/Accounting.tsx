@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import { printInvoice, printDeliveryNote, printAccountantReport } from "@/lib/print-documents";
+import { formatDate } from "@/lib/utils";
 import { DnCertificates } from "@/components/DnCertificates";
 import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
@@ -620,7 +621,7 @@ export default function Accounting() {
                   const req = reportData.requisitions ?? [];
                   const woCost = wo.reduce((a: number, w: any) => a + (parseFloat(String(w.costAmount ?? "0")) || 0), 0);
                   const mkd = (n: any) => Number(n ?? 0).toLocaleString("mk-MK");
-                  const dt = (d: any) => d ? String(d).split("T")[0] : "";
+                  const dt = (d: any) => d ? formatDate(d) : "";
 
                   const Section = ({ title, count, total, headers, rows, onExport, color }: any) => (
                     <div className="border rounded-lg overflow-hidden">
@@ -761,7 +762,7 @@ export default function Accounting() {
                       <TableCell>{inv.invoiceType === "standard" ? "Стандардна" : inv.invoiceType === "proforma" ? "Проформа" : "Кредитна"}</TableCell>
                       <TableCell className="font-medium">{inv.totalAmount} {inv.currency}</TableCell>
                       <TableCell>{inv.vatAmount}</TableCell>
-                      <TableCell className="text-gray-500">{inv.issueDate ? String(inv.issueDate).split("T")[0] : "-"}</TableCell>
+                      <TableCell className="text-gray-500">{formatDate(inv.issueDate)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" onClick={() => { setSelId(inv.id); setDetailType("out"); setDetailOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
@@ -812,7 +813,7 @@ export default function Accounting() {
                           <span className="text-gray-400 text-xs">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-gray-500">{inv.receivedDate ? String(inv.receivedDate).split("T")[0] : "-"}</TableCell>
+                      <TableCell className="text-gray-500">{formatDate(inv.receivedDate)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" onClick={() => { setSelId(inv.id); setDetailType("inc"); setDetailOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
@@ -842,7 +843,7 @@ export default function Accounting() {
                       <TableCell className="font-mono text-sm font-medium">{r.receiptNumber}</TableCell>
                       <TableCell>{r.supplierName || "-"}</TableCell>
                       <TableCell><Badge className={recStatus[r.status]?.cls}>{recStatus[r.status]?.label}</Badge></TableCell>
-                      <TableCell className="text-gray-500">{r.receiptDate ? String(r.receiptDate).split("T")[0] : "-"}</TableCell>
+                      <TableCell className="text-gray-500">{formatDate(r.receiptDate)}</TableCell>
                       <TableCell className="font-medium">{r.totalAmount} ден.</TableCell>
                       <TableCell><Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) delRec.mutate({ id: r.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
                     </TableRow>
@@ -868,7 +869,7 @@ export default function Accounting() {
                       <TableCell className="font-mono text-sm font-medium">{dn.dnNumber}</TableCell>
                       <TableCell>{dn.customerName} {dn.customerCompany ? `(${dn.customerCompany})` : ""}</TableCell>
                       <TableCell><Badge className={dnStatus[dn.status]?.cls}>{dnStatus[dn.status]?.label}</Badge></TableCell>
-                      <TableCell className="text-gray-500">{dn.issueDate ? String(dn.issueDate).split("T")[0] : "-"}</TableCell>
+                      <TableCell className="text-gray-500">{formatDate(dn.issueDate)}</TableCell>
                       <TableCell>{dn.totalItems}</TableCell>
                       <TableCell><div className="flex gap-1"><Button size="sm" variant="outline" onClick={async () => { const full = await utils.accounting.deliveryNoteById.fetch({ id: dn.id }); printDeliveryNote(full, companySettings); }}><Download className="h-3.5 w-3.5 mr-1" />Печати</Button><Button size="sm" variant="outline" title="Вградени материјали / атести" onClick={async () => { const full = await utils.accounting.deliveryNoteById.fetch({ id: dn.id }); setCertDn(full); }}><ShieldCheck className="h-3.5 w-3.5" /></Button><Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) delDN.mutate({ id: dn.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button></div></TableCell>
                     </TableRow>
@@ -932,10 +933,10 @@ export default function Accounting() {
                           )}
                         </TableCell>
                         <TableCell className="text-gray-500 text-sm">
-                          {p.issueDate ? String(p.issueDate).split("T")[0] : "—"}
+                          {formatDate(p.issueDate)}
                           {(p as any).dueDate && (
                             <div className="text-[11px] text-gray-400">
-                              рок {String((p as any).dueDate).split("T")[0]}
+                              рок {formatDate((p as any).dueDate)}
                             </div>
                           )}
                         </TableCell>
@@ -983,8 +984,8 @@ export default function Accounting() {
                 <div><span className="text-gray-500">Тип:</span> {outDetail.invoiceType}</div>
                 <div><span className="text-gray-500">Износ:</span> <span className="font-semibold">{outDetail.totalAmount} {outDetail.currency}</span></div>
                 <div><span className="text-gray-500">ДДВ:</span> {outDetail.vatAmount} ({outDetail.vatRate}%)</div>
-                <div><span className="text-gray-500">Датум:</span> {outDetail.issueDate ? String(outDetail.issueDate).split("T")[0] : "-"}</div>
-                <div><span className="text-gray-500">Рок:</span> {outDetail.dueDate ? String(outDetail.dueDate).split("T")[0] : "-"}</div>
+                <div><span className="text-gray-500">Датум:</span> {formatDate(outDetail.issueDate)}</div>
+                <div><span className="text-gray-500">Рок:</span> {formatDate(outDetail.dueDate)}</div>
               </div>
               <div className="flex gap-2 pt-2">
                 <Button size="sm" variant="outline" onClick={() => generateUJPXml(outDetail)}><FileText className="h-3.5 w-3.5 mr-1" />УЈП XML</Button>
@@ -1000,7 +1001,7 @@ export default function Accounting() {
                 <div><span className="text-gray-500">Статус:</span> <Badge className={incStatus[incDetail.status]?.cls}>{incStatus[incDetail.status]?.label}</Badge></div>
                 <div><span className="text-gray-500">Износ:</span> <span className="font-semibold">{incDetail.totalAmount} {incDetail.currency}</span></div>
                 <div><span className="text-gray-500">ДДВ:</span> {incDetail.vatAmount}</div>
-                <div><span className="text-gray-500">Прием:</span> {incDetail.receivedDate ? String(incDetail.receivedDate).split("T")[0] : "-"}</div>
+                <div><span className="text-gray-500">Прием:</span> {formatDate(incDetail.receivedDate)}</div>
               </div>
               {/* PDF Preview */}
               {incDetail.fileUrl && (
@@ -1480,7 +1481,7 @@ function UJPEFakturaTab() {
                   </SelectItem>
                   {certificates?.map(cert => (
                     <SelectItem key={cert.id} value={cert.id.toString()}>
-                      🔐 {cert.name} ({cert.issuer}) - до {cert.validTo ? new Date(cert.validTo).toLocaleDateString("mk-MK") : "?"}
+                      🔐 {cert.name} ({cert.issuer}) - до {cert.validTo ? formatDate(cert.validTo) : "?"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1698,7 +1699,7 @@ function EmailInvoicesTab() {
                              "Одбиена"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-xs">{ei.receivedAt ? new Date(ei.receivedAt).toLocaleDateString("mk-MK") : "-"}</TableCell>
+                        <TableCell className="text-xs">{formatDate(ei.receivedAt)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             {ei.pdfBase64 && (

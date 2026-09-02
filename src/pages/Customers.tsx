@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -443,7 +444,7 @@ export default function Customers() {
                           </TableCell>
                           <TableCell><Badge className={pr.className}>{pr.label}</Badge></TableCell>
                           <TableCell className="font-medium">{o.totalAmount} ден.</TableCell>
-                          <TableCell className="text-gray-500">{o.deliveryDate ? String(o.deliveryDate).split("T")[0] : "-"}</TableCell>
+                          <TableCell className="text-gray-500">{formatDate(o.deliveryDate)}</TableCell>
                           <TableCell>{o.status === "confirmed" ? <Button size="sm" variant="outline" onClick={() => chainWO.mutate({ orderId: o.id })} disabled={chainWO.isPending}>→ Налог</Button> : o.status === "in_production" ? <span className="text-xs text-amber-600">во налог</span> : <span className="text-xs text-gray-400">потврди прво</span>}</TableCell>
                           <TableCell>
                             <div className="flex gap-1">
@@ -480,7 +481,7 @@ export default function Customers() {
                 <div><span className="text-gray-500">Статус:</span> <Badge className={orderStatusConfig[orderDetail.status]?.className}>{orderStatusConfig[orderDetail.status]?.label}</Badge></div>
                 <div><span className="text-gray-500">Приоритет:</span> <Badge className={priorityConfig[orderDetail.priority]?.className}>{priorityConfig[orderDetail.priority]?.label}</Badge></div>
                 <div><span className="text-gray-500">Вкупно:</span> <span className="font-semibold">{orderDetail.totalAmount} ден.</span></div>
-                <div><span className="text-gray-500">Испорака:</span> {orderDetail.deliveryDate ? String(orderDetail.deliveryDate).split("T")[0] : "-"}</div>
+                <div><span className="text-gray-500">Испорака:</span> {formatDate(orderDetail.deliveryDate)}</div>
               </div>
 
               {orderDetail.items && orderDetail.items.length > 0 && (

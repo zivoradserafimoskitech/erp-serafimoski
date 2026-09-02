@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { printQuotation } from "@/lib/print-documents";
+import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -556,7 +557,7 @@ export default function Quotations() {
                       <TableCell><Badge className={qStatus[q.status]?.cls}>{qStatus[q.status]?.label}</Badge></TableCell>
                       <TableCell className="font-medium">{Number(q.totalAmount).toLocaleString("mk-MK")} {q.currency}</TableCell>
                       <TableCell className="text-gray-500">{q.deliveryDays} дена</TableCell>
-                      <TableCell className="text-gray-500">{q.validUntil ? String(q.validUntil).split("T")[0] : "-"}</TableCell>
+                      <TableCell className="text-gray-500">{formatDate(q.validUntil)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" onClick={() => { setSelQ(q.id); setDetailOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
@@ -698,7 +699,7 @@ export default function Quotations() {
                     <CalendarClock className="h-5 w-5 text-gray-400 shrink-0" />
                     <div>
                       <div className="text-xs text-gray-400 uppercase tracking-wide">Важи до</div>
-                      <div className="text-sm font-medium text-gray-800">{qDetail.validUntil ? String(qDetail.validUntil).split("T")[0] : "-"}</div>
+                      <div className="text-sm font-medium text-gray-800">{formatDate(qDetail.validUntil)}</div>
                     </div>
                   </div>
                 </div>

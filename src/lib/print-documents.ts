@@ -5,7 +5,14 @@ type Money = string | number | null | undefined;
 
 const den = (v: Money) => Number(v ?? 0).toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const dt = (s: any) => { if (!s) return "—"; const d = new Date(s); return isNaN(d.getTime()) ? esc(s) : d.toLocaleDateString("mk-MK"); };
+const dt = (s: any) => {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return esc(s);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}-${mm}-${d.getFullYear()}`;
+};
 
 const PRIORITY_MK: Record<string, string> = { low: "Низок", normal: "Нормален", high: "Висок", urgent: "ИТНО" };
 const STATUS_MK: Record<string, string> = { pending: "Во чекање", in_progress: "Во тек", on_hold: "Паузиран", completed: "Завршен", cancelled: "Откажан", draft: "Нацрт", issued: "Издадена", delivered: "Испорачана" };
@@ -613,7 +620,7 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
   </div></div>
 
   <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Сметководител</div></div></div>
-  <div class="foot"><b>${esc(s?.name ?? "Serafimoski Tech DOOEL")}</b> · ЕДБ ${esc(s?.edb ?? "")} · Извештај генериран од Metal ERP на ${new Date().toLocaleDateString("mk-MK")}</div>
+  <div class="foot"><b>${esc(s?.name ?? "Serafimoski Tech DOOEL")}</b> · ЕДБ ${esc(s?.edb ?? "")} · Извештај генериран од Metal ERP на ${dt(new Date())}</div>
 <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
 </body></html>`;
   openPrint(html);
