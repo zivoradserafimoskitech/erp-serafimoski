@@ -31,6 +31,7 @@ const NUMBER_SOURCE: Record<string, { table: string; column: string }> = {
   order: { table: "orders", column: "order_number" },
   po: { table: "purchase_orders", column: "po_number" },
   invoice: { table: "invoices", column: "invoice_number" },
+  count: { table: "inventory_counts", column: "count_number" },
 };
 
 function formatNumber(kind: string, value: number, year: number): string {

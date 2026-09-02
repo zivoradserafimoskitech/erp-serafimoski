@@ -16,9 +16,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, AlertTriangle, ArrowDownLeft, Package, Scissors, Pencil, Weight, ShieldCheck } from "lucide-react";
+import { Search, Plus, AlertTriangle, ArrowDownLeft, Package, Scissors, Pencil, Weight, ShieldCheck, ClipboardCheck } from "lucide-react";
 import RemnantsTab from "@/components/RemnantsTab";
 import CertificatesTab from "@/components/CertificatesTab";
+import InventoryCountTab from "@/components/InventoryCountTab";
 import { WeightCalculator, lineWeightKg, unitMeta } from "@/components/WeightCalculator";
 import { DENSITIES } from "@contracts/weight-geometry";
 import { WeightAutofill } from "@/components/WeightAutofill";
@@ -33,7 +34,7 @@ const units: Record<string, string> = { kg: "кг", m: "м", m2: "м²", pcs: "�
 
 export default function Storage() {
   const utils = trpc.useUtils();
-  const [mainTab, setMainTab] = useState<"materials" | "finished" | "remnants" | "certs">("materials");
+  const [mainTab, setMainTab] = useState<"materials" | "finished" | "remnants" | "certs" | "popis">("materials");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
@@ -206,6 +207,7 @@ export default function Storage() {
           { key: "finished" as const, label: "Готови производи (ГЛ-ПРОД)", icon: Package },
           { key: "remnants" as const, label: "Остатоци (крајки)", icon: Scissors },
           { key: "certs" as const, label: "Атести / шаржи", icon: ShieldCheck },
+          { key: "popis" as const, label: "Попис", icon: ClipboardCheck },
         ].map(t => (
           <button key={t.key} onClick={() => setMainTab(t.key)} className={`flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === t.key ? "border-amber-500 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
             <t.icon className="h-4 w-4" />{t.label}
@@ -216,6 +218,8 @@ export default function Storage() {
       {mainTab === "remnants" && <RemnantsTab />}
 
       {mainTab === "certs" && <CertificatesTab />}
+
+      {mainTab === "popis" && <InventoryCountTab />}
 
       {mainTab === "finished" && (
         <Card>
