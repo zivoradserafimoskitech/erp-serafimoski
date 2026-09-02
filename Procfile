@@ -1,1 +1,1 @@
-web: NODE_ENV=production node dist/server.mjs
+web: NODE_ENV=production node dist/server.cjs
