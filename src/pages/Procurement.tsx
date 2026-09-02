@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -421,7 +422,7 @@ export default function Procurement() {
                             </Select>
                           </TableCell>
                           <TableCell className="font-medium">{po.totalAmount} ден.</TableCell>
-                          <TableCell className="text-gray-500">{po.expectedDate ? String(po.expectedDate).split("T")[0] : "-"}</TableCell>
+                          <TableCell className="text-gray-500">{formatDate(po.expectedDate)}</TableCell>
                           <TableCell>
                             <div className="flex gap-1">
                               <Button size="sm" variant="outline" onClick={() => { setSelectedPO(po.id); setDetailOpen(true); }}>
@@ -455,7 +456,7 @@ export default function Procurement() {
                 <div><span className="text-gray-500">Добавувач:</span> {poDetail.supplier?.name}</div>
                 <div><span className="text-gray-500">Статус:</span> <Badge className={poStatusConfig[poDetail.status]?.className}>{poStatusConfig[poDetail.status]?.label}</Badge></div>
                 <div><span className="text-gray-500">Вкупно:</span> <span className="font-semibold">{poDetail.totalAmount} ден.</span></div>
-                <div><span className="text-gray-500">Очекувано:</span> {poDetail.expectedDate ? String(poDetail.expectedDate).split("T")[0] : "-"}</div>
+                <div><span className="text-gray-500">Очекувано:</span> {formatDate(poDetail.expectedDate)}</div>
               </div>
 
               {poDetail.items && poDetail.items.length > 0 && (

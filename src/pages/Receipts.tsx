@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -626,7 +627,7 @@ export default function Receipts() {
                       <TableCell className="font-medium">{r.receiptNumber}</TableCell>
                       <TableCell>{r.supplierName ?? "-"}</TableCell>
                       <TableCell>{r.warehouseId}</TableCell>
-                      <TableCell>{r.receiptDate ? new Date(r.receiptDate).toLocaleDateString("mk-MK") : "-"}</TableCell>
+                      <TableCell>{formatDate(r.receiptDate)}</TableCell>
                       <TableCell className="text-xs">
                         {(parseFloat(r.transportCost ?? "0") + parseFloat(r.customsCost ?? "0") + parseFloat(r.otherCost ?? "0")).toFixed(2)} ден.
                       </TableCell>

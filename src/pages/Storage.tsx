@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,7 +234,7 @@ export default function Storage() {
                       <TableCell className="text-gray-500">{fg.warehouseName ?? fg.warehouseCode ?? "-"}</TableCell>
                       <TableCell className="font-mono text-xs">{fg.woNumber ?? "-"}</TableCell>
                       <TableCell className="text-gray-500">{fg.unitCost && parseFloat(String(fg.unitCost)) > 0 ? `${fg.unitCost} ден.` : "-"}</TableCell>
-                      <TableCell className="text-gray-400 text-xs">{fg.updatedAt ? String(fg.updatedAt).split("T")[0] : "-"}</TableCell>
+                      <TableCell className="text-gray-400 text-xs">{formatDate(fg.updatedAt)}</TableCell>
                     </TableRow>
                   ))}
               </TableBody>

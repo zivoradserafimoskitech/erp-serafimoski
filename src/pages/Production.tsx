@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -327,7 +328,7 @@ export default function Production() {
                 </div>
                 <div className="bg-gray-50 rounded-lg px-3 py-2.5">
                   <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Планиран почеток</p>
-                  <p className="text-sm font-medium">{woDetail.plannedStart ? String(woDetail.plannedStart).split("T")[0] : "—"}</p>
+                  <p className="text-sm font-medium">{formatDate(woDetail.plannedStart)}</p>
                 </div>
               </div>
 
