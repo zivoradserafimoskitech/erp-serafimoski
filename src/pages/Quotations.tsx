@@ -103,11 +103,16 @@ export default function Quotations() {
   // BOM Estimator state
   const [estDialog, setEstDialog] = useState(false);
   const [estProduct, setEstProduct] = useState<number | null>(null);
-  const [estForm, setEstForm] = useState({ area: "", perimeter: "", length: "", quantity: "1" });
+  const [estForm, setEstForm] = useState({ area: "", perimeter: "", length: "", quantity: "1", width: "", height: "" });
   const { data: estimateData } = trpc.quotation.estimateFromProduct.useQuery(
     { productId: estProduct!, area: estForm.area, perimeter: estForm.perimeter || undefined, length: estForm.length || undefined, quantity: estForm.quantity },
     { enabled: !!estProduct && !!estForm.area }
   );
+  const { data: estBom } = trpc.catalog.bomList.useQuery({ productId: estProduct! }, { enabled: !!estProduct });
+  const estScales = new Set((estBom ?? []).map((c: any) => c.scale));
+  const estNeedsPerimeter = estScales.has("perimeter");
+  const estNeedsArea = estScales.has("area") || estNeedsPerimeter;
+  const estNeedsLength = estScales.has("length");
 
   const { data: customers } = trpc.customers.customerList.useQuery({});
   const { data: materialsData } = trpc.quotation.materialList.useQuery({});
@@ -337,7 +342,7 @@ export default function Quotations() {
                         onSelect={(sv: any) => addItem("service", sv.id, sv.name, sv.unit, String(sv.lastPurchasePrice ?? "0"))} />
                       <MaterialPicker tile={{ icon: "📦", label: "Производ (каталог)" }} title="Избери производ — ќе се отвори естиматор" value={null}
                         materials={productsData?.map(p => ({ id: p.id, code: p.code, name: p.name, unit: prodUnits[p.unit] || p.unit, lastPurchasePrice: p.defaultPrice })) as any}
-                        onSelect={(p: any) => { setEstProduct(p.id); setEstForm({ area: "", perimeter: "", length: "", quantity: "1" }); setEstDialog(true); }} />
+                        onSelect={(p: any) => { setEstProduct(p.id); setEstForm({ area: "", perimeter: "", length: "", quantity: "1", width: "", height: "" }); setEstDialog(true); }} />
                       <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300"
                         onClick={() => { setCustomForm({ name: "", unit: "pcs", quantity: "1", salePrice: "" }); setEstMats([]); setEstSvcs([]); setCustomDialog(true); }}>
                         <span className="text-lg leading-none">✏️</span>
@@ -774,14 +779,58 @@ export default function Quotations() {
       {/* BOM Estimator Dialog */}
       <Dialog open={estDialog} onOpenChange={setEstDialog}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Естиматор за производ</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Естиматор — {productsData?.find(x => x.id === estProduct)?.name ?? "производ"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-4 gap-3">
-              <div className="space-y-1"><Label>Површина (m2) *</Label><Input type="number" step="0.01" value={estForm.area} onChange={e => setEstForm({ ...estForm, area: e.target.value })} placeholder="пр. 15.5" /></div>
-              <div className="space-y-1"><Label>Периметар (м)</Label><Input type="number" step="0.01" value={estForm.perimeter} onChange={e => setEstForm({ ...estForm, perimeter: e.target.value })} placeholder="пр. 24" /></div>
-              <div className="space-y-1"><Label>Должина (м)</Label><Input type="number" step="0.01" value={estForm.length} onChange={e => setEstForm({ ...estForm, length: e.target.value })} placeholder="пр. 5" /></div>
-              <div className="space-y-1"><Label>Количина</Label><Input type="number" value={estForm.quantity} onChange={e => setEstForm({ ...estForm, quantity: e.target.value })} /></div>
-            </div>
+            {estBom && estBom.length === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                Овој производ сè уште нема состав (норматив). Оди во Каталог → Нормативи (BOM) и додади материјали/услуги пред да можеш да естимираш.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {estNeedsPerimeter ? (
+                  <>
+                    <div className="space-y-1">
+                      <Label>Ширина (м) *</Label>
+                      <Input type="number" step="0.01" value={estForm.width} placeholder="пр. 5"
+                        onChange={e => {
+                          const w = e.target.value, h = estForm.height;
+                          const wn = parseFloat(w) || 0, hn = parseFloat(h) || 0;
+                          setEstForm({ ...estForm, width: w, area: (wn * hn).toFixed(2), perimeter: (2 * (wn + hn)).toFixed(2) });
+                        }} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Висина (м) *</Label>
+                      <Input type="number" step="0.01" value={estForm.height} placeholder="пр. 1.8"
+                        onChange={e => {
+                          const h = e.target.value, w = estForm.width;
+                          const wn = parseFloat(w) || 0, hn = parseFloat(h) || 0;
+                          setEstForm({ ...estForm, height: h, area: (wn * hn).toFixed(2), perimeter: (2 * (wn + hn)).toFixed(2) });
+                        }} />
+                    </div>
+                  </>
+                ) : estNeedsArea && (
+                  <div className="space-y-1 col-span-2">
+                    <Label>Површина (m²) *</Label>
+                    <Input type="number" step="0.01" value={estForm.area} onChange={e => setEstForm({ ...estForm, area: e.target.value })} placeholder="пр. 15.5" />
+                  </div>
+                )}
+                {estNeedsLength && (
+                  <div className="space-y-1">
+                    <Label>Должина (м) *</Label>
+                    <Input type="number" step="0.01" value={estForm.length} onChange={e => setEstForm({ ...estForm, length: e.target.value })} placeholder="пр. 5" />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label>Количина (парчиња)</Label>
+                  <Input type="number" value={estForm.quantity} onChange={e => setEstForm({ ...estForm, quantity: e.target.value })} />
+                </div>
+                {estNeedsPerimeter && (Number(estForm.area) > 0) && (
+                  <p className="col-span-2 sm:col-span-4 text-xs text-gray-500">
+                    Пресметано: {estForm.area} m² површина · {estForm.perimeter} м периметар за рамка
+                  </p>
+                )}
+              </div>
+            )}
             {estimateData && (
               <div className="space-y-3">
                 <div className="flex gap-4 text-sm">
