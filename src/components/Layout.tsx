@@ -21,6 +21,7 @@ import {
   Settings,
   BookOpen,
   Building2,
+  Landmark,
 } from "lucide-react";
 
 const navItems = [
@@ -30,6 +31,7 @@ const navItems = [
   { path: "/klienti", label: "Клиенти и нарачки", icon: Users },
   { path: "/nabavka", label: "Набавка", icon: ShoppingCart },
   { path: "/smetkovodstvo", label: "Сметководство", icon: Calculator },
+  { path: "/finansii", label: "Финансии", icon: Landmark },
   { path: "/ponudi", label: "Понуди", icon: FileText },
   { path: "/priemnici", label: "Приемници", icon: ClipboardCheck },
   { path: "/katalog", label: "Каталог", icon: BookOpen },

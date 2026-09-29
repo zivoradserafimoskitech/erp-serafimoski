@@ -59,6 +59,9 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   dashboard: "manager",
   bank: "manager",
   assets: "manager",
+  finance: "manager",
+  ops: "operator",
+  hr: "admin",
 
   // Подесувања — само администратор
   settings: "admin",
@@ -92,7 +95,7 @@ export function isReadOnlyProcedure(procedure: string): boolean {
  * Може ли улогата да ја изврши постапката `router.procedure`?
  * Ова е истата логика што ја користи и серверот и интерфејсот.
  */
-export function canRun(role: string | undefined | null, path: string): boolean {
+export function canRun(role: string | undefined | null, path: string, type?: "query" | "mutation" | "subscription"): boolean {
   const [router, procedure = ""] = path.split(".");
   const r = rankOf(role);
   if (r === 0) return false;
@@ -100,11 +103,12 @@ export function canRun(role: string | undefined | null, path: string): boolean {
   // „Кој сум јас“ мора да е достапно на секого — интерфејсот го чита при вчитување
   if (path === "appUsers.appUsersMe") return true;
 
-  // Читањето е отворено за сите освен подесувањата и корисниците
-  if (isReadOnlyProcedure(procedure)) {
-    if (router === "appUsers") return atLeast(role, "admin");
-    return true;
-  }
+  // Корисниците и платите се доверливи и за читање
+  if (router === "appUsers" || router === "hr") return atLeast(role, "admin");
+
+  // Читањето е отворено за сите: секое tRPC query е читање (ниту едно не запишува),
+  // а за повици без тип се препознава по името
+  if (type === "query" || isReadOnlyProcedure(procedure)) return true;
 
   // Бришењето бара администратор
   if (isDestructive(procedure)) return atLeast(role, "admin");

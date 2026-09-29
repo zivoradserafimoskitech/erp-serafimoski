@@ -1,3 +1,4 @@
+import { getExtraSql } from "./init-db-v2";
 // АВТОГЕНЕРИРАНО од db/migrations/0000_full_schema.sql (drizzle-kit generate)
 // Целосна Postgres шема — сите 44 табели. Идемпотентно: IF NOT EXISTS + try/catch на constraints.
 
@@ -1435,5 +1436,6 @@ export function getInitSql(): string[] {
     `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "confidence" integer DEFAULT 0`,
     `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "parse_notes" text`,
     `ALTER TABLE "parsed_invoices" ADD COLUMN IF NOT EXISTS "due_date" date`,
+    ...getExtraSql(),
   ];
 }

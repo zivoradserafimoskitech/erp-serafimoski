@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import { PaymentTermsEditor } from "@/components/PaymentTermsEditor";
 import { type Installment, parseSchedule, describeSchedule, scheduleTotal } from "@contracts/payment-terms";
+import { isDomesticCountry } from "@contracts/country";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -93,8 +94,6 @@ export default function Quotations() {
     parseSchedule(raw) ?? [{ percent: 100, when: "after_invoice", days: parseInt(String(text ?? "").match(/\d+/)?.[0] ?? "14", 10) || 14 }];
   const [qSchedule, setQSchedule] = useState<Installment[]>(DEFAULT_SCHEDULE);
   // Странство = клиент од друга држава или валута различна од денари -> извоз, без ДДВ
-  const isDomesticCountry = (c?: string | null) =>
-    !c || /^(mk|mkd|македонија|северна македонија|(north |republic of )?macedonia|makedonija|severna makedonija)$/i.test(c.trim());
   const isForeign = (customerId: string | number, currency: string) =>
     currency !== "MKD" || !isDomesticCountry(customers?.find(c => String(c.id) === String(customerId))?.country);
   const [qForm, setQForm] = useState({

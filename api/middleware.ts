@@ -12,7 +12,7 @@ export const createRouter = t.router;
 
 // ── Спроведување на дозволи ──
 // Ова е вистинската заштита. Криењето копчиња во интерфејсот е само удобност.
-const enforcePermissions = t.middleware(async ({ ctx, path, next }) => {
+const enforcePermissions = t.middleware(async ({ ctx, path, type, next }) => {
   // Ако нема поставена лозинка воопшто, системот работи отворено (како порано)
   if (!process.env.APP_PASSWORD) return next({ ctx });
 
@@ -20,7 +20,7 @@ const enforcePermissions = t.middleware(async ({ ctx, path, next }) => {
   if (!actor) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Најави се повторно" });
   }
-  if (!canRun(actor.role, path)) {
+  if (!canRun(actor.role, path, type)) {
     const roleLabel = ROLES[actor.role]?.label ?? actor.role;
     throw new TRPCError({
       code: "FORBIDDEN",
