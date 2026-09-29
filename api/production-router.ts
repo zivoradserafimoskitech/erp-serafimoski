@@ -101,9 +101,10 @@ export const productionRouter = createRouter({
         .where(eq(workOrderMaterials.workOrderId, input.id));
       const matsWithWeight = (mats as any[]).map((m) => ({
         ...m,
+        // материјал во кг: тежината е самата количина; инаку количина × кг по единица
         weightKg:
           Math.round(
-            (Number(m.materialWeightPerUnit ?? 0) || 0) * (Number(m.quantity ?? 0) || 0) * 1000
+            (m.materialUnit === "kg" ? 1 : (Number(m.materialWeightPerUnit ?? 0) || 0)) * (Number(m.quantity ?? 0) || 0) * 1000
           ) / 1000,
       }));
       const plannedKg = matsWithWeight
