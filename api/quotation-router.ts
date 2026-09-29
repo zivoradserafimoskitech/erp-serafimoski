@@ -521,6 +521,16 @@ export const quotationRouter = createRouter({
         updateData.totalAmount = (subtotal + vatAmount).toFixed(2);
       }
 
+      if (!items && data.vatRate !== undefined) {
+        // само ДДВ се менува (на пр. „Без ДДВ“ за извоз) -- преметни ги ДДВ и вкупното од основицата
+        const cur = (await db.select().from(quotations).where(eq(quotations.id, id)))[0];
+        if (cur) {
+          const sub = parseFloat(String(cur.subtotal)) || 0;
+          const vatAmount = sub * (parseFloat(data.vatRate) || 0) / 100;
+          updateData.vatAmount = vatAmount.toFixed(2);
+          updateData.totalAmount = (sub + vatAmount).toFixed(2);
+        }
+      }
       await db.update(quotations).set(updateData).where(eq(quotations.id, id));
       await logAudit({ action: "UPDATE", entityType: "quotation", entityId: id, description: `Изменета понуда` });
       return { success: true };
