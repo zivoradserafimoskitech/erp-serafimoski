@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { MaterialPicker } from "@/components/MaterialPicker";
+import { PaymentTermsEditor } from "@/components/PaymentTermsEditor";
+import { type Installment, parseSchedule, describeSchedule, scheduleTotal } from "@contracts/payment-terms";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +87,11 @@ export default function Quotations() {
   const quoToWO = trpc.quotation.quotationToWorkOrder.useMutation({ onSuccess: (d) => toast.success(`Креиран налог ${d.woNumber} (${d.materialsCopied} материјали од естимација)`) });
   const { data: qDetail } = trpc.quotation.quotationById.useQuery({ id: selQ! }, { enabled: !!selQ });
 
+  const DEFAULT_SCHEDULE: Installment[] = [{ percent: 100, when: "after_invoice", days: 14 }];
+  // Стари понуди имаат само текст („14 дена“) -- претвори го во рата по фактура
+  const scheduleFrom = (raw: unknown, text?: string | null): Installment[] =>
+    parseSchedule(raw) ?? [{ percent: 100, when: "after_invoice", days: parseInt(String(text ?? "").match(/\d+/)?.[0] ?? "14", 10) || 14 }];
+  const [qSchedule, setQSchedule] = useState<Installment[]>(DEFAULT_SCHEDULE);
   const [qForm, setQForm] = useState({
     quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14",
     paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18",
@@ -153,7 +160,7 @@ export default function Quotations() {
   const [pfOpen, setPfOpen] = useState(false);
   const [pf, setPf] = useState({
     language: "mk" as DocLang, currency: "MKD", rate: "61.5", vatRate: "18", exportExempt: false,
-    issueDate: "", dueDate: "", notes: "", descriptions: [] as string[],
+    issueDate: "", dueDate: "", notes: "", descriptions: [] as string[], schedule: DEFAULT_SCHEDULE,
   });
   const isoDay = (d: Date) => d.toISOString().slice(0, 10);
   const pfDefaultNotes = (lang: DocLang, exempt: boolean, quoteNo: string) => {
@@ -161,11 +168,10 @@ export default function Quotations() {
     if (lang === "en") {
       lines.push(`Based on quotation ${quoteNo.replace(/ПО/g, "PO")}.`);
       if (exempt) lines.push("VAT exempt – export of goods (Art. 26, Law on VAT of the Republic of North Macedonia).");
-      lines.push("Payment: 100% in advance by bank transfer. Bank charges (OUR) are borne by the payer.");
+      lines.push("Payment by bank transfer. Bank charges (OUR) are borne by the payer.");
     } else {
       lines.push(`Според понуда ${quoteNo}.`);
       if (exempt) lines.push("Ослободено од ДДВ согласно член 26 од Законот за ДДВ (извоз на добра).");
-      lines.push("Плаќање: 100% авансно.");
     }
     return lines.join("\n");
   };
@@ -184,13 +190,17 @@ export default function Quotations() {
     const cur = qDetail.currency ?? "MKD";
     const language: DocLang = lang ?? (cur !== "MKD" ? "en" : "mk");
     const exempt = cur !== "MKD";
-    const days = parseInt(String(qDetail.paymentTerms ?? "").match(/\d+/)?.[0] ?? "14", 10) || 14;
+    const schedule = scheduleFrom(qDetail.paymentSchedule, qDetail.paymentTerms);
+    // рок: аванс → 7 дена; прва рата „X дена по фактура“ → X дена; инаку 14
+    const first = schedule[0];
+    const days = first.when === "after_invoice" ? (first.days ?? 14) : first.when === "advance" ? 7 : 14;
     const today = new Date();
     setPf({
       language, currency: cur, rate: "61.5", vatRate: exempt ? "0" : String(Number(qDetail.vatRate ?? 18)), exportExempt: exempt,
       issueDate: isoDay(today), dueDate: isoDay(new Date(today.getTime() + days * 86400000)),
       notes: pfDefaultNotes(language, exempt, qDetail.quoteNumber),
       descriptions: (qDetail.items ?? []).map((i: any) => i.description),
+      schedule,
     });
     setPfOpen(true);
   };
@@ -237,6 +247,7 @@ export default function Quotations() {
 
   const resetQForm = () => {
     setQForm({ quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14", paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18" });
+    setQSchedule(DEFAULT_SCHEDULE);
     setQItems([]);
   };
 
@@ -252,6 +263,7 @@ export default function Quotations() {
       currency: qDetail.currency ?? "MKD",
       vatRate: qDetail.vatRate ?? "18",
     });
+    setQSchedule(scheduleFrom(qDetail.paymentSchedule, qDetail.paymentTerms));
     setQItems((qDetail.items ?? []).map((i: any) => ({
       itemType: i.itemType, referenceId: i.referenceId ?? null, description: i.description,
       quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, totalPrice: i.totalPrice,
@@ -327,13 +339,15 @@ export default function Quotations() {
   const handleQSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const t = calcTotals();
+    if (scheduleTotal(qSchedule) !== 100) { toast.error("Ратите за плаќање мора да се вкупно 100%"); return; }
+    const payTerms = { paymentTerms: describeSchedule(qSchedule, "mk").slice(0, 255), paymentSchedule: JSON.stringify(qSchedule) };
     if (editingId) {
       updateQFull.mutate({
         id: editingId,
         customerId: parseInt(qForm.customerId),
         validUntil: qForm.validUntil || undefined,
         deliveryDays: parseInt(qForm.deliveryDays) || 14,
-        paymentTerms: qForm.paymentTerms,
+        ...payTerms,
         notes: qForm.notes || undefined,
         vatRate: qForm.vatRate,
         currency: qForm.currency,
@@ -346,7 +360,7 @@ export default function Quotations() {
       customerId: parseInt(qForm.customerId),
       validUntil: qForm.validUntil || undefined,
       deliveryDays: parseInt(qForm.deliveryDays) || 14,
-      paymentTerms: qForm.paymentTerms,
+      ...payTerms,
       notes: qForm.notes || undefined,
       subtotal: t.subtotal,
       vatRate: qForm.vatRate,
@@ -389,10 +403,13 @@ export default function Quotations() {
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label>Важи до</Label><Input type="date" value={qForm.validUntil} onChange={e => setQForm({ ...qForm, validUntil: e.target.value })} /></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Испорака (денови)</Label><Input value={qForm.deliveryDays} onChange={e => setQForm({ ...qForm, deliveryDays: e.target.value })} /></div>
-                    <div className="space-y-2"><Label>Плаќање</Label><Input value={qForm.paymentTerms} onChange={e => setQForm({ ...qForm, paymentTerms: e.target.value })} /></div>
                     <div className="space-y-2"><Label>Валута</Label><Select value={qForm.currency} onValueChange={v => setQForm({ ...qForm, currency: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MKD">MKD</SelectItem><SelectItem value="EUR">EUR</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Услови за плаќање</Label>
+                    <PaymentTermsEditor value={qSchedule} onChange={setQSchedule} total={parseFloat(calcTotals().total) || 0} currency={qForm.currency} />
                   </div>
 
                   {/* Add items section */}
@@ -889,6 +906,10 @@ export default function Quotations() {
                   ))}
                 </div>
               </div>
+              <div className="space-y-1">
+                <Label>Услови за плаќање</Label>
+                <PaymentTermsEditor value={pf.schedule} onChange={sch => setPf({ ...pf, schedule: sch })} total={pfPreview?.total} currency={pf.currency} />
+              </div>
               <div className="space-y-1"><Label>Забелешка на документот</Label><Textarea rows={4} value={pf.notes} onChange={e => setPf({ ...pf, notes: e.target.value })} /></div>
               {(pf.language === "en" || pf.currency !== "MKD") && !companySettings?.iban && (
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
@@ -901,7 +922,7 @@ export default function Quotations() {
                   <span className="font-bold text-blue-700">Вкупно: {pfPreview.total.toFixed(2)} {pf.currency}</span>
                 </div>
               )}
-              <Button className="w-full bg-blue-600 hover:bg-blue-700" disabled={createPf.isPending || pfFactor() === null || !pf.issueDate}
+              <Button className="w-full bg-blue-600 hover:bg-blue-700" disabled={createPf.isPending || pfFactor() === null || !pf.issueDate || scheduleTotal(pf.schedule) !== 100}
                 onClick={() => {
                   const f = pfFactor();
                   if (f === null) return;
@@ -914,6 +935,7 @@ export default function Quotations() {
                     quotationId: qDetail.id, language: pf.language, currency: pf.currency, priceFactor: f,
                     vatRate: pf.exportExempt ? "0" : (pf.vatRate || "0"), issueDate: pf.issueDate, dueDate: pf.dueDate || undefined,
                     notes: (pf.notes + conv).trim() || undefined, descriptions: pf.descriptions,
+                    paymentSchedule: JSON.stringify(pf.schedule),
                   });
                 }}>
                 {createPf.isPending ? "Креирање..." : "Креирај про-фактура и печати"}

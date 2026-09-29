@@ -274,6 +274,7 @@ export const quotationRouter = createRouter({
       issueDate: z.string(),
       dueDate: z.string().optional(),
       notes: z.string().optional(),
+      paymentSchedule: z.string().optional(),
       // преведени/изменети описи на ставките, по редослед на ставките во понудата
       descriptions: z.array(z.string()).optional(),
     }))
@@ -313,6 +314,7 @@ export const quotationRouter = createRouter({
         totalAmount: (subtotal + vatAmount).toFixed(2),
         currency: input.currency,
         notes: input.notes || null,
+        paymentSchedule: input.paymentSchedule || quo[0].paymentSchedule || null,
       };
       let insertId = 0;
       for (let attempt = 0; attempt < 5 && !insertId; attempt++) {
@@ -405,6 +407,7 @@ export const quotationRouter = createRouter({
       validUntil: z.string().optional(),
       deliveryDays: z.number().default(14),
       paymentTerms: z.string().default("14 дена"),
+      paymentSchedule: z.string().optional(),
       notes: z.string().optional(),
       items: z.array(z.object({
         itemType: z.enum(["material", "service", "product"]),
@@ -470,6 +473,7 @@ export const quotationRouter = createRouter({
       validUntil: z.string().optional(),
       deliveryDays: z.number().optional(),
       paymentTerms: z.string().optional(),
+      paymentSchedule: z.string().optional(),
       notes: z.string().optional(),
       items: z.array(z.object({
         itemType: z.enum(["material", "service", "product"]),

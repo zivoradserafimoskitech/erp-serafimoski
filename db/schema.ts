@@ -752,6 +752,7 @@ export const quotations = pgTable("quotations", {
   validUntil: date("valid_until"),
   deliveryDays: integer("delivery_days").default(14),
   paymentTerms: varchar("payment_terms", { length: 255 }),
+  paymentSchedule: text("payment_schedule"), // JSON: [{ percent, when, days? }] — види contracts/payment-terms.ts
   notes: text("notes"),
   convertedOrderId: bigint("converted_order_id", { mode: "number", unsigned: true }),
   createdBy: bigint("created_by", { mode: "number", unsigned: true }),
@@ -810,6 +811,7 @@ export const invoices = pgTable("invoices", {
   originalInvoiceId: bigint("original_invoice_id", { mode: "number", unsigned: true }), // for credit notes
   quotationId: bigint("quotation_id", { mode: "number", unsigned: true }), // про-фактура креирана од понуда
   language: varchar("language", { length: 5 }).default("mk"), // mk | en — јазик на печатење
+  paymentSchedule: text("payment_schedule"), // JSON рати на плаќање (од понудата / про-фактурата)
   createdBy: bigint("created_by", { mode: "number", unsigned: true }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

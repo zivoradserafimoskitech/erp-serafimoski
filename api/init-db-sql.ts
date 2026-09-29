@@ -1254,6 +1254,8 @@ export function getInitSql(): string[] {
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "bank_address" text`,
     `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "quotation_id" bigint`,
     `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "language" varchar(5) DEFAULT 'mk'`,
+    `ALTER TABLE "quotations" ADD COLUMN IF NOT EXISTS "payment_schedule" text`,
+    `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "payment_schedule" text`,
 
     // ===== Тежина по единица (kg/m, kg/m², kg/ком) =====
     `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
