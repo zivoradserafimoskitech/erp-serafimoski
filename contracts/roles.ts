@@ -79,7 +79,12 @@ export function isReadOnlyProcedure(procedure: string): boolean {
     p.endsWith("stats") || p.endsWith("get") || p.endsWith("search") ||
     p.endsWith("report") || p.endsWith("preview") || p.endsWith("suggest") ||
     p.endsWith("needs") || p.endsWith("logs") || p.endsWith("trace") ||
-    p.endsWith("formaterial") || p.endsWith("params")
+    p.endsWith("formaterial") || p.endsWith("params") ||
+    // предлог на следен број на документ -- секој што креира документ мора да може да го прочита
+    p.endsWith("nextdocnumber") || p.endsWith("nextnumber") || p.endsWith("nextinvoicenumber") ||
+    p.startsWith("estimate") || p.endsWith("forinvoice") || p.endsWith("byproduct") ||
+    p.endsWith("formatching") || p.endsWith("bypartner") || p.endsWith("opendocs") ||
+    p.endsWith("allocationsof") || p === "payablesreceivables" || p === "hasconfig"
   );
 }
 

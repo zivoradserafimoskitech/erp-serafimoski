@@ -89,7 +89,7 @@ export function getInitSql(): string[] {
 );`,
     `CREATE TABLE IF NOT EXISTS "doc_counters" (
 	"id" serial PRIMARY KEY NOT NULL,
-	"kind" varchar(10) NOT NULL,
+	"kind" varchar(30) NOT NULL,
 	"year" integer NOT NULL,
 	"value" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -722,7 +722,7 @@ export function getInitSql(): string[] {
     `ALTER TABLE "digital_certificates" ADD COLUMN IF NOT EXISTS "last_used_at" timestamp`,
     `ALTER TABLE "digital_certificates" ADD COLUMN IF NOT EXISTS "created_at" timestamp DEFAULT now()`,
     `ALTER TABLE "doc_counters" ADD COLUMN IF NOT EXISTS "id" serial PRIMARY KEY`,
-    `ALTER TABLE "doc_counters" ADD COLUMN IF NOT EXISTS "kind" varchar(10)`,
+    `ALTER TABLE "doc_counters" ADD COLUMN IF NOT EXISTS "kind" varchar(30)`,
     `ALTER TABLE "doc_counters" ADD COLUMN IF NOT EXISTS "year" integer`,
     `ALTER TABLE "doc_counters" ADD COLUMN IF NOT EXISTS "value" integer DEFAULT 0`,
     `ALTER TABLE "doc_counters" ADD COLUMN IF NOT EXISTS "created_at" timestamp DEFAULT now()`,
@@ -1256,6 +1256,8 @@ export function getInitSql(): string[] {
     `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "language" varchar(5) DEFAULT 'mk'`,
     `ALTER TABLE "quotations" ADD COLUMN IF NOT EXISTS "payment_schedule" text`,
     `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "payment_schedule" text`,
+    // „deliveryNote“ / „incomingInvoice“ се подолги од 10 знаци -- бројачот не можеше да се зачува
+    `ALTER TABLE "doc_counters" ALTER COLUMN "kind" TYPE varchar(30)`,
 
     // ===== Тежина по единица (kg/m, kg/m², kg/ком) =====
     `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,

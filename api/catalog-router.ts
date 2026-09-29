@@ -248,7 +248,7 @@ export const catalogRouter = createRouter({
         let unitCost = 0;
         if (c.kind === "material") {
           const m = await db.select().from(materials).where(eq(materials.id, c.refId));
-          unitCost = parseFloat(m[0]?.price ?? "0");
+          unitCost = parseFloat(m[0]?.avgCost ?? "0") || parseFloat(m[0]?.lastPurchasePrice ?? "0") || 0;
           materialCost += qty * unitCost;
         } else {
           const s = await db.select().from(services).where(eq(services.id, c.refId));

@@ -1,7 +1,7 @@
 // Автоматска пресметка на цена на работен налог: операции (цена/час × време) + материјали
 import { eq } from "drizzle-orm";
 import { getDb } from "./queries/connection";
-import { workOrders, workOrderOperations, workOrderMaterials } from "@db/schema";
+import { workOrders, workOrderOperations, workOrderMaterials, materials } from "@db/schema";
 
 export async function recalcWorkOrderCost(workOrderId: number): Promise<string> {
   const db = getDb();
@@ -21,7 +21,18 @@ export async function recalcWorkOrderCost(workOrderId: number): Promise<string> 
     }
   }
 
-  const matCost = mats.reduce((s, m) => s + (parseFloat(String(m.totalCost ?? "0")) || 0), 0);
+  // Секој ред е или планиран или реален (издавањето го претвора планираниот во реален), па нема двојно броење.
+  // Ред без цена (на пр. копиран од понуда) се вреднува по просечната набавна цена на материјалот.
+  let matCost = 0;
+  for (const m of mats) {
+    let cost = parseFloat(String(m.totalCost ?? "0")) || 0;
+    if (cost <= 0) {
+      const mat = (await db.select().from(materials).where(eq(materials.id, m.materialId)))[0];
+      const unit = parseFloat(String(mat?.avgCost ?? "0")) || parseFloat(String(mat?.lastPurchasePrice ?? "0")) || 0;
+      cost = unit * (parseFloat(String(m.quantity ?? "0")) || 0);
+    }
+    matCost += cost;
+  }
   const total = opCost + matCost;
   await db.update(workOrders).set({ costAmount: total.toFixed(2) }).where(eq(workOrders.id, workOrderId));
   return total.toFixed(2);
