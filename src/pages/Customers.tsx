@@ -38,6 +38,7 @@ import {
   ClipboardList,
   Trash2,
   Eye,
+  Pencil,
 } from "lucide-react";
 
 const orderStatusConfig: Record<string, { label: string; className: string }> = {
@@ -65,10 +66,9 @@ export default function Customers() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<number | null>(null);
 
-  const [custForm, setCustForm] = useState({
-    name: "", company: "", contactPerson: "", email: "", phone: "",
-    address: "", city: "", taxNumber: "", notes: "",
-  });
+  const EMPTY_CUST = { name: "", company: "", contactPerson: "", email: "", phone: "", address: "", city: "", country: "", taxNumber: "", notes: "", isActive: "active" };
+  const [custForm, setCustForm] = useState(EMPTY_CUST);
+  const [editingCustId, setEditingCustId] = useState<number | null>(null);
 
   const [orderForm, setOrderForm] = useState({
     orderNumber: "", customerId: "", priority: "normal",
@@ -97,9 +97,32 @@ export default function Customers() {
     onSuccess: () => {
       utils.customers.customerList.invalidate();
       setCustomerDialog(false);
-      setCustForm({ name: "", company: "", contactPerson: "", email: "", phone: "", address: "", city: "", taxNumber: "", notes: "" });
+      setCustForm(EMPTY_CUST);
     },
+    onError: (e) => toast.error(e.message),
   });
+
+  const custUpdate = trpc.customers.customerUpdate.useMutation({
+    onSuccess: () => {
+      utils.customers.customerList.invalidate();
+      toast.success("Клиентот е изменет");
+      setCustomerDialog(false);
+      setEditingCustId(null);
+      setCustForm(EMPTY_CUST);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const openNewCust = () => { setEditingCustId(null); setCustForm(EMPTY_CUST); };
+  const openEditCust = (c: any) => {
+    setEditingCustId(c.id);
+    setCustForm({
+      name: c.name ?? "", company: c.company ?? "", contactPerson: c.contactPerson ?? "", email: c.email ?? "",
+      phone: c.phone ?? "", address: c.address ?? "", city: c.city ?? "", country: c.country ?? "",
+      taxNumber: c.taxNumber ?? c.edb ?? "", notes: c.notes ?? "", isActive: c.isActive ?? "active",
+    });
+    setCustomerDialog(true);
+  };
 
   const custDelete = trpc.customers.customerDelete.useMutation({
     onSuccess: () => utils.customers.customerList.invalidate(),
@@ -133,7 +156,9 @@ export default function Customers() {
 
   const handleCustSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    custCreate.mutate(custForm);
+    const { isActive, ...rest } = custForm;
+    if (editingCustId) custUpdate.mutate({ id: editingCustId, ...rest, isActive: isActive as "active" | "inactive" });
+    else custCreate.mutate(rest);
   };
 
   const handleOrderSubmit = (e: React.FormEvent) => {
@@ -182,16 +207,16 @@ export default function Customers() {
           <p className="text-gray-500 mt-1">Управување со клиенти и нивни нарачки</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={customerDialog} onOpenChange={setCustomerDialog}>
+          <Dialog open={customerDialog} onOpenChange={(o) => { setCustomerDialog(o); if (!o) setEditingCustId(null); }}>
             <DialogTrigger asChild>
-              <Button variant="outline">
+              <Button variant="outline" onClick={openNewCust}>
                 <Plus className="h-4 w-4 mr-2" />
                 Нов клиент
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Нов клиент</DialogTitle>
+                <DialogTitle>{editingCustId ? `Измени клиент — ${custForm.name}` : "Нов клиент"}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleCustSubmit} className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -222,13 +247,17 @@ export default function Customers() {
                   <Label>Адреса</Label>
                   <Input value={custForm.address} onChange={(e) => setCustForm({ ...custForm, address: e.target.value })} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <Label>Град</Label>
                     <Input value={custForm.city} onChange={(e) => setCustForm({ ...custForm, city: e.target.value })} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Даночен број</Label>
+                    <Label>Држава</Label>
+                    <Input value={custForm.country} onChange={(e) => setCustForm({ ...custForm, country: e.target.value })} placeholder="Македонија" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>ЕДБ / VAT број</Label>
                     <Input value={custForm.taxNumber} onChange={(e) => setCustForm({ ...custForm, taxNumber: e.target.value })} />
                   </div>
                 </div>
@@ -236,8 +265,14 @@ export default function Customers() {
                   <Label>Белешки</Label>
                   <Textarea value={custForm.notes} onChange={(e) => setCustForm({ ...custForm, notes: e.target.value })} />
                 </div>
-                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={custCreate.isPending}>
-                  {custCreate.isPending ? "Зачувување..." : "Зачувај клиент"}
+                {editingCustId && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={custForm.isActive === "active"} onChange={(e) => setCustForm({ ...custForm, isActive: e.target.checked ? "active" : "inactive" })} />
+                    Активен клиент
+                  </label>
+                )}
+                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={custCreate.isPending || custUpdate.isPending}>
+                  {custCreate.isPending || custUpdate.isPending ? "Зачувување..." : editingCustId ? "Зачувај измени" : "Зачувај клиент"}
                 </Button>
               </form>
             </DialogContent>
@@ -390,7 +425,10 @@ export default function Customers() {
                             {c.isActive === "active" ? "Активен" : "Неактивен"}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Button size="sm" variant="ghost" onClick={() => openEditCust(c)} title="Измени">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
                           <Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) custDelete.mutate({ id: c.id }); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
