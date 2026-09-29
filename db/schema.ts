@@ -1033,7 +1033,7 @@ export type DigitalCertificate = typeof digitalCertificates.$inferSelect;
 // ============= DOCUMENT COUNTERS =============
 export const docCounters = pgTable("doc_counters", {
   id: serial("id").primaryKey(),
-  kind: varchar("kind", { length: 10 }).notNull(), // PO, RN, IS, PF, VF, PR, FV, KN
+  kind: varchar("kind", { length: 30 }).notNull(), // quote, workOrder, deliveryNote, incomingInvoice, ...
   year: integer("year").notNull(),
   value: integer("value").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

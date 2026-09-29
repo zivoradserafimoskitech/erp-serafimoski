@@ -721,27 +721,43 @@ export const productionRouter = createRouter({
         customerId = ord[0]?.customerId ?? null;
       }
       if (!customerId) throw new Error("Налогот нема поврзана нарачка со клиент — креирај фактура рачно");
+      const existing = await db.select().from(invoices).where(eq(invoices.workOrderId, input.workOrderId));
+      const prev = existing.find((i: any) => i.invoiceType === "standard" && i.status !== "cancelled");
+      if (prev) throw new Error(`За овој налог веќе постои фактура ${prev.invoiceNumber}`);
+
+      // Цените се од нарачката (договорената цена од понудата); ако нема цени -- трошок + маржа
+      const oItems = (await db.select().from(orderItems).where(eq(orderItems.orderId, wo[0].orderId!)))
+        .filter((i: any) => Number(i.totalPrice ?? 0) > 0);
+      const lines = oItems.length > 0
+        ? oItems.map((i: any) => ({
+            description: i.description, quantity: String(i.quantity ?? 1), unit: "pcs",
+            unitPrice: String(i.unitPrice), totalPrice: String(i.totalPrice),
+          }))
+        : (() => {
+            const cost = Number(wo[0].costAmount ?? 0);
+            const price = Math.round(cost * (1 + input.marginPercent / 100) * 100) / 100;
+            return [{ description: wo[0].description ?? `Работен налог ${wo[0].woNumber}`, quantity: "1", unit: "pcs", unitPrice: String(price), totalPrice: String(price) }];
+          })();
+      const subtotal = Math.round(lines.reduce((a, l) => a + Number(l.totalPrice), 0) * 100) / 100;
+      if (!(subtotal > 0)) throw new Error("Налогот нема цена (ни во нарачката, ни пресметан трошок) — креирај фактура рачно");
+      const vat = Math.round(subtotal * 0.18 * 100) / 100;
+
       const { getNextDocNumber } = await import("./counters-helper");
       const invoiceNumber = await getNextDocNumber("invoice");
-      const cost = Number(wo[0].costAmount ?? 0);
-      const price = Math.round(cost * (1 + input.marginPercent / 100) * 100) / 100;
-      const vat = Math.round(price * 0.18 * 100) / 100;
       const today = new Date().toISOString().slice(0, 10);
       const due = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
       const res = await db.insert(invoices).values({
-        invoiceNumber, customerId, workOrderId: input.workOrderId,
+        invoiceNumber, customerId, orderId: wo[0].orderId, workOrderId: input.workOrderId,
+        invoiceType: "standard",
         issueDate: today, dueDate: due, status: "draft",
-        subtotal: String(price), vatRate: "18", vatAmount: String(vat),
-        totalAmount: String(Math.round((price + vat) * 100) / 100), currency: "MKD",
-      });
+        subtotal: subtotal.toFixed(2), vatRate: "18", vatAmount: vat.toFixed(2),
+        totalAmount: (subtotal + vat).toFixed(2), currency: "MKD",
+      } as any);
       const invId = Number((res as any)[0]?.insertId ?? 0);
       if (invId) {
-        await db.insert(documentItems).values({
-          documentId: invId, documentType: "invoice",
-          description: wo[0].description ?? `Работен налог ${wo[0].woNumber}`,
-          quantity: "1", unit: "pcs", unitPrice: String(price), totalPrice: String(price),
-          vatRate: "18", itemType: "service", sortOrder: 0,
-        });
+        await db.insert(documentItems).values(lines.map(l => ({
+          documentId: invId, documentType: "invoice", ...l, vatRate: "18", itemType: "manual",
+        })) as any);
       }
       return { success: true, invoiceNumber, id: invId };
     }),

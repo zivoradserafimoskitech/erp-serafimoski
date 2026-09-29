@@ -343,10 +343,17 @@ export const storageRouter = createRouter({
       sourceDocId: z.number(),
       reference: z.string().optional(),
       userId: z.number().optional(),
+      // ред од материјалите на налогот што се издава -- се означува како „реално“ за да не се издаде двапати
+      woMaterialId: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const { materialId, warehouseId, quantity, sourceDocType, sourceDocId, reference, userId } = input;
+      const { materialId, warehouseId, quantity, sourceDocType, sourceDocId, reference, userId, woMaterialId } = input;
+      if (woMaterialId) {
+        const { workOrderMaterials } = await import("@db/schema");
+        const row = (await db.select().from(workOrderMaterials).where(eq(workOrderMaterials.id, woMaterialId)))[0];
+        if (row?.isActual === "actual") throw new Error("Овој материјал е веќе издаден за налогот");
+      }
       const qty = parseFloat(quantity);
 
       // Check stock
@@ -370,6 +377,29 @@ export const storageRouter = createRouter({
         await db.update(materials)
           .set({ currentStock: (parseFloat(mat[0].currentStock) - qty).toFixed(3) })
           .where(eq(materials.id, materialId));
+      }
+
+      // Лотови (шаржи/атести): FIFO -- намали ги најстарите со преостаната количина
+      {
+        const lots = (await db.select().from(materialLots)
+          .where(and(eq(materialLots.materialId, materialId), eq(materialLots.warehouseId, warehouseId)))
+          .orderBy(materialLots.id)).filter((l: any) => parseFloat(String(l.remainingQty)) > 0);
+        let left = qty;
+        for (const l of lots) {
+          if (left <= 0) break;
+          const rem = parseFloat(String(l.remainingQty));
+          const take = Math.min(rem, left);
+          await db.update(materialLots).set({ remainingQty: (rem - take).toFixed(3) }).where(eq(materialLots.id, l.id));
+          left -= take;
+        }
+      }
+
+      if (woMaterialId) {
+        const { workOrderMaterials } = await import("@db/schema");
+        await db.update(workOrderMaterials).set({
+          isActual: "actual", quantity: qty.toFixed(3),
+          unitCost: parseFloat(unitCost).toFixed(2), totalCost: (qty * parseFloat(unitCost)).toFixed(2),
+        }).where(eq(workOrderMaterials.id, woMaterialId));
       }
 
       // Log issue

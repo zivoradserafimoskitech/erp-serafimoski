@@ -245,7 +245,7 @@ export const quotationRouter = createRouter({
       for (const it of items) {
         // директни материјални ставки
         if (it.itemType === "material" && it.referenceId) {
-          await db.insert(workOrderMaterials).values({ workOrderId: woId, materialId: it.referenceId, quantity: it.quantity, isActual: 0 } as any);
+          await db.insert(workOrderMaterials).values({ workOrderId: woId, materialId: it.referenceId, quantity: it.quantity, isActual: "planned" } as any);
           mats++;
         }
         // custom производ со интерна естимација (JSON во notes)
@@ -253,11 +253,15 @@ export const quotationRouter = createRouter({
           try {
             const est = JSON.parse(it.notes);
             for (const em of est?.materials ?? []) {
-              await db.insert(workOrderMaterials).values({ workOrderId: woId, materialId: em.materialId, quantity: String(em.quantity), isActual: 0 } as any);
+              await db.insert(workOrderMaterials).values({ workOrderId: woId, materialId: em.materialId, quantity: String(em.quantity), isActual: "planned" } as any);
               mats++;
             }
           } catch { /* не е JSON — прескокни */ }
         }
+      }
+      if (woId) {
+        const { recalcWorkOrderCost } = await import("./wo-cost-helper");
+        await recalcWorkOrderCost(woId).catch(() => {});
       }
       return { success: true, woNumber, materialsCopied: mats };
     }),

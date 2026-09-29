@@ -17,7 +17,10 @@ export const settingsRouter = createRouter({
   settingsGet: publicQuery.query(async () => {
     const db = getDb();
     const result = await db.select().from(companySettings);
-    return result[0] ?? null;
+    if (!result[0]) return null;
+    // Паролата за е-пошта не смее да стигне до прелистувачот (ја чита само серверот)
+    const { emailPassword, ...safe } = result[0];
+    return { ...safe, emailPasswordSet: !!emailPassword };
   }),
 
   settingsUpsert: publicQuery

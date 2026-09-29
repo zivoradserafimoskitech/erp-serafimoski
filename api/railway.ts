@@ -10,6 +10,18 @@ import { cors } from "hono/cors";
 
 const app = new Hono();
 
+// Сервисни адреси (миграција, seed, debug): кога е поставена APP_PASSWORD, бараат ?key=... или x-app-key
+const ADMIN_PATHS = ["/api/init-db", "/api/debug", "/api/test-db", "/api/seed-services", "/api/seed-materials"];
+app.use("/api/*", async (c, next) => {
+  const pw = process.env.APP_PASSWORD;
+  if (!pw || !ADMIN_PATHS.includes(c.req.path)) return await next();
+  const key = c.req.header("x-app-key") ?? c.req.query("key") ?? "";
+  const { resolveActor } = await import("./context");
+  const actor = await resolveActor(key);
+  if (!actor || actor.role !== "admin") return c.json({ error: "Потребна е администраторска лозинка (?key=...)" }, 401);
+  await next();
+});
+
 // ── Заштита со лозинка (точка 5): активна само ако APP_PASSWORD е поставена ──
 app.post("/api/auth-check", async (c) => {
   const pw = process.env.APP_PASSWORD;
@@ -82,55 +94,6 @@ app.get("/api/init-db", async (c) => {
     return c.json({ status: "tables created", created: r.created, skipped: r.skipped });
   } catch (e: any) {
     return c.json({ status: "error", message: e.message }, 500);
-  }
-});
-
-// Debug: test db compatibility layer
-app.get("/api/debug-db", async (c) => {
-  try {
-    const { getDb } = await import("./queries/pg-compat");
-    const db = getDb();
-    
-    // Test 1: Raw execute
-    const t1 = await db.execute("SELECT 1 as test");
-    
-    // Test 2: Check pg_tables
-    const t2 = await db.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
-    
-    // Test 3: Insert with pg-compat
-    const { customers } = await import("../db/schema");
-    const t3 = await db.insert(customers).values({
-      name: "DEBUG клиент",
-      company: "DEBUG",
-      email: "debug@test.mk",
-      is_active: "active"
-    });
-    
-    return c.json({ success: true, t1, tables: t2.rows.map((r: any) => r.tablename), t3 });
-  } catch (e: any) {
-    return c.json({ success: false, error: e.message, stack: e.stack?.substring(0, 500) }, 500);
-  }
-});
-
-// 4. Test customer creation — raw pg, сигурно работи
-app.get("/api/test-customer", async (c) => {
-  try {
-    const pgModule = await import("pg");
-    const Pool = pgModule.default?.Pool || pgModule.Pool;
-    const ssl = process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
-    const pool = new Pool({ 
-      connectionString: process.env.DATABASE_URL,
-      ssl
-    });
-    
-    const result = await pool.query(
-      `INSERT INTO customers (name, company, email, phone, address, city, country, is_active, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW()) RETURNING *`,
-      ['Тест Клиент ' + Date.now(), 'Тест ДООЕЛ', 'test@test.mk', '070123456', 'Улица 1', 'Скопје', 'Македонија']
-    );
-    await pool.end();
-    return c.json({ success: true, message: "Клиентот е креиран!", result: result.rows[0] });
-  } catch (e: any) {
-    return c.json({ success: false, error: e.message, stack: e.stack?.substring(0, 500) }, 500);
   }
 });
 

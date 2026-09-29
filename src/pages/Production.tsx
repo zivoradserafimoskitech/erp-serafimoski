@@ -144,13 +144,13 @@ export default function Production() {
   const handleIssue = (woMaterial: any) => {
     // Материјалите се издаваат од магацинот за материјали (ГЛ-МАТ)
     const matWh = warehousesData?.find((w: any) => w.code === "GL-MAT")
-      || warehousesData?.find((w: any) => w.type === "materials")
+      || warehousesData?.find((w: any) => w.type === "raw_materials")
       || warehousesData?.[0];
     if (!matWh) { toast.error("Нема магацин за материјали — провери во Магацини"); return; }
     issueMut.mutate({
       materialId: woMaterial.materialId, warehouseId: matWh.id,
       quantity: woMaterial.quantity, sourceDocType: "work_order", sourceDocId: selWO!,
-      reference: woDetail?.woNumber,
+      reference: woDetail?.woNumber, woMaterialId: woMaterial.id,
     });
   };
 
