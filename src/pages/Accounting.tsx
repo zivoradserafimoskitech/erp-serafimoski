@@ -989,7 +989,8 @@ export default function Accounting() {
               </div>
               <div className="flex gap-2 pt-2">
                 <Button size="sm" variant="outline" onClick={() => generateUJPXml(outDetail)}><FileText className="h-3.5 w-3.5 mr-1" />УЈП XML</Button>
-                <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings)}><Download className="h-3.5 w-3.5 mr-1" />Печати / PDF</Button>
+                <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings, "mk")}><Download className="h-3.5 w-3.5 mr-1" />PDF МК</Button>
+                <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings, "en")}><Download className="h-3.5 w-3.5 mr-1" />PDF EN</Button>
               </div>
             </div>
           )}

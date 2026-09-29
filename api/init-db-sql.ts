@@ -1245,6 +1245,16 @@ export function getInitSql(): string[] {
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "cut_kerf_mm" numeric(6, 1) DEFAULT '2'`,
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "min_remnant_mm" numeric(8, 1) DEFAULT '300'`,
 
+    // ===== Девизна сметка / про-фактура за странство =====
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "name_en" varchar(255)`,
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "address_en" text`,
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "iban" varchar(50)`,
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "swift" varchar(20)`,
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "bank_name_en" varchar(255)`,
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "bank_address" text`,
+    `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "quotation_id" bigint`,
+    `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "language" varchar(5) DEFAULT 'mk'`,
+
     // ===== Тежина по единица (kg/m, kg/m², kg/ком) =====
     `ALTER TABLE "materials" ADD COLUMN IF NOT EXISTS "weight_per_unit" numeric(12, 4) DEFAULT '0'`,
     `ALTER TABLE "document_items" ADD COLUMN IF NOT EXISTS "material_id" bigint`,

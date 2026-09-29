@@ -1,6 +1,6 @@
 import UsersTab from "@/components/UsersTab";
 import { formatDate } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,22 @@ export default function SettingsPage() {
     bankName: settings?.bankName ?? "", bankAccount: settings?.bankAccount ?? "", phone: settings?.phone ?? "",
     email: settings?.email ?? "", defaultVatRate: settings?.defaultVatRate ?? "18",
     valuationMethod: settings?.valuationMethod ?? "weighted_average", currency: settings?.currency ?? "MKD",
+    nameEn: settings?.nameEn ?? "", addressEn: settings?.addressEn ?? "", iban: settings?.iban ?? "",
+    swift: settings?.swift ?? "", bankNameEn: settings?.bankNameEn ?? "", bankAddress: settings?.bankAddress ?? "",
   });
+
+  // Подесувањата стигнуваат асинхроно -- пополни ја формата кога ќе се вчитаат
+  useEffect(() => {
+    if (!settings) return;
+    setForm({
+      name: settings.name ?? "", address: settings.address ?? "", edb: settings.edb ?? "", embs: settings.embs ?? "",
+      bankName: settings.bankName ?? "", bankAccount: settings.bankAccount ?? "", phone: settings.phone ?? "",
+      email: settings.email ?? "", defaultVatRate: settings.defaultVatRate ?? "18",
+      valuationMethod: settings.valuationMethod ?? "weighted_average", currency: settings.currency ?? "MKD",
+      nameEn: settings.nameEn ?? "", addressEn: settings.addressEn ?? "", iban: settings.iban ?? "",
+      swift: settings.swift ?? "", bankNameEn: settings.bankNameEn ?? "", bankAddress: settings.bankAddress ?? "",
+    });
+  }, [settings]);
 
   const [unitForm, setUnitForm] = useState({ code: "", name: "", nameMk: "", category: "weight" as string });
   const [convForm, setConvForm] = useState({ fromUnitId: "", toUnitId: "", factor: "", materialType: "", description: "" });
@@ -106,6 +121,27 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <Button onClick={handleSave} disabled={upsertMutation.isPending} className="bg-emerald-700 hover:bg-emerald-800"><Save className="h-4 w-4 mr-1" /> Зачувај</Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Девизна сметка и податоци на англиски</CardTitle>
+              <p className="text-xs text-gray-500">Се печатат на про-фактури и фактури во EUR/USD и на документите на англиски јазик.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>IBAN (девизна сметка)</Label><Input value={form.iban} onChange={e => setForm({ ...form, iban: e.target.value })} placeholder="MK07 ..." /></div>
+                <div className="space-y-1"><Label>SWIFT / BIC</Label><Input value={form.swift} onChange={e => setForm({ ...form, swift: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Банка (на англиски)</Label><Input value={form.bankNameEn} onChange={e => setForm({ ...form, bankNameEn: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Адреса на банка</Label><Input value={form.bankAddress} onChange={e => setForm({ ...form, bankAddress: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Назив на фирма (латиница)</Label><Input value={form.nameEn} onChange={e => setForm({ ...form, nameEn: e.target.value })} placeholder="Serafimoski Tech DOOEL" /></div>
+                <div className="space-y-1"><Label>Адреса (на англиски)</Label><Input value={form.addressEn} onChange={e => setForm({ ...form, addressEn: e.target.value })} /></div>
               </div>
               <Button onClick={handleSave} disabled={upsertMutation.isPending} className="bg-emerald-700 hover:bg-emerald-800"><Save className="h-4 w-4 mr-1" /> Зачувај</Button>
             </CardContent>

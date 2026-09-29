@@ -109,57 +109,236 @@ function openPrint(html: string) {
   else frame.onload = () => setTimeout(doPrint, 350);
 }
 
-// ══════════════ ФАКТУРА ══════════════
-export function printInvoice(inv: any, settings: any) {
-  const docTitle = String(inv?.invoiceType ?? "").includes("proforma") ? "ПРО-ФАКТУРА" : "ФАКТУРА";
+// Заеднички „челичен“ стил за понуда и фактура / про-фактура
+const STEEL_CSS = `  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { --steel: #6188AF; --steel-mid: #4A5568; --steel-line: #D8DCE1; --amber: #3D71B8; --amber-soft: #EEF4FB; --paper: #F5F3EF; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #232A32; padding: 12mm 13mm; font-variant-numeric: tabular-nums; }
+  @page { size: A4; margin: 0; }
+  .lbl { font-size: 8px; text-transform: uppercase; letter-spacing: 2px; color: var(--steel-mid); font-weight: 700; }
+
+  /* Заглавие: лого лево, челичен таг со засечен агол десно */
+  .head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .head img { max-width: 310px; max-height: 52px; object-fit: contain; object-position: left; }
+  .head .co-sub { font-size: 9px; color: var(--steel-mid); line-height: 1.6; margin-top: 6px; }
+  .tag { background: var(--steel); color: #fff; padding: 13px 18px 12px 22px; min-width: 62mm; clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px)); position: relative; }
+  .tag::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #C9DDF2; }
+  .tag h2 { font-size: 19px; letter-spacing: 5px; font-weight: 800; }
+  .tag .num { font-size: 14px; font-weight: 700; color: #EAF2FA; margin-top: 2px; letter-spacing: 1px; }
+  .tag .meta { font-size: 9.5px; color: #DDE9F4; margin-top: 8px; line-height: 1.7; }
+  .tag .meta b { color: #fff; font-weight: 600; }
+
+  /* Челична линија со килибарен сегмент */
+  .rule { height: 2px; background: var(--steel-line); margin: 12px 0 14px; position: relative; }
+  .rule::before { content: ""; position: absolute; left: 0; top: 0; height: 2px; width: 58mm; background: var(--amber); }
+
+  .parties { display: flex; gap: 12px; }
+  .party { flex: 1; border: 1px solid var(--steel-line); background: #FDFDFC; padding: 10px 14px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%); }
+  .party .n { font-weight: 700; font-size: 12.5px; color: var(--steel); margin: 4px 0 2px; }
+  .party div { line-height: 1.6; color: #45505B; }
+
+  table.t { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  table.t th { font-size: 8px; text-transform: uppercase; letter-spacing: 1.6px; color: var(--steel-mid); text-align: left; padding: 0 9px 6px; border-bottom: 2px solid var(--steel); }
+  table.t td { padding: 7px 9px; border-bottom: 1px solid #ECEEF1; }
+  table.t tr:last-child td { border-bottom: 2px solid var(--steel-line); }
+  .c { text-align: center; } .r { text-align: right; white-space: nowrap; }
+  th.c { text-align: center; } th.r { text-align: right; }
+  .dim { color: #97A0AA; font-size: 10px; }
+  .desc { font-weight: 500; color: var(--steel); }
+
+  /* Вкупно: челична плоча */
+  .sum-wrap { display: flex; justify-content: flex-end; margin-top: 12px; }
+  .sum { width: 70mm; }
+  .sum .row { display: flex; justify-content: space-between; padding: 4px 12px; color: #45505B; }
+  .sum .grand { margin-top: 6px; background: var(--steel); color: #fff; font-weight: 800; font-size: 14px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: baseline; clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px)); border-top: 3px solid #C9DDF2; }
+  .sum .grand small { font-size: 9px; letter-spacing: 2px; color: #E3EDF7; font-weight: 700; }
+
+  .terms { margin-top: 16px; background: var(--amber-soft); border-left: 3px solid var(--amber); padding: 10px 14px; font-size: 10.5px; line-height: 1.75; }
+  .terms .lbl { color: var(--amber); margin-bottom: 3px; display: block; }
+  .terms b { color: var(--steel); }
+  .notes { margin-top: 10px; font-size: 10px; color: #5A646E; line-height: 1.6; }
+
+  .sigs { display: flex; justify-content: space-between; margin-top: 40px; gap: 26px; }
+  .sig { flex: 1; text-align: center; }
+  .sig .line { border-top: 1px solid var(--steel-mid); margin-top: 34px; padding-top: 5px; font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--steel-mid); }
+
+  .foot { margin-top: 18px; background: var(--steel); color: #E3EDF7; font-size: 8.5px; text-align: center; padding: 7px 10px; letter-spacing: .6px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  .foot b { color: #fff; }
+  @media print { body { padding: 11mm 12mm; } }
+
+  /* Фактура: дополнителни елементи */
+  .party .lbl { display: block; }
+  .party .small { font-size: 9.5px; color: #6B7580; }
+  table.t td.num-col { font-variant-numeric: tabular-nums; }
+  .sum .row.vat { border-bottom: 1px dashed var(--steel-line); padding-bottom: 6px; }
+  .words { margin-top: 8px; text-align: right; font-size: 9.5px; color: var(--steel-mid); }
+  .pay { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--steel-line); }
+  .pay .ph { grid-column: 1 / -1; background: var(--amber-soft); border-left: 3px solid var(--amber); padding: 7px 12px; }
+  .pay .ph .lbl { color: var(--amber); }
+  .pay .cell { padding: 7px 12px; border-top: 1px solid #ECEEF1; }
+  .pay .cell:nth-child(even) { border-left: 1px solid #ECEEF1; }
+  .pay .cell .k { font-size: 8px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--steel-mid); font-weight: 700; }
+  .pay .cell .v { font-size: 11.5px; font-weight: 700; color: #232A32; margin-top: 2px; letter-spacing: .3px; }
+  .pay .cell.wide { grid-column: 1 / -1; border-left: 0; }
+  .stamp { display: inline-block; margin-top: 6px; border: 1.5px solid #C9DDF2; color: #fff; font-size: 8.5px; letter-spacing: 2px; padding: 2px 8px; font-weight: 700; }
+  .disclaimer { margin-top: 8px; font-size: 9px; color: #8A939C; }
+`;
+
+// ══════════════ ЈАЗИК И ВАЛУТА (МК / EN) ══════════════
+export type DocLang = "mk" | "en";
+
+const UNIT_LBL: Record<string, { mk: string; en: string }> = {
+  pcs: { mk: "ком", en: "pcs" }, ком: { mk: "ком", en: "pcs" }, kom: { mk: "ком", en: "pcs" },
+  kg: { mk: "кг", en: "kg" }, кг: { mk: "кг", en: "kg" },
+  m: { mk: "м", en: "m" }, м: { mk: "м", en: "m" },
+  m2: { mk: "м²", en: "m²" }, м2: { mk: "м²", en: "m²" },
+  hour: { mk: "час", en: "h" }, час: { mk: "час", en: "h" },
+  job: { mk: "услуга", en: "job" }, m_cut: { mk: "м сеч.", en: "m cut" }, bend: { mk: "свив.", en: "bend" },
+  set: { mk: "сет", en: "set" },
+};
+const unitLbl = (u: any, lang: DocLang) => UNIT_LBL[String(u ?? "")]?.[lang] ?? esc(u ?? "");
+
+/** Износ со ознака на валута: „1.234,00 ден.“ / „1,234.00 EUR“ */
+const money = (v: Money, cur: string, lang: DocLang) => {
+  const n = Number(v ?? 0).toLocaleString(lang === "en" ? "en-GB" : "mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${n} ${curLbl(cur, lang)}`;
+};
+const num = (v: Money, lang: DocLang) =>
+  Number(v ?? 0).toLocaleString(lang === "en" ? "en-GB" : "mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const curLbl = (cur: string, lang: DocLang) => (cur || "MKD") === "MKD" ? (lang === "en" ? "MKD" : "ден.") : esc(cur);
+
+/** Латинизирај ги кирилските префикси на броевите (ПФ-001/2026 → PF-001/2026) */
+const docNoEn = (n: any) => String(n ?? "")
+  .replace(/ПФ/g, "PF").replace(/ПО/g, "PO").replace(/КН/g, "CN").replace(/НАР/g, "ORD");
+
+const INV_T = {
+  mk: {
+    invoice: "ФАКТУРА", proforma: "ПРО-ФАКТУРА", credit: "КНИЖНО ОДОБРУВАЊЕ", no: "бр.",
+    issued: "Датум на издавање", due: "Рок за плаќање", currency: "Валута",
+    seller: "Издавач", buyer: "Примач", taxId: "ЕДБ", regNo: "ЕМБС", phone: "тел", account: "Ж-ска",
+    desc: "Опис", unit: "ЕМ", qty: "Кол.", price: "Цена", discount: "Попуст", total: "Вкупно",
+    noItems: "Нема ставки", subtotal: "Основица", vat: "ДДВ", toPay: "ЗА ПЛАЌАЊЕ",
+    payInfo: "Податоци за плаќање", giro: "Жиро сметка", ref: "Повикување на број", term: "Рок",
+    beneficiary: "Корисник", bank: "Банка", bankAddr: "Адреса на банка", purpose: "Цел на дознака",
+    notes: "Забелешка", prepared: "Изготвил", approved: "Одобрил", received: "Примил",
+    proformaNote: "Про-фактурата не е даночен документ. Конечна фактура се издава по извршена испорака.",
+    generated: "Генерирано од Metal ERP",
+  },
+  en: {
+    invoice: "INVOICE", proforma: "PROFORMA INVOICE", credit: "CREDIT NOTE", no: "No.",
+    issued: "Issue date", due: "Payment due", currency: "Currency",
+    seller: "Seller", buyer: "Buyer", taxId: "VAT No.", regNo: "Reg. No.", phone: "tel", account: "Account",
+    desc: "Description", unit: "Unit", qty: "Qty", price: "Unit price", discount: "Disc.", total: "Amount",
+    noItems: "No items", subtotal: "Subtotal", vat: "VAT", toPay: "TOTAL DUE",
+    payInfo: "Payment details", giro: "Account No.", ref: "Payment reference", term: "Due",
+    beneficiary: "Beneficiary", bank: "Bank", bankAddr: "Bank address", purpose: "Payment reference",
+    notes: "Notes", prepared: "Prepared by", approved: "Approved by", received: "Received by",
+    proformaNote: "This proforma invoice is not a tax document. The final invoice will be issued upon delivery.",
+    generated: "Generated by Metal ERP",
+  },
+};
+
+// ══════════════ ФАКТУРА / ПРО-ФАКТУРА ══════════════
+export function printInvoice(inv: any, settings: any, langArg?: DocLang) {
+  const lang: DocLang = langArg ?? (inv?.language === "en" ? "en" : "mk");
+  const T = INV_T[lang];
+  const type = String(inv?.invoiceType ?? "");
+  const isProforma = type.includes("proforma");
+  const docTitle = isProforma ? T.proforma : type === "credit_note" ? T.credit : T.invoice;
   const c = inv?.customer ?? {};
   const s = settings ?? {};
+  const cur = String(inv?.currency ?? "MKD");
+  const foreign = cur !== "MKD";
   const items: any[] = inv?.items ?? [];
   const vatRate = Number(inv?.vatRate ?? s?.defaultVatRate ?? 18);
-  const rows = items.map((it, i) => `<tr>
-      <td class="c">${i + 1}</td><td>${esc(it.description)}</td><td class="c">${esc(it.unit ?? "")}</td>
-      <td class="r">${den(it.quantity)}</td><td class="r">${den(it.unitPrice)}</td>
-      <td class="r">${it.discount && Number(it.discount) > 0 ? den(it.discount) + "%" : "—"}</td>
-      <td class="r"><b>${den(it.totalPrice)}</b></td></tr>`).join("");
+  const docNo = lang === "en" ? docNoEn(inv?.invoiceNumber) : String(inv?.invoiceNumber ?? "");
+  const coName = (lang === "en" && s?.nameEn) || s?.name || "Serafimoski Tech DOOEL";
+  const coAddr = (lang === "en" && s?.addressEn) || s?.address || "";
+  const bankName = (lang === "en" && s?.bankNameEn) || s?.bankName || "";
 
-  const body = `
-  ${header(s, docTitle, "бр. " + (inv?.invoiceNumber ?? ""), `
-    Датум на издавање: <b>${dt(inv?.issueDate)}</b><br>
-    Рок за плаќање: <b>${dt(inv?.dueDate)}</b><br>
-    Валута: ${esc(inv?.currency ?? "MKD")}`)}
-  <div class="parties">
-    <div class="party"><h3>Издавач</h3>
-      <div class="n">${esc(s?.name ?? "Serafimoski Tech DOOEL")}</div>
-      <div>${esc(s?.address ?? "")}</div>
-      <div>ЕДБ: ${esc(s?.edb ?? "—")}</div>
-      <div>Ж-ска: ${esc(s?.bankAccount ?? "—")}${s?.bankName ? " · " + esc(s.bankName) : ""}</div>
+  const cl = curLbl(cur, lang);
+  const hasDisc = items.some(it => Number(it.discount ?? 0) > 0);
+  const rows = items.map((it, i) => `<tr>
+      <td class="c dim">${String(i + 1).padStart(2, "0")}</td><td class="desc">${esc(it.description)}</td>
+      <td class="c dim">${unitLbl(it.unit, lang)}</td>
+      <td class="r">${num(it.quantity, lang)}</td><td class="r">${num(it.unitPrice, lang)}</td>
+      ${hasDisc ? `<td class="r dim">${Number(it.discount ?? 0) > 0 ? num(it.discount, lang) + "%" : "—"}</td>` : ""}
+      <td class="r"><b>${num(it.totalPrice, lang)}</b></td></tr>`).join("");
+  const cols = hasDisc ? 7 : 6;
+
+  // Плаќање: девизно (IBAN/SWIFT) за странска валута или англиски документ, жиро сметка за денари
+  const useIban = (foreign || lang === "en") && (s?.iban || s?.swift);
+  const cell = (k: string, v: any, wide = false) => `<div class="cell${wide ? " wide" : ""}"><div class="k">${k}</div><div class="v">${esc(v || "—")}</div></div>`;
+  const payBox = useIban
+    ? `<div class="pay"><div class="ph"><span class="lbl">${T.payInfo}</span></div>
+        ${cell(T.beneficiary, coName)}${cell("IBAN", s?.iban)}
+        ${cell(T.bank, bankName)}${cell("SWIFT / BIC", s?.swift)}
+        ${s?.bankAddress ? cell(T.bankAddr, s.bankAddress, true) : ""}
+        ${cell(T.purpose, docNo)}${cell(T.due, dt(inv?.dueDate))}
+      </div>`
+    : `<div class="pay"><div class="ph"><span class="lbl">${T.payInfo}</span></div>
+        ${cell(T.giro, s?.bankAccount)}${cell(T.bank, bankName)}
+        ${cell(T.ref, docNo)}${cell(T.due, dt(inv?.dueDate))}
+      </div>`;
+
+  const logo = "/logo-black.png?v=1";
+  const statusStamp = isProforma ? (lang === "en" ? "ADVANCE PAYMENT" : "АВАНСНО ПЛАЌАЊЕ") : "";
+  const html = `<!doctype html>
+<html lang="${lang}"><head><meta charset="utf-8"><title>${docTitle} ${esc(docNo)}</title>
+<style>
+${STEEL_CSS}</style></head><body>
+  <div class="head">
+    <div>
+      <img src="${esc(logo)}" alt="" onerror="this.style.display='none'">
+      <div class="co-sub">
+        <b style="color:var(--steel)">${esc(coName)}</b><br>
+        ${esc(coAddr)}${coAddr ? "<br>" : ""}
+        ${T.taxId}: ${esc(s?.edb ?? "—")} · ${T.regNo}: ${esc(s?.embs ?? "—")}${s?.phone ? ` · ${T.phone}: ` + esc(s.phone) : ""}${s?.email ? "<br>" + esc(s.email) : ""}
+      </div>
     </div>
-    <div class="party"><h3>Примач</h3>
+    <div class="tag">
+      <h2 style="${docTitle.length > 10 ? "font-size:15px;letter-spacing:3px" : ""}">${docTitle}</h2>
+      <div class="num">${T.no} ${esc(docNo)}</div>
+      <div class="meta">${T.issued}: <b>${dt(inv?.issueDate)}</b><br>${T.due}: <b>${dt(inv?.dueDate)}</b> · ${T.currency}: <b>${esc(cur)}</b></div>
+      ${statusStamp ? `<div class="stamp">${statusStamp}</div>` : ""}
+    </div>
+  </div>
+  <div class="rule"></div>
+  <div class="parties">
+    <div class="party"><span class="lbl">${T.seller}</span>
+      <div class="n">${esc(coName)}</div>
+      <div>${esc(coAddr)}</div>
+      <div>${T.taxId}: ${esc(s?.edb ?? "—")}${s?.embs ? ` · ${T.regNo}: ${esc(s.embs)}` : ""}</div>
+      ${useIban ? `<div class="small">IBAN: ${esc(s?.iban ?? "—")}${s?.swift ? " · SWIFT: " + esc(s.swift) : ""}</div>`
+        : `<div class="small">${T.account}: ${esc(s?.bankAccount ?? "—")}${bankName ? " · " + esc(bankName) : ""}</div>`}
+    </div>
+    <div class="party"><span class="lbl">${T.buyer}</span>
       <div class="n">${esc(c.company || c.name || "—")}</div>
-      ${c.company && c.name ? `<div>${esc(c.name)}</div>` : ""}
-      <div>${esc([c.address, c.city].filter(Boolean).join(", "))}</div>
-      ${c.edb || c.taxNumber ? `<div>ЕДБ: ${esc(c.edb || c.taxNumber)}</div>` : ""}
-      ${c.phone ? `<div>тел: ${esc(c.phone)}</div>` : ""}
+      ${c.company && c.name && c.company !== c.name ? `<div>${esc(c.name)}</div>` : ""}
+      <div>${esc([c.address, c.city, c.country].filter(Boolean).join(", "))}</div>
+      ${c.edb || c.taxNumber ? `<div>${T.taxId}: ${esc(c.edb || c.taxNumber)}</div>` : ""}
+      ${c.phone || c.email ? `<div class="small">${[c.phone ? `${T.phone}: ${esc(c.phone)}` : "", esc(c.email ?? "")].filter(Boolean).join(" · ")}</div>` : ""}
     </div>
   </div>
   <table class="t"><thead><tr>
-    <th class="c" style="width:26px">#</th><th>Опис</th><th class="c" style="width:42px">ЕМ</th>
-    <th class="r" style="width:58px">Кол.</th><th class="r" style="width:76px">Цена (ден.)</th>
-    <th class="r" style="width:52px">Попуст</th><th class="r" style="width:88px">Вкупно (ден.)</th>
-  </tr></thead><tbody>${rows || `<tr><td colspan="7" class="c" style="padding:14px;color:#999">Нема ставки</td></tr>`}</tbody></table>
-  <div class="totals">
-    <div class="row"><span>Основица:</span><b>${den(inv?.subtotal)} ден.</b></div>
-    <div class="row"><span>ДДВ (${vatRate}%):</span><b>${den(inv?.vatAmount)} ден.</b></div>
-    <div class="row grand"><span>ЗА ПЛАЌАЊЕ:</span><span>${den(inv?.totalAmount)} ден.</span></div>
-  </div>
-  <div class="box"><b>Податоци за плаќање</b><br>
-    Жиро сметка: <b>${esc(s?.bankAccount ?? "—")}</b>${s?.bankName ? " · " + esc(s.bankName) : ""}<br>
-    Повикување на број: <b>${esc(inv?.invoiceNumber)}</b> · Рок: ${dt(inv?.dueDate)}
-  </div>
-  ${inv?.notes ? `<div class="notes"><b>Забелешка:</b> ${esc(inv.notes)}</div>` : ""}
-  <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Одобрил</div></div><div class="sig"><div class="line">Примил</div></div></div>
-  ${footer(s)}`;
-  openPrint(shell(`${docTitle} ${inv?.invoiceNumber ?? ""}`, "#3a72b8", body));
+    <th class="c" style="width:28px">#</th><th>${T.desc}</th><th class="c" style="width:44px">${T.unit}</th>
+    <th class="r" style="width:60px">${T.qty}</th><th class="r" style="width:84px">${T.price} (${cl})</th>
+    ${hasDisc ? `<th class="r" style="width:50px">${T.discount}</th>` : ""}
+    <th class="r" style="width:96px">${T.total} (${cl})</th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="${cols}" class="c" style="padding:16px;color:#999">${T.noItems}</td></tr>`}</tbody></table>
+  <div class="sum-wrap"><div class="sum">
+    <div class="row"><span>${T.subtotal}:</span><b>${money(inv?.subtotal, cur, lang)}</b></div>
+    <div class="row vat"><span>${T.vat} (${vatRate}%):</span><b>${money(inv?.vatAmount, cur, lang)}</b></div>
+    <div class="grand"><small>${T.toPay}</small><span>${money(inv?.totalAmount, cur, lang)}</span></div>
+  </div></div>
+  ${payBox}
+  ${inv?.notes ? `<div class="terms"><span class="lbl">${T.notes}</span>${esc(inv.notes).replace(/\n/g, "<br>")}</div>` : ""}
+  ${isProforma ? `<div class="disclaimer">${T.proformaNote}</div>` : ""}
+  <div class="sigs"><div class="sig"><div class="line">${T.prepared}</div></div><div class="sig"><div class="line">${T.approved}</div></div><div class="sig"><div class="line">${T.received}</div></div></div>
+  <div class="foot"><b>${esc(coName)}</b> · ${esc(coAddr)} · ${T.taxId} ${esc(s?.edb ?? "")} · ${T.generated}</div>
+<script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+  openPrint(html);
 }
 
 // ══════════════ РАБОТЕН НАЛОГ ══════════════
@@ -281,8 +460,30 @@ export function printDeliveryNote(dn: any, settings: any) {
 }
 
 // ══════════════ ПОНУДА (премиум шаблон — челик + килибар) ══════════════
-export function printQuotation(q: any, settings: any) {
+const QUO_T = {
+  mk: { title: "ПОНУДА", date: "Датум", valid: "Важи до", currency: "Валута", offerer: "Понудувач", client: "За клиент",
+    taxId: "ЕДБ", regNo: "ЕМБС", phone: "тел", desc: "Опис", unit: "ЕМ", qty: "Кол.", weight: "Тежина (кг)", price: "Цена", total: "Вкупно",
+    noItems: "Нема ставки", totalWeight: "Вкупна тежина", subtotal: "Основица", vat: "ДДВ", grand: "ВКУПНО", terms: "Услови",
+    delivery: "Рок на испорака", days: "дена", payment: "Плаќање", perKg: "/кг",
+    validTxt: (d: string, c: string, vat: boolean) => `Понудата важи до <b>${d}</b>. Цените се изразени во ${c === "MKD" ? "денари" : esc(c)}${vat ? " со пресметан ДДВ во рекапитулацијата" : ""}.`,
+    notes: "Забелешка", prepared: "Изготвил", approved: "Одобрил", generated: "Генерирано од Metal ERP" },
+  en: { title: "QUOTATION", date: "Date", valid: "Valid until", currency: "Currency", offerer: "Supplier", client: "Customer",
+    taxId: "VAT No.", regNo: "Reg. No.", phone: "tel", desc: "Description", unit: "Unit", qty: "Qty", weight: "Weight (kg)", price: "Unit price", total: "Amount",
+    noItems: "No items", totalWeight: "Total weight", subtotal: "Subtotal", vat: "VAT", grand: "TOTAL", terms: "Terms",
+    delivery: "Delivery time", days: "days", payment: "Payment", perKg: "/kg",
+    validTxt: (d: string, c: string, vat: boolean) => `This quotation is valid until <b>${d}</b>. Prices are in ${esc(c)}${vat ? ", VAT shown in the summary" : ""}.`,
+    notes: "Notes", prepared: "Prepared by", approved: "Approved by", generated: "Generated by Metal ERP" },
+};
+
+export function printQuotation(q: any, settings: any, lang: DocLang = "mk") {
+  const T = QUO_T[lang];
   const s = settings ?? {};
+  const cur = String(q?.currency ?? "MKD");
+  const cl = curLbl(cur, lang);
+  const n = (v: Money) => num(v, lang);
+  const coName = (lang === "en" && s?.nameEn) || s?.name || "Serafimoski Tech DOOEL";
+  const coAddr = (lang === "en" && s?.addressEn) || s?.address || "";
+  const quoteNo = lang === "en" ? docNoEn(q?.quoteNumber) : String(q?.quoteNumber ?? "");
   const c = q?.customer ?? {};
   const items: any[] = q?.items ?? [];
   const vatRate = Number(q?.vatRate ?? s?.defaultVatRate ?? 18);
@@ -290,125 +491,70 @@ export function printQuotation(q: any, settings: any) {
   const totalKg = items.reduce((a, it) => a + (Number(it.weightKg ?? 0) || 0), 0);
   const hasKg = totalKg > 0;
   const rows = items.map((it, i) => `<tr>
-    <td class="c dim">${String(i + 1).padStart(2, "0")}</td><td class="desc">${esc(it.description)}</td><td class="c dim">${esc(it.unit ?? "")}</td>
-    <td class="r">${den(it.quantity)}</td>
-    ${hasKg ? `<td class="r dim">${Number(it.weightKg ?? 0) > 0 ? den(it.weightKg) : "—"}</td>` : ""}
-    <td class="r">${den(it.unitPrice)}${
+    <td class="c dim">${String(i + 1).padStart(2, "0")}</td><td class="desc">${esc(it.description)}</td><td class="c dim">${unitLbl(it.unit, lang)}</td>
+    <td class="r">${n(it.quantity)}</td>
+    ${hasKg ? `<td class="r dim">${Number(it.weightKg ?? 0) > 0 ? n(it.weightKg) : "—"}</td>` : ""}
+    <td class="r">${n(it.unitPrice)}${
       it.priceMode === "kg" && Number(it.pricePerKg ?? 0) > 0
-        ? `<div style="font-size:8px;color:#888;font-weight:400">${den(it.pricePerKg)} ден/кг</div>`
+        ? `<div style="font-size:8px;color:#888;font-weight:400">${n(it.pricePerKg)} ${cl}${T.perKg}</div>`
         : ""
     }</td>
-    <td class="r"><b>${den(it.totalPrice)}</b></td></tr>`).join("");
+    <td class="r"><b>${n(it.totalPrice)}</b></td></tr>`).join("");
 
   const html = `<!doctype html>
-<html lang="mk"><head><meta charset="utf-8"><title>Понуда ${esc(q?.quoteNumber ?? "")}</title>
+<html lang="${lang}"><head><meta charset="utf-8"><title>${T.title} ${esc(quoteNo)}</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  :root { --steel: #6188AF; --steel-mid: #4A5568; --steel-line: #D8DCE1; --amber: #3D71B8; --amber-soft: #EEF4FB; --paper: #F5F3EF; }
-  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #232A32; padding: 12mm 13mm; font-variant-numeric: tabular-nums; }
-  @page { size: A4; margin: 0; }
-  .lbl { font-size: 8px; text-transform: uppercase; letter-spacing: 2px; color: var(--steel-mid); font-weight: 700; }
-
-  /* Заглавие: лого лево, челичен таг со засечен агол десно */
-  .head { display: flex; justify-content: space-between; align-items: flex-start; }
-  .head img { max-width: 310px; max-height: 52px; object-fit: contain; object-position: left; }
-  .head .co-sub { font-size: 9px; color: var(--steel-mid); line-height: 1.6; margin-top: 6px; }
-  .tag { background: var(--steel); color: #fff; padding: 13px 18px 12px 22px; min-width: 62mm; clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px)); position: relative; }
-  .tag::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #C9DDF2; }
-  .tag h2 { font-size: 19px; letter-spacing: 5px; font-weight: 800; }
-  .tag .num { font-size: 14px; font-weight: 700; color: #EAF2FA; margin-top: 2px; letter-spacing: 1px; }
-  .tag .meta { font-size: 9.5px; color: #DDE9F4; margin-top: 8px; line-height: 1.7; }
-  .tag .meta b { color: #fff; font-weight: 600; }
-
-  /* Челична линија со килибарен сегмент */
-  .rule { height: 2px; background: var(--steel-line); margin: 12px 0 14px; position: relative; }
-  .rule::before { content: ""; position: absolute; left: 0; top: 0; height: 2px; width: 58mm; background: var(--amber); }
-
-  .parties { display: flex; gap: 12px; }
-  .party { flex: 1; border: 1px solid var(--steel-line); background: #FDFDFC; padding: 10px 14px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%); }
-  .party .n { font-weight: 700; font-size: 12.5px; color: var(--steel); margin: 4px 0 2px; }
-  .party div { line-height: 1.6; color: #45505B; }
-
-  table.t { width: 100%; border-collapse: collapse; margin-top: 16px; }
-  table.t th { font-size: 8px; text-transform: uppercase; letter-spacing: 1.6px; color: var(--steel-mid); text-align: left; padding: 0 9px 6px; border-bottom: 2px solid var(--steel); }
-  table.t td { padding: 7px 9px; border-bottom: 1px solid #ECEEF1; }
-  table.t tr:last-child td { border-bottom: 2px solid var(--steel-line); }
-  .c { text-align: center; } .r { text-align: right; white-space: nowrap; }
-  th.c { text-align: center; } th.r { text-align: right; }
-  .dim { color: #97A0AA; font-size: 10px; }
-  .desc { font-weight: 500; color: var(--steel); }
-
-  /* Вкупно: челична плоча */
-  .sum-wrap { display: flex; justify-content: flex-end; margin-top: 12px; }
-  .sum { width: 70mm; }
-  .sum .row { display: flex; justify-content: space-between; padding: 4px 12px; color: #45505B; }
-  .sum .grand { margin-top: 6px; background: var(--steel); color: #fff; font-weight: 800; font-size: 14px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: baseline; clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px)); border-top: 3px solid #C9DDF2; }
-  .sum .grand small { font-size: 9px; letter-spacing: 2px; color: #E3EDF7; font-weight: 700; }
-
-  .terms { margin-top: 16px; background: var(--amber-soft); border-left: 3px solid var(--amber); padding: 10px 14px; font-size: 10.5px; line-height: 1.75; }
-  .terms .lbl { color: var(--amber); margin-bottom: 3px; display: block; }
-  .terms b { color: var(--steel); }
-  .notes { margin-top: 10px; font-size: 10px; color: #5A646E; line-height: 1.6; }
-
-  .sigs { display: flex; justify-content: space-between; margin-top: 40px; gap: 26px; }
-  .sig { flex: 1; text-align: center; }
-  .sig .line { border-top: 1px solid var(--steel-mid); margin-top: 34px; padding-top: 5px; font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--steel-mid); }
-
-  .foot { margin-top: 18px; background: var(--steel); color: #E3EDF7; font-size: 8.5px; text-align: center; padding: 7px 10px; letter-spacing: .6px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
-  .foot b { color: #fff; }
-  @media print { body { padding: 11mm 12mm; } }
-</style></head><body>
+${STEEL_CSS}</style></head><body>
   <div class="head">
     <div>
       <img src="${esc(logo)}" alt="" onerror="this.style.display='none'">
       <div class="co-sub">
-        ${esc(s?.address ?? "")}${s?.address ? "<br>" : ""}
-        ЕДБ: ${esc(s?.edb ?? "—")} · ЕМБС: ${esc(s?.embs ?? "—")}${s?.phone ? " · тел: " + esc(s.phone) : ""}${s?.email ? "<br>" + esc(s.email) : ""}
+        ${esc(coAddr)}${coAddr ? "<br>" : ""}
+        ${T.taxId}: ${esc(s?.edb ?? "—")} · ${T.regNo}: ${esc(s?.embs ?? "—")}${s?.phone ? ` · ${T.phone}: ` + esc(s.phone) : ""}${s?.email ? "<br>" + esc(s.email) : ""}
       </div>
     </div>
     <div class="tag">
-      <h2>ПОНУДА</h2>
-      <div class="num">${esc(q?.quoteNumber ?? "")}</div>
-      <div class="meta">Датум: <b>${dt(q?.createdAt)}</b><br>Важи до: <b>${dt(q?.validUntil)}</b> · Валута: <b>${esc(q?.currency ?? "MKD")}</b></div>
+      <h2>${T.title}</h2>
+      <div class="num">${esc(quoteNo)}</div>
+      <div class="meta">${T.date}: <b>${dt(q?.createdAt)}</b><br>${T.valid}: <b>${dt(q?.validUntil)}</b> · ${T.currency}: <b>${esc(cur)}</b></div>
     </div>
   </div>
   <div class="rule"></div>
   <div class="parties">
-    <div class="party"><span class="lbl">Понудувач</span>
-      <div class="n">${esc(s?.name ?? "Serafimoski Tech DOOEL")}</div>
-      <div>${esc(s?.address ?? "")}</div>
-      <div>ЕДБ: ${esc(s?.edb ?? "—")}</div>
-      ${s?.phone ? `<div>тел: ${esc(s.phone)}</div>` : ""}
+    <div class="party"><span class="lbl">${T.offerer}</span>
+      <div class="n">${esc(coName)}</div>
+      <div>${esc(coAddr)}</div>
+      <div>${T.taxId}: ${esc(s?.edb ?? "—")}</div>
+      ${s?.phone ? `<div>${T.phone}: ${esc(s.phone)}</div>` : ""}
     </div>
-    <div class="party"><span class="lbl">За клиент</span>
+    <div class="party"><span class="lbl">${T.client}</span>
       <div class="n">${esc(c.company || c.name || "—")}</div>
       ${c.company && c.name ? `<div>${esc(c.name)}</div>` : ""}
-      <div>${esc([c.address, c.city].filter(Boolean).join(", "))}</div>
-      ${c.phone ? `<div>тел: ${esc(c.phone)}</div>` : ""}
+      <div>${esc([c.address, c.city, c.country].filter(Boolean).join(", "))}</div>
+      ${c.phone ? `<div>${T.phone}: ${esc(c.phone)}</div>` : ""}
     </div>
   </div>
   <table class="t"><thead><tr>
-    <th class="c" style="width:28px">#</th><th>Опис</th><th class="c" style="width:44px">ЕМ</th>
-    <th class="r" style="width:62px">Кол.</th>
-    ${hasKg ? `<th class="r" style="width:62px">Тежина (кг)</th>` : ""}
-    <th class="r" style="width:82px">Цена (ден.)</th>
-    <th class="r" style="width:92px">Вкупно (ден.)</th>
-  </tr></thead><tbody>${rows || `<tr><td colspan="${hasKg ? 7 : 6}" class="c" style="padding:16px;color:#999">Нема ставки</td></tr>`}</tbody></table>
+    <th class="c" style="width:28px">#</th><th>${T.desc}</th><th class="c" style="width:44px">${T.unit}</th>
+    <th class="r" style="width:62px">${T.qty}</th>
+    ${hasKg ? `<th class="r" style="width:62px">${T.weight}</th>` : ""}
+    <th class="r" style="width:82px">${T.price} (${cl})</th>
+    <th class="r" style="width:92px">${T.total} (${cl})</th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="${hasKg ? 7 : 6}" class="c" style="padding:16px;color:#999">${T.noItems}</td></tr>`}</tbody></table>
   <div class="sum-wrap"><div class="sum">
-    ${hasKg ? `<div class="row"><span>Вкупна тежина:</span><b>${den(totalKg)} кг</b></div>` : ""}
-    <div class="row"><span>Основица:</span><b>${den(q?.subtotal)} ден.</b></div>
-    <div class="row"><span>ДДВ (${vatRate}%):</span><b>${den(q?.vatAmount)} ден.</b></div>
-    <div class="grand"><small>ВКУПНО</small><span>${den(q?.totalAmount)} ден.</span></div>
+    ${hasKg ? `<div class="row"><span>${T.totalWeight}:</span><b>${n(totalKg)} ${lang === "en" ? "kg" : "кг"}</b></div>` : ""}
+    <div class="row"><span>${T.subtotal}:</span><b>${money(q?.subtotal, cur, lang)}</b></div>
+    <div class="row"><span>${T.vat} (${vatRate}%):</span><b>${money(q?.vatAmount, cur, lang)}</b></div>
+    <div class="grand"><small>${T.grand}</small><span>${money(q?.totalAmount, cur, lang)}</span></div>
   </div></div>
-  <div class="terms"><span class="lbl">Услови</span>
-    ${q?.deliveryDays ? `Рок на испорака: <b>${esc(q.deliveryDays)} дена</b><br>` : ""}
-    ${q?.paymentTerms ? `Плаќање: <b>${esc(q.paymentTerms)}</b><br>` : ""}
-    Понудата важи до <b>${dt(q?.validUntil)}</b>. Цените се изразени во денари${vatRate ? " со пресметан ДДВ во рекапитулацијата" : ""}.
+  <div class="terms"><span class="lbl">${T.terms}</span>
+    ${q?.deliveryDays ? `${T.delivery}: <b>${esc(q.deliveryDays)} ${T.days}</b><br>` : ""}
+    ${q?.paymentTerms ? `${T.payment}: <b>${esc(q.paymentTerms)}</b><br>` : ""}
+    ${T.validTxt(dt(q?.validUntil), cur, !!vatRate)}
   </div>
-  ${q?.notes ? `<div class="notes"><b>Забелешка:</b> ${esc(q.notes)}</div>` : ""}
-  <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">Одобрил</div></div></div>
-  <div class="foot"><b>${esc(s?.name ?? "Serafimoski Tech DOOEL")}</b> · ${esc(s?.address ?? "")} · ЕДБ ${esc(s?.edb ?? "")} · Генерирано од Metal ERP</div>
+  ${q?.notes ? `<div class="notes"><b>${T.notes}:</b> ${esc(q.notes)}</div>` : ""}
+  <div class="sigs"><div class="sig"><div class="line">${T.prepared}</div></div><div class="sig"><div class="line">${T.approved}</div></div></div>
+  <div class="foot"><b>${esc(coName)}</b> · ${esc(coAddr)} · ${T.taxId} ${esc(s?.edb ?? "")} · ${T.generated}</div>
 <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
 </body></html>`;
   openPrint(html);

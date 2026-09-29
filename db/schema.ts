@@ -36,6 +36,13 @@ export const companySettings = pgTable("company_settings", {
   // Параметри за кроење / остатоци
   cutKerfMm: decimal("cut_kerf_mm", { precision: 6, scale: 1 }).default("2"),
   minRemnantMm: decimal("min_remnant_mm", { precision: 8, scale: 1 }).default("300"),
+  // Девизна сметка и податоци за документи на англиски (про-фактура за странство)
+  nameEn: varchar("name_en", { length: 255 }),
+  addressEn: text("address_en"),
+  iban: varchar("iban", { length: 50 }),
+  swift: varchar("swift", { length: 20 }),
+  bankNameEn: varchar("bank_name_en", { length: 255 }),
+  bankAddress: text("bank_address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -801,6 +808,8 @@ export const invoices = pgTable("invoices", {
   notes: text("notes"),
   eInvoiceId: varchar("e_invoice_id", { length: 255 }),
   originalInvoiceId: bigint("original_invoice_id", { mode: "number", unsigned: true }), // for credit notes
+  quotationId: bigint("quotation_id", { mode: "number", unsigned: true }), // про-фактура креирана од понуда
+  language: varchar("language", { length: 5 }).default("mk"), // mk | en — јазик на печатење
   createdBy: bigint("created_by", { mode: "number", unsigned: true }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
