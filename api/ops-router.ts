@@ -5,7 +5,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getPool } from "./queries/connection";
 import { loadRates, iso } from "./rates-helper";
 import { toMkd, round2 } from "@contracts/finance";
-import { autoSchedule, addDays } from "@contracts/schedule";
+import { autoSchedule, addDays, spreadHours, pickMachine } from "@contracts/schedule";
 import { logAudit } from "./audit-helper";
 
 const q = async (text: string, params: any[] = []) => (await getPool().query(text, params)).rows as any[];
@@ -256,7 +256,6 @@ export const opsRouter = createRouter({
   scheduleBoard: publicQuery
     .input(z.object({ from: dateStr, days: z.number().min(1).max(42).default(14) }))
     .query(async ({ input }) => {
-      const to = addDays(input.from, input.days - 1);
       const machines = await q(`SELECT id, name, code, COALESCE(hours_per_day, 8) hpd, operations FROM machines WHERE is_active = 'active' ORDER BY name`);
       const ops = await q(`SELECT o.id, o.work_order_id, o.sequence, o.operation, o.status, o.machine_id, o.planned_date,
           COALESCE(NULLIF(o.estimated_time, 0), 1) AS hours, w.wo_number, w.description, w.priority, w.planned_end, w.status AS wo_status
@@ -268,23 +267,32 @@ export const opsRouter = createRouter({
       // операција на избришана/неактивна машина се прикажува во „Без машина“
       const activeIds = new Set(machines.map(m => Number(m.id)));
       for (const o of ops) if (o.machine_id && !activeIds.has(Number(o.machine_id))) o.machine_id = null;
-      const scheduled = ops.filter(o => o.planned_date && iso(o.planned_date) >= input.from && iso(o.planned_date) <= to);
       const lanes = [...machines.map(m => ({ id: Number(m.id), name: m.name, code: m.code, hoursPerDay: Number(m.hpd) })), { id: 0, name: "Без машина", code: "—", hoursPerDay: 8 }];
+      const capOf = (mid: number) => lanes.find(l => l.id === mid)?.hoursPerDay ?? 8;
+      // Операција подолга од денот се протега на следните работни денови
+      const segs = ops.filter(o => o.planned_date).flatMap(o => {
+        const mid = Number(o.machine_id ?? 0);
+        const parts = spreadHours(iso(o.planned_date), Number(o.hours), capOf(mid));
+        return parts.map((p, i) => ({ o, mid, date: p.date, hours: p.hours, part: i + 1, parts: parts.length, end: parts[parts.length - 1].date }));
+      });
+      const endOf = new Map<number, string>();
+      for (const sg of segs) endOf.set(Number(sg.o.id), sg.end);
       const cells = lanes.map(l => ({
         machineId: l.id,
         days: days.map(d => {
-          const items = scheduled.filter(o => Number(o.machine_id ?? 0) === l.id && iso(o.planned_date) === d);
-          const hours = round2(items.reduce((a, o) => a + Number(o.hours), 0));
-          return { date: d, hours, items: items.map(o => ({ opId: o.id, woNumber: o.wo_number, operation: o.operation, hours: Number(o.hours), status: o.status, priority: o.priority })) };
+          const items = segs.filter(sg => sg.mid === l.id && sg.date === d);
+          const hours = round2(items.reduce((a, sg) => a + sg.hours, 0));
+          return { date: d, hours, items: items.map(sg => ({ opId: sg.o.id, woNumber: sg.o.wo_number, operation: sg.o.operation, hours: sg.hours, totalHours: Number(sg.o.hours),
+            part: sg.part, parts: sg.parts, start: iso(sg.o.planned_date), status: sg.o.status, priority: sg.o.priority })) };
         }),
       }));
       const unscheduled = ops.filter(o => !o.planned_date).map(o => ({ opId: o.id, workOrderId: o.work_order_id, woNumber: o.wo_number, description: o.description, operation: o.operation, sequence: o.sequence, hours: Number(o.hours), machineId: o.machine_id, priority: o.priority }));
-      // Можна испорака по налог = последниот закажан ден
+      // Можна испорака по налог = последниот ден на последната операција
       const promise = new Map<number, { woNumber: string; date: string | null; plannedEnd: string | null; unscheduled: number }>();
       for (const o of ops) {
         const k = Number(o.work_order_id);
         const p = promise.get(k) ?? { woNumber: o.wo_number, date: null, plannedEnd: o.planned_end ? iso(o.planned_end) : null, unscheduled: 0 };
-        if (o.planned_date) { const d = iso(o.planned_date); if (!p.date || d > p.date) p.date = d; } else p.unscheduled++;
+        if (o.planned_date) { const d = endOf.get(Number(o.id)) ?? iso(o.planned_date); if (!p.date || d > p.date) p.date = d; } else p.unscheduled++;
         promise.set(k, p);
       }
       return { days, lanes, cells, unscheduled, promises: [...promise.entries()].map(([id, p]) => ({ workOrderId: id, ...p, late: !!(p.date && p.plannedEnd && p.date > p.plannedEnd) })) };
@@ -301,8 +309,8 @@ export const opsRouter = createRouter({
     .input(z.object({ from: dateStr.optional(), reschedule: z.boolean().default(false) }))
     .mutation(async ({ input }) => {
       const from = input.from ?? todayIso();
-      const machines = (await q(`SELECT id, COALESCE(hours_per_day, 8) hpd, operations FROM machines WHERE is_active = 'active'`))
-        .map(m => ({ id: Number(m.id), hoursPerDay: Number(m.hpd), operations: String(m.operations ?? "").split(",").filter(Boolean) }));
+      const machines = (await q(`SELECT id, name, type, COALESCE(hours_per_day, 8) hpd, operations FROM machines WHERE is_active = 'active' ORDER BY id`))
+        .map(m => ({ id: Number(m.id), name: m.name, type: m.type, hoursPerDay: Number(m.hpd), operations: String(m.operations ?? "").split(",").filter(Boolean) }));
       const rows = await q(`SELECT o.id, o.work_order_id, o.sequence, o.operation, o.status, o.machine_id, o.planned_date,
           COALESCE(NULLIF(o.estimated_time, 0), 1) AS hours, w.priority, w.planned_end, w.created_at
         FROM work_order_operations o JOIN work_orders w ON w.id = o.work_order_id
@@ -312,14 +320,17 @@ export const opsRouter = createRouter({
         machineId: o.machine_id ? Number(o.machine_id) : null, plannedDate: o.planned_date ? iso(o.planned_date) : null,
         // започнатите и (без „reschedule“) веќе закажаните не се поместуваат; старите датуми во минатото се преплануваат
         locked: o.status === "in_progress" || (!input.reschedule && !!o.planned_date && iso(o.planned_date) >= from),
+        started: o.status === "in_progress",
       }));
       const woMap = new Map<number, any>();
       for (const o of rows) woMap.set(Number(o.work_order_id), { id: Number(o.work_order_id), priority: o.priority, plannedEnd: o.planned_end ? iso(o.planned_end) : null, createdAt: new Date(o.created_at).toISOString() });
       const activeIds = new Set(machines.map(m => m.id));
       for (const o of ops) if (o.machineId && !activeIds.has(o.machineId)) { o.machineId = null; o.locked = false; }
+      // закажана „без машина“, а сега има машина што ја работи -> распореди ја повторно (освен започнатите)
+      for (const o of ops) if (!o.machineId && o.locked && !o.started && pickMachine(o, machines)) o.locked = false;
       const plan = autoSchedule({ from, machines, wos: [...woMap.values()], ops });
       for (const p of plan) await q(`UPDATE work_order_operations SET machine_id = $2, planned_date = $3 WHERE id = $1`, [p.opId, p.machineId, p.plannedDate]);
-      return { scheduled: plan.length, overloaded: plan.filter(p => p.overloaded).length };
+      return { scheduled: plan.length, multiDay: plan.filter(p => p.endDate > p.plannedDate).length, noMachine: plan.filter(p => !p.machineId).length };
     }),
 
   // ===================== КВАЛИТЕТ =====================

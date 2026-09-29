@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -27,8 +28,8 @@ const SOURCE_LBL: Record<string, string> = {
 function PeriodPicker({ from, to, onChange }: { from: string; to: string; onChange: (f: string, t: string) => void }) {
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="space-y-1"><Label className="text-xs text-gray-500">Од</Label><Input type="date" className="h-9 w-40" value={from} onChange={(e) => onChange(e.target.value, to)} /></div>
-      <div className="space-y-1"><Label className="text-xs text-gray-500">До</Label><Input type="date" className="h-9 w-40" value={to} onChange={(e) => onChange(from, e.target.value)} /></div>
+      <div className="space-y-1"><Label className="text-xs text-gray-500">Од</Label><DateInput className="h-9 w-40" value={from} onChange={(e) => onChange(e.target.value, to)} /></div>
+      <div className="space-y-1"><Label className="text-xs text-gray-500">До</Label><DateInput className="h-9 w-40" value={to} onChange={(e) => onChange(from, e.target.value)} /></div>
       <div className="flex gap-1">
         <Button size="sm" variant="ghost" className="h-9" onClick={() => onChange(monthStart(), today())}>Овој месец</Button>
         <Button size="sm" variant="ghost" className="h-9" onClick={() => onChange(yearStart(), today())}>Оваа година</Button>
@@ -144,7 +145,7 @@ function JournalTab() {
           <DialogHeader><DialogTitle>Рачен налог за книжење</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-[10rem_1fr] gap-3">
-              <div className="space-y-1"><Label className="text-xs">Датум</Label><Input type="date" value={mDate} onChange={(e) => setMDate(e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Датум</Label><DateInput value={mDate} onChange={(e) => setMDate(e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Опис</Label><Input value={mDesc} onChange={(e) => setMDesc(e.target.value)} placeholder="на пр. Почетна состојба, пресметка на камата..." /></div>
             </div>
             <div className="grid grid-cols-[1fr_8rem_8rem_2rem] gap-2 text-xs text-gray-500 font-medium"><span>Конто</span><span className="text-right">Должи</span><span className="text-right">Побарува</span><span /></div>
@@ -450,7 +451,7 @@ function CashTab({ presetInvoiceId }: { presetInvoiceId?: number | null }) {
           <DialogHeader><DialogTitle>{dlg === "in" ? "Уплатница — пари влегуваат" : "Исплатница — пари излегуваат"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-xs">Датум</Label><Input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
+              <div className="space-y-1"><Label className="text-xs">Датум</Label><DateInput value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
               <div className="space-y-1"><Label className="text-xs">Износ (ден)</Label><Input type="number" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></div>
             </div>
             <div className="space-y-1"><Label className="text-xs">{dlg === "in" ? "Наплата по фактура (ако е)" : "Плаќање по влезна фактура (ако е)"}</Label>
@@ -517,7 +518,7 @@ function RatesTab() {
       <Card><CardContent className="p-4">
         <p className="text-sm font-medium mb-2">Рачен внес (ако НБРМ не е достапна)</p>
         <div className="flex flex-wrap items-end gap-2">
-          <Input type="date" className="w-40" value={m.date} onChange={(e) => setM({ ...m, date: e.target.value })} />
+          <DateInput className="w-40" value={m.date} onChange={(e) => setM({ ...m, date: e.target.value })} />
           <Select value={m.currency} onValueChange={(v) => setM({ ...m, currency: v })}>
             <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
             <SelectContent>{["EUR", "USD", "GBP", "CHF"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>

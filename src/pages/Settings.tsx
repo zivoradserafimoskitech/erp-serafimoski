@@ -1,4 +1,5 @@
 import UsersTab from "@/components/UsersTab";
+import { DateInput } from "@/components/ui/date-input";
 import { formatDate } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { trpc } from "@/providers/trpc";
@@ -299,11 +300,11 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label>Важи од</Label>
-                    <Input type="date" value={certForm.validFrom} onChange={e => setCertForm({ ...certForm, validFrom: e.target.value })} />
+                    <DateInput value={certForm.validFrom} onChange={e => setCertForm({ ...certForm, validFrom: e.target.value })} />
                   </div>
                   <div className="space-y-1">
                     <Label>Важи до</Label>
-                    <Input type="date" value={certForm.validTo} onChange={e => setCertForm({ ...certForm, validTo: e.target.value })} />
+                    <DateInput value={certForm.validTo} onChange={e => setCertForm({ ...certForm, validTo: e.target.value })} />
                   </div>
                   <div className="space-y-1">
                     <Label>ЕДБ</Label>

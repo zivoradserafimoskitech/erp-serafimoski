@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
@@ -330,7 +331,7 @@ export default function Customers() {
                   </div>
                   <div className="space-y-2">
                     <Label>Датум на испорака</Label>
-                    <Input type="date" value={orderForm.deliveryDate} onChange={(e) => setOrderForm({ ...orderForm, deliveryDate: e.target.value })} />
+                    <DateInput value={orderForm.deliveryDate} onChange={(e) => setOrderForm({ ...orderForm, deliveryDate: e.target.value })} />
                   </div>
                 </div>
 

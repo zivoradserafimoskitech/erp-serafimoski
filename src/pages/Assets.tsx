@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -301,7 +302,7 @@ export default function Assets() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Датум на набавка *</Label>
-                <Input type="date" value={form.acquisitionDate}
+                <DateInput value={form.acquisitionDate}
                   onChange={(e) => setForm({ ...form, acquisitionDate: e.target.value })} />
               </div>
               <div className="space-y-2">
@@ -422,7 +423,7 @@ export default function Assets() {
               </div>
               <div className="space-y-2">
                 <Label>Датум на расход</Label>
-                <Input type="date" value={disposal.date}
+                <DateInput value={disposal.date}
                   onChange={(e) => setDisposal({ ...disposal, date: e.target.value })} />
               </div>
               <div className="space-y-2">

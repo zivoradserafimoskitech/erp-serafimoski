@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,7 +87,7 @@ function QualityTab() {
           <DialogHeader><DialogTitle>Нова неусогласеност</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-xs">Датум</Label><Input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
+              <div className="space-y-1"><Label className="text-xs">Датум</Label><DateInput value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
               <div className="space-y-1"><Label className="text-xs">Вид</Label>
                 <Select value={f.kind} onValueChange={(v) => setF({ ...f, kind: v })}><SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{Object.entries(KIND).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select></div>
@@ -218,7 +219,7 @@ function MaintenanceTab() {
             <Input placeholder="Што се прави (на пр. Замена на масло)" value={p.title} onChange={(e) => setP({ ...p, title: e.target.value })} />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label className="text-xs">На секои (дена)</Label><Input type="number" value={p.intervalDays} onChange={(e) => setP({ ...p, intervalDays: e.target.value })} /></div>
-              <div className="space-y-1"><Label className="text-xs">Последно направено</Label><Input type="date" value={p.lastDone} onChange={(e) => setP({ ...p, lastDone: e.target.value })} /></div>
+              <div className="space-y-1"><Label className="text-xs">Последно направено</Label><DateInput value={p.lastDone} onChange={(e) => setP({ ...p, lastDone: e.target.value })} /></div>
             </div>
             <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={!p.machineId || p.title.length < 3 || !(parseInt(p.intervalDays) > 0)}
               onClick={() => createPlan.mutate({ machineId: Number(p.machineId), title: p.title, intervalDays: parseInt(p.intervalDays), lastDone: p.lastDone || undefined })}>Зачувај</Button>
@@ -240,7 +241,7 @@ function MaintenanceTab() {
                 </div>
               )}
               <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1"><Label className="text-xs">Датум</Label><Input type="date" value={l.date} onChange={(e) => setL({ ...l, date: e.target.value })} /></div>
+                <div className="space-y-1"><Label className="text-xs">Датум</Label><DateInput value={l.date} onChange={(e) => setL({ ...l, date: e.target.value })} /></div>
                 <div className="space-y-1"><Label className="text-xs">Трошок (ден)</Label><Input type="number" value={l.cost} onChange={(e) => setL({ ...l, cost: e.target.value })} /></div>
                 <div className="space-y-1"><Label className="text-xs">Застој (ч)</Label><Input type="number" value={l.downtime} onChange={(e) => setL({ ...l, downtime: e.target.value })} /></div>
               </div>
