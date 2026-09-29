@@ -111,12 +111,12 @@ export async function getNextDocNumberTxn(
     .from(docCounters)
     .where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
 
-  let nextVal: number;
+  const taken = await takenNumbers(kind, y);
+  let nextVal = existing.length === 0 ? 1 : existing[0].value + 1;
+  for (let g = 0; taken.has(nextVal) && g < 10000; g++) nextVal++;
   if (existing.length === 0) {
-    await db.insert(docCounters).values({ kind, year: y, value: 1 });
-    nextVal = 1;
+    await db.insert(docCounters).values({ kind, year: y, value: nextVal });
   } else {
-    nextVal = existing[0].value + 1;
     await db
       .update(docCounters)
       .set({ value: nextVal, updatedAt: new Date() })
@@ -136,11 +136,11 @@ export async function peekNextDocNumber(kind: string, year?: number): Promise<st
     .select()
     .from(docCounters)
     .where(and(eq(docCounters.kind, kind), eq(docCounters.year, y)));
-  const nextVal = existing.length === 0 ? 1 : existing[0].value + 1;
-  const prefix = PREFIXES[kind] ?? "";
-  const num = String(nextVal).padStart(3, "0");
-  if (kind === "invoice") return `${num}/${y}`;
-  return `${prefix}-${num}/${y}`;
+  // Предлогот ги прескокнува броевите што веќе постојат (исто како getNextDocNumber)
+  const taken = await takenNumbers(kind, y);
+  let nextVal = existing.length === 0 ? 1 : existing[0].value + 1;
+  for (let g = 0; taken.has(nextVal) && g < 10000; g++) nextVal++;
+  return formatNumber(kind, nextVal, y);
 }
 
 export async function bumpDocCounter(kind: string, usedNumber: string, year?: number): Promise<void> {

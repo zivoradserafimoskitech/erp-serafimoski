@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +16,7 @@ import { printWorkOrder, printRequisition } from "@/lib/print-documents";
 import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck, Clock } from "lucide-react";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import ScheduleBoard from "@/components/ScheduleBoard";
+import WorkOrderCreateDialog from "@/components/WorkOrderCreateDialog";
 import { useSearchParams } from "react-router";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
@@ -57,7 +57,6 @@ export default function Production() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { data: nextWorkOrderNum } = trpc.settings.nextDocNumber.useQuery({ kind: "workOrder" }, { enabled: dialogOpen });
   const [detailOpen, setDetailOpen] = useState(false);
   const [view, setView] = useState<"list" | "schedule">("list");
   const [params, setParams] = useSearchParams();
@@ -69,7 +68,6 @@ export default function Production() {
   const [completeWO, setCompleteWO] = useState<{ id: number; woNumber: string } | null>(null);
   const [completeForm, setCompleteForm] = useState({ producedQty: "1", producedUnit: "ком" });
 
-  const [form, setForm] = useState({ woNumber: "", description: "", priority: "normal", plannedStart: "", plannedEnd: "", assignedTo: "", notes: "" });
   const [opForm, setOpForm] = useState({ operation: "cutting_laser" as keyof typeof opList, sequence: 1, description: "", estimatedTime: "", operator: "", costRate: "" });
   const [matForm, setMatForm] = useState({ materialId: "", quantity: "", notes: "" });
 
@@ -94,9 +92,6 @@ export default function Production() {
   }, [woDetail?.id, woDetail?.operations?.length]);
   const { data: warehousesData } = trpc.warehouse.warehouseList.useQuery();
 
-  const createMut = trpc.production.workOrderCreate.useMutation({
-    onSuccess: () => { utils.production.workOrderList.invalidate(); utils.production.productionStats.invalidate(); setDialogOpen(false); setForm({ woNumber: "", description: "", priority: "normal", plannedStart: "", plannedEnd: "", assignedTo: "", notes: "" }); },
-  });
   const updateMut = trpc.production.workOrderUpdate.useMutation({
     onSuccess: (data: any) => {
       utils.production.workOrderList.invalidate(); utils.production.productionStats.invalidate(); utils.production.workOrderById.invalidate(); utils.accounting.finishedGoodsList.invalidate();
@@ -132,7 +127,6 @@ export default function Production() {
     onSuccess: (data) => { utils.production.workOrderById.invalidate(); toast.success(`Цена на налогот: ${data.totalCost} ден`); },
   });
 
-  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); createMut.mutate(form as any); };
 
   const handleOpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,11 +165,6 @@ export default function Production() {
     });
   };
 
-  useEffect(() => {
-    if (dialogOpen && nextWorkOrderNum && !form.woNumber) {
-      setForm(prev => ({ ...prev, woNumber: nextWorkOrderNum }));
-    }
-  }, [dialogOpen, nextWorkOrderNum]);
 
   return (
     <div className="space-y-6">
@@ -184,28 +173,8 @@ export default function Production() {
           <h2 className="text-2xl font-bold text-gray-800">Производство</h2>
           <p className="text-gray-500 mt-1">Работни налози, операции и материјали</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нов работен налог</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Нов работен налог</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2"><Label>Број на налог *</Label><Input value={form.woNumber} onChange={(e) => setForm({ ...form, woNumber: e.target.value })} required placeholder="РН-001/2025" /></div>
-              <div className="space-y-2"><Label>Опис *</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Приоритет</Label><Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(priorityCfg).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-2"><Label>Доделено на</Label><Input value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} placeholder="Име на оператер" /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Планиран почеток</Label><Input type="date" value={form.plannedStart} onChange={(e) => setForm({ ...form, plannedStart: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Планиран крај</Label><Input type="date" value={form.plannedEnd} onChange={(e) => setForm({ ...form, plannedEnd: e.target.value })} /></div>
-              </div>
-              <div className="space-y-2"><Label>Белешки</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-              <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createMut.isPending}>{createMut.isPending ? "Зачувување..." : "Креирај налог"}</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Нов работен налог</Button>
+        <WorkOrderCreateDialog open={dialogOpen} onOpenChange={setDialogOpen} onCreated={(id) => { setSelWO(id); setDetailOpen(true); }} />
       </div>
 
       <div className="inline-flex rounded-lg bg-gray-100 p-1">
@@ -232,7 +201,7 @@ export default function Production() {
         <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input placeholder="Пребарувај работни налози..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" /></div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Сите статуси" /></SelectTrigger>
-          <SelectContent>{Object.entries(statusCfg).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectItem value="all">Сите статуси</SelectItem>{Object.entries(statusCfg).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
