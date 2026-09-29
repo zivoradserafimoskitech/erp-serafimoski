@@ -157,7 +157,20 @@ export const productionRouter = createRouter({
       }
       const db = getDb();
       const { orderId, ...rest } = input;
+      const dup = await db.select({ id: workOrders.id }).from(workOrders).where(eq(workOrders.woNumber, input.woNumber));
+      if (dup[0]) {
+        const { peekNextDocNumber } = await import("./counters-helper");
+        throw new Error(`Бројот ${input.woNumber} веќе постои — следниот слободен е ${await peekNextDocNumber("workOrder")}`);
+      }
       const insertData: any = { ...rest, orderId: orderId ?? null };
+      if (orderId) {
+        const { orders } = await import("@db/schema");
+        const ord: any = (await db.select().from(orders).where(eq(orders.id, orderId)))[0];
+        if (!ord) throw new Error("Нарачката не постои");
+        if (ord.quoteId) insertData.quotationId = ord.quoteId;
+        // нарачката оди во производство
+        if (["pending", "confirmed"].includes(ord.status)) await db.update(orders).set({ status: "in_production" }).where(eq(orders.id, orderId));
+      }
       if (rest.plannedStart) insertData.plannedStart = new Date(rest.plannedStart);
       if (rest.plannedEnd) insertData.plannedEnd = new Date(rest.plannedEnd);
       const result = await db.insert(workOrders).values(insertData);
