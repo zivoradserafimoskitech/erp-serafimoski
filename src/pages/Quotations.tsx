@@ -92,6 +92,11 @@ export default function Quotations() {
   const scheduleFrom = (raw: unknown, text?: string | null): Installment[] =>
     parseSchedule(raw) ?? [{ percent: 100, when: "after_invoice", days: parseInt(String(text ?? "").match(/\d+/)?.[0] ?? "14", 10) || 14 }];
   const [qSchedule, setQSchedule] = useState<Installment[]>(DEFAULT_SCHEDULE);
+  // Странство = клиент од друга држава или валута различна од денари -> извоз, без ДДВ
+  const isDomesticCountry = (c?: string | null) =>
+    !c || /^(mk|mkd|македонија|северна македонија|(north |republic of )?macedonia|makedonija|severna makedonija)$/i.test(c.trim());
+  const isForeign = (customerId: string | number, currency: string) =>
+    currency !== "MKD" || !isDomesticCountry(customers?.find(c => String(c.id) === String(customerId))?.country);
   const [qForm, setQForm] = useState({
     quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14",
     paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18",
@@ -261,7 +266,8 @@ export default function Quotations() {
       paymentTerms: qDetail.paymentTerms ?? "14 дена",
       notes: qDetail.notes ?? "",
       currency: qDetail.currency ?? "MKD",
-      vatRate: qDetail.vatRate ?? "18",
+      // странски клиент / валута -> без ДДВ; инаку стапката од понудата („18.00“ -> „18“)
+      vatRate: isForeign(qDetail.customerId, qDetail.currency ?? "MKD") ? "0" : String(Number(qDetail.vatRate ?? 18)),
     });
     setQSchedule(scheduleFrom(qDetail.paymentSchedule, qDetail.paymentTerms));
     setQItems((qDetail.items ?? []).map((i: any) => ({
@@ -331,7 +337,8 @@ export default function Quotations() {
 
   const calcTotals = () => {
     const sub = qItems.reduce((s, i) => s + parseFloat(i.totalPrice), 0);
-    const vatR = parseFloat(qForm.vatRate) || 18;
+    const vr = parseFloat(qForm.vatRate);
+    const vatR = Number.isFinite(vr) ? vr : 18;
     const vat = sub * vatR / 100;
     return { subtotal: sub.toFixed(2), vatAmount: vat.toFixed(2), total: (sub + vat).toFixed(2) };
   };
@@ -400,12 +407,26 @@ export default function Quotations() {
                   {/* Basic info */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-2"><Label>Број на понуда *</Label><Input value={qForm.quoteNumber} onChange={e => setQForm({ ...qForm, quoteNumber: e.target.value })} required disabled={!!editingId} placeholder="ПОН-2026-001" /></div>
-                    <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v, ...(isForeign(v, qForm.currency) ? { vatRate: "0" } : {}) })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label>Важи до</Label><Input type="date" value={qForm.validUntil} onChange={e => setQForm({ ...qForm, validUntil: e.target.value })} /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Испорака (денови)</Label><Input value={qForm.deliveryDays} onChange={e => setQForm({ ...qForm, deliveryDays: e.target.value })} /></div>
-                    <div className="space-y-2"><Label>Валута</Label><Select value={qForm.currency} onValueChange={v => setQForm({ ...qForm, currency: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MKD">MKD</SelectItem><SelectItem value="EUR">EUR</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Валута</Label><Select value={qForm.currency} onValueChange={v => setQForm({ ...qForm, currency: v, vatRate: isForeign(qForm.customerId, v) ? "0" : (Number(qForm.vatRate) === 0 ? "18" : qForm.vatRate) })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MKD">MKD</SelectItem><SelectItem value="EUR">EUR</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 rounded-md border px-3 py-2 bg-gray-50">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={Number(qForm.vatRate) === 0} onChange={e => setQForm({ ...qForm, vatRate: e.target.checked ? "0" : "18" })} />
+                      Извоз / странство — без ДДВ
+                    </label>
+                    {Number(qForm.vatRate) !== 0 && (
+                      <label className="flex items-center gap-2 text-sm">ДДВ %
+                        <Input type="number" className="w-20 h-8" value={qForm.vatRate} onChange={e => setQForm({ ...qForm, vatRate: e.target.value })} />
+                      </label>
+                    )}
+                    {qForm.customerId && isForeign(qForm.customerId, qForm.currency) && Number(qForm.vatRate) !== 0 && (
+                      <span className="text-xs text-amber-700">Клиентот е од странство / валутата не е денари — обично без ДДВ</span>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Услови за плаќање</Label>
@@ -488,7 +509,9 @@ export default function Quotations() {
                         )}
                         <div className="flex justify-end gap-4 text-sm">
                           <span className="text-gray-500">Нето: <b>{calcTotals().subtotal}</b> {qForm.currency}</span>
-                          <span className="text-gray-500">ДДВ ({qForm.vatRate}%): <b>{calcTotals().vatAmount}</b></span>
+                          {Number(qForm.vatRate) === 0
+                            ? <span className="text-gray-500">Без ДДВ (извоз)</span>
+                            : <span className="text-gray-500">ДДВ ({qForm.vatRate}%): <b>{calcTotals().vatAmount}</b></span>}
                           <span className="text-gray-800 font-bold">ВКУПНО: {calcTotals().total} {qForm.currency}</span>
                         </div>
                       </div>
@@ -760,10 +783,17 @@ export default function Quotations() {
                       <div className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1">Нето</div>
                       <div className="text-xl font-semibold text-gray-800">{Number(qDetail.subtotal).toLocaleString("mk-MK")} <span className="text-sm font-normal text-gray-500">{qDetail.currency}</span></div>
                     </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1">ДДВ ({qDetail.vatRate}%)</div>
-                      <div className="text-xl font-semibold text-gray-800">{Number(qDetail.vatAmount).toLocaleString("mk-MK")} <span className="text-sm font-normal text-gray-500">{qDetail.currency}</span></div>
-                    </div>
+                    {Number(qDetail.vatRate) > 0 ? (
+                      <div>
+                        <div className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1">ДДВ ({Number(qDetail.vatRate)}%)</div>
+                        <div className="text-xl font-semibold text-gray-800">{Number(qDetail.vatAmount).toLocaleString("mk-MK")} <span className="text-sm font-normal text-gray-500">{qDetail.currency}</span></div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1">ДДВ</div>
+                        <div className="text-sm font-medium text-gray-600 mt-1.5">Ослободено — извоз</div>
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="text-xs font-medium uppercase tracking-wider text-amber-700/70 mb-1">Вкупно за плаќање</div>
