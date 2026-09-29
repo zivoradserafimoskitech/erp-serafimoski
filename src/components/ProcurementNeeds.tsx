@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,7 +121,7 @@ export default function ProcurementNeeds() {
         </label>
         <div className="flex items-center gap-2 ml-auto">
           <span className="text-xs text-gray-500">Очекувана испорака</span>
-          <Input type="date" className="h-9 w-40" value={expectedDate}
+          <DateInput className="h-9 w-40" value={expectedDate}
             onChange={(e) => setExpectedDate(e.target.value)} />
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +68,7 @@ function EmployeesTab() {
                 <div className="space-y-1"><Label className="text-xs">Цена на час за налози (ден)</Label><Input type="number" value={f.hourlyCost} onChange={(e) => setF({ ...f, hourlyCost: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label className="text-xs">Почеток на работа</Label><Input type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
+                <div className="space-y-1"><Label className="text-xs">Почеток на работа</Label><DateInput value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
                 <div className="space-y-1"><Label className="text-xs">Трансакциска сметка</Label><Input value={f.bankAccount} onChange={(e) => setF({ ...f, bankAccount: e.target.value })} /></div>
               </div>
               {!!f.id && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.isActive === "active"} onChange={(e) => setF({ ...f, isActive: e.target.checked ? "active" : "inactive" })} />Активен</label>}

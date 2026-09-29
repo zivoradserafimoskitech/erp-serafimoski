@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { printQuotation, printInvoice, quotationHtml, type DocLang } from "@/lib/print-documents";
 import SendEmailDialog from "@/components/SendEmailDialog";
 import DealFlow from "@/components/DealFlow";
@@ -427,7 +428,7 @@ export default function Quotations() {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-2"><Label>Број на понуда *</Label><Input value={qForm.quoteNumber} onChange={e => setQForm({ ...qForm, quoteNumber: e.target.value })} required disabled={!!editingId} placeholder="ПОН-2026-001" /></div>
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v, ...(isForeign(v, qForm.currency) ? { vatRate: "0" } : {}) })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-2"><Label>Важи до</Label><Input type="date" value={qForm.validUntil} onChange={e => setQForm({ ...qForm, validUntil: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>Важи до</Label><DateInput value={qForm.validUntil} onChange={e => setQForm({ ...qForm, validUntil: e.target.value })} /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Испорака (денови)</Label><Input value={qForm.deliveryDays} onChange={e => setQForm({ ...qForm, deliveryDays: e.target.value })} /></div>
@@ -963,8 +964,8 @@ export default function Quotations() {
                 <div className="space-y-1 w-1/3"><Label>ДДВ %</Label><Input type="number" value={pf.vatRate} onChange={e => setPf({ ...pf, vatRate: e.target.value })} /></div>
               )}
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label>Датум на издавање</Label><Input type="date" value={pf.issueDate} onChange={e => setPf({ ...pf, issueDate: e.target.value })} /></div>
-                <div className="space-y-1"><Label>Рок за плаќање</Label><Input type="date" value={pf.dueDate} onChange={e => setPf({ ...pf, dueDate: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Датум на издавање</Label><DateInput value={pf.issueDate} onChange={e => setPf({ ...pf, issueDate: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Рок за плаќање</Label><DateInput value={pf.dueDate} onChange={e => setPf({ ...pf, dueDate: e.target.value })} /></div>
               </div>
               <div className="space-y-1">
                 <Label>Описи на ставките {pf.language === "en" && <span className="text-xs font-normal text-amber-600">— преведи ги на англиски</span>}</Label>

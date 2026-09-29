@@ -1,4 +1,5 @@
 import BankTab from "@/components/BankTab";
+import { DateInput } from "@/components/ui/date-input";
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -329,8 +330,8 @@ export default function Accounting() {
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={outForm.customerId} onValueChange={(v) => setOutForm({ ...outForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2"><Label>Датум на издавање *</Label><Input type="date" value={outForm.issueDate} onChange={(e) => setOutForm({ ...outForm, issueDate: e.target.value })} required /></div>
-                    <div className="space-y-2"><Label>Датум на плаќање</Label><Input type="date" value={outForm.dueDate} onChange={(e) => setOutForm({ ...outForm, dueDate: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>Датум на издавање *</Label><DateInput value={outForm.issueDate} onChange={(e) => setOutForm({ ...outForm, issueDate: e.target.value })} required /></div>
+                    <div className="space-y-2"><Label>Датум на плаќање</Label><DateInput value={outForm.dueDate} onChange={(e) => setOutForm({ ...outForm, dueDate: e.target.value })} /></div>
                   </div>
                   {/* Invoice Items - Products/Services */}
                   <div className="border rounded-lg p-3 space-y-3">
@@ -466,9 +467,9 @@ export default function Accounting() {
                     <div className="space-y-1"><Label>Добавувач *</Label><Select value={incForm.supplierId} onValueChange={(v) => setIncForm({ ...incForm, supplierId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1"><Label>Датум на прием *</Label><Input type="date" value={incForm.receivedDate} onChange={(e) => setIncForm({ ...incForm, receivedDate: e.target.value })} required /></div>
-                    <div className="space-y-1"><Label>Датум на фактура</Label><Input type="date" value={incForm.issueDate} onChange={(e) => setIncForm({ ...incForm, issueDate: e.target.value })} /></div>
-                    <div className="space-y-1"><Label>Рок на плаќање</Label><Input type="date" value={incForm.dueDate} onChange={(e) => setIncForm({ ...incForm, dueDate: e.target.value })} /></div>
+                    <div className="space-y-1"><Label>Датум на прием *</Label><DateInput value={incForm.receivedDate} onChange={(e) => setIncForm({ ...incForm, receivedDate: e.target.value })} required /></div>
+                    <div className="space-y-1"><Label>Датум на фактура</Label><DateInput value={incForm.issueDate} onChange={(e) => setIncForm({ ...incForm, issueDate: e.target.value })} /></div>
+                    <div className="space-y-1"><Label>Рок на плаќање</Label><DateInput value={incForm.dueDate} onChange={(e) => setIncForm({ ...incForm, dueDate: e.target.value })} /></div>
                   </div>
 
                   {/* Invoice Items */}
@@ -537,7 +538,7 @@ export default function Accounting() {
                     <div className="space-y-2"><Label>Број *</Label><Input value={recForm.receiptNumber} onChange={(e) => setRecForm({ ...recForm, receiptNumber: e.target.value })} required /></div>
                     <div className="space-y-2"><Label>Добавувач</Label><Select value={recForm.supplierId} onValueChange={(v) => setRecForm({ ...recForm, supplierId: v })}><SelectTrigger><SelectValue placeholder="Избери" /></SelectTrigger><SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
-                  <div className="space-y-2"><Label>Датум *</Label><Input type="date" value={recForm.receiptDate} onChange={(e) => setRecForm({ ...recForm, receiptDate: e.target.value })} required /></div>
+                  <div className="space-y-2"><Label>Датум *</Label><DateInput value={recForm.receiptDate} onChange={(e) => setRecForm({ ...recForm, receiptDate: e.target.value })} required /></div>
                   <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createRec.isPending}>{createRec.isPending ? "Зачувување..." : "Креирај приемник"}</Button>
                 </form>
               </DialogContent>
@@ -554,8 +555,8 @@ export default function Accounting() {
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={dnForm.customerId} onValueChange={(v) => setDnForm({ ...dnForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2"><Label>Датум на издавање *</Label><Input type="date" value={dnForm.issueDate} onChange={(e) => setDnForm({ ...dnForm, issueDate: e.target.value })} required /></div>
-                    <div className="space-y-2"><Label>Датум на испорака</Label><Input type="date" value={dnForm.deliveryDate} onChange={(e) => setDnForm({ ...dnForm, deliveryDate: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>Датум на издавање *</Label><DateInput value={dnForm.issueDate} onChange={(e) => setDnForm({ ...dnForm, issueDate: e.target.value })} required /></div>
+                    <div className="space-y-2"><Label>Датум на испорака</Label><DateInput value={dnForm.deliveryDate} onChange={(e) => setDnForm({ ...dnForm, deliveryDate: e.target.value })} /></div>
                   </div>
                   <div className="border rounded-lg p-3 space-y-2 bg-gray-50">
                     <p className="text-xs font-semibold">Ставки за испорака</p>
@@ -601,8 +602,8 @@ export default function Accounting() {
               <DialogHeader><DialogTitle>Извештај за сметководител</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2"><Label>Од датум</Label><Input type="date" value={reportPeriod.startDate} onChange={(e) => setReportPeriod({ ...reportPeriod, startDate: e.target.value })} /></div>
-                  <div className="space-y-2"><Label>До датум</Label><Input type="date" value={reportPeriod.endDate} onChange={(e) => setReportPeriod({ ...reportPeriod, endDate: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Од датум</Label><DateInput value={reportPeriod.startDate} onChange={(e) => setReportPeriod({ ...reportPeriod, startDate: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>До датум</Label><DateInput value={reportPeriod.endDate} onChange={(e) => setReportPeriod({ ...reportPeriod, endDate: e.target.value })} /></div>
                 </div>
                 <div className="flex gap-2">
                   <Button

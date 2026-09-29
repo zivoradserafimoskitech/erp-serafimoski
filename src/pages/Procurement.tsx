@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
@@ -269,7 +270,7 @@ export default function Procurement() {
                 </div>
                 <div className="space-y-2">
                   <Label>Очекуван датум на прием</Label>
-                  <Input type="date" value={poForm.expectedDate} onChange={(e) => setPoForm({ ...poForm, expectedDate: e.target.value })} />
+                  <DateInput value={poForm.expectedDate} onChange={(e) => setPoForm({ ...poForm, expectedDate: e.target.value })} />
                 </div>
 
                 {/* Items */}

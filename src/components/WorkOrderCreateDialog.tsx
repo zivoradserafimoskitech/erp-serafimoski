@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { trpc } from "@/providers/trpc";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -157,11 +158,11 @@ export default function WorkOrderCreateDialog({ open, onOpenChange, onCreated }:
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <span className="text-xs text-gray-500">Почеток</span>
-                  <Input type="date" value={form.plannedStart} onChange={(e) => set({ plannedStart: e.target.value })} className="bg-white" />
+                  <DateInput value={form.plannedStart} onChange={(e) => set({ plannedStart: e.target.value })} className="bg-white" />
                 </div>
                 <div className="space-y-1">
                   <span className="text-xs text-gray-500">Крај</span>
-                  <Input type="date" value={form.plannedEnd} min={form.plannedStart || undefined} onChange={(e) => set({ plannedEnd: e.target.value })} className="bg-white" />
+                  <DateInput value={form.plannedEnd} min={form.plannedStart || undefined} onChange={(e) => set({ plannedEnd: e.target.value })} className="bg-white" />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">

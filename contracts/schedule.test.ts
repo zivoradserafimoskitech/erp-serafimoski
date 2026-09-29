@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { autoSchedule, nextWorkday, isWorkday } from "./schedule";
+import { autoSchedule, nextWorkday, isWorkday, spreadHours, pickMachine } from "./schedule";
 
 const machines = [{ id: 1, hoursPerDay: 8, operations: ["cutting_laser"] }, { id: 2, hoursPerDay: 8, operations: ["bending"] }];
 const wo = (id: number, priority = "normal") => ({ id, priority, plannedEnd: null, createdAt: `2026-01-0${id}T00:00:00Z` });
@@ -50,5 +50,33 @@ describe("распоред", () => {
     expect(r.find(x => x.opId === 1)?.plannedDate).toBe("2026-10-05");
     expect(r.find(x => x.opId === 2)?.plannedDate).toBe("2026-10-05"); // 5 + 3 = 8
     expect(r.find(x => x.opId === 3)?.plannedDate).toBe("2026-10-06"); // 8 + 4 > 8
+  });
+
+  it("долга операција се протега на повеќе работни денови (без викенд)", () => {
+    expect(spreadHours("2026-10-01", 25, 8)).toEqual([
+      { date: "2026-10-01", hours: 8 }, { date: "2026-10-02", hours: 8 }, { date: "2026-10-05", hours: 8 }, { date: "2026-10-06", hours: 1 }]);
+    const r = autoSchedule({ from: "2026-10-05", machines, wos: [wo(1)], ops: [op(1, 1, 1, "cutting_laser", 20), op(2, 1, 2, "bending", 4)] });
+    expect(r.find(x => x.opId === 1)).toMatchObject({ plannedDate: "2026-10-05", endDate: "2026-10-07" });
+    expect(r.find(x => x.opId === 2)!.plannedDate >= "2026-10-07").toBe(true);
+  });
+
+  it("друг налог не се става врз деновите на долгата операција", () => {
+    const r = autoSchedule({ from: "2026-10-05", machines, wos: [wo(1), wo(2)], ops: [op(1, 1, 1, "cutting_laser", 16), op(2, 2, 1, "cutting_laser", 8)] });
+    expect(r.find(x => x.opId === 2)?.plannedDate).toBe("2026-10-07");
+  });
+
+  it("машина без означени операции се препознава по името", () => {
+    const named = [{ id: 7, hoursPerDay: 8, operations: [], name: "Ласер ЦНЦ за сечење" }, { id: 8, hoursPerDay: 8, operations: [], name: "Абкант преса" }];
+    expect(pickMachine(op(1, 1, 1, "cutting_laser", 1), named)).toBe(7);
+    expect(pickMachine(op(2, 1, 2, "bending", 1), named)).toBe(8);
+    expect(pickMachine(op(3, 1, 3, "painting", 1), named)).toBe(null);
+  });
+
+  it("однапред закажана операција што почнува пред крајот на претходната се поместува по неа", () => {
+    const paint = { ...op(2, 1, 2, "painting", 8), plannedDate: "2026-10-05", locked: true };
+    const r = autoSchedule({ from: "2026-10-05", machines, wos: [wo(1)], ops: [op(1, 1, 1, "cutting_laser", 16), paint] });
+    expect(r.find(x => x.opId === 2)!.plannedDate >= "2026-10-06").toBe(true);
+    const started = { ...paint, started: true };
+    expect(autoSchedule({ from: "2026-10-05", machines, wos: [wo(1)], ops: [op(1, 1, 1, "cutting_laser", 16), started] }).find(x => x.opId === 2)).toBeUndefined();
   });
 });

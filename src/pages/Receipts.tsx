@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
@@ -487,7 +488,7 @@ export default function Receipts() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1"><Label>Број *</Label><Input value={form.receiptNumber} onChange={e => setForm({ ...form, receiptNumber: e.target.value })} placeholder="ПР-001/2025" /></div>
-                    <div className="space-y-1"><Label>Датум *</Label><Input type="date" value={form.receiptDate} onChange={e => setForm({ ...form, receiptDate: e.target.value })} /></div>
+                    <div className="space-y-1"><Label>Датум *</Label><DateInput value={form.receiptDate} onChange={e => setForm({ ...form, receiptDate: e.target.value })} /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1"><Label>Магацин *</Label>

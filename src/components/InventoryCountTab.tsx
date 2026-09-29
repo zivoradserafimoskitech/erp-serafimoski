@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -178,7 +179,7 @@ export default function InventoryCountTab() {
               </div>
               <div className="space-y-2">
                 <Label>Датум</Label>
-                <Input type="date" value={form.countDate} onChange={(e) => setForm({ ...form, countDate: e.target.value })} />
+                <DateInput value={form.countDate} onChange={(e) => setForm({ ...form, countDate: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label>Белешки</Label>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { machineDoes } from "@contracts/schedule";
 import { CalendarDays, ChevronLeft, ChevronRight, Wand2, Settings2, AlertTriangle } from "lucide-react";
 
 const OPS: Record<string, string> = {
@@ -20,6 +22,8 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const monday = () => { const d = new Date(); const w = (d.getDay() + 6) % 7; d.setDate(d.getDate() - w); return iso(d); };
 const shift = (d: string, n: number) => iso(new Date(new Date(d + "T00:00:00Z").getTime() + n * 86400000));
 const dm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+// со година кога не е тековната (рок 09.03 без година лесно се чита погрешно)
+const dmy = (d: string) => d.slice(0, 4) === String(new Date().getFullYear()) ? dm(d) : `${dm(d)}.${d.slice(0, 4)}`;
 
 export default function ScheduleBoard() {
   const utils = trpc.useUtils();
@@ -29,7 +33,8 @@ export default function ScheduleBoard() {
   const auto = trpc.ops.scheduleAuto.useMutation({
     onSuccess: (r) => {
       utils.ops.scheduleBoard.invalidate();
-      toast.success(`Закажани ${r.scheduled} операции${r.overloaded ? ` (${r.overloaded} подолги од еден ден)` : ""}`);
+      toast.success(`Закажани ${r.scheduled} операции${r.multiDay ? ` · ${r.multiDay} траат повеќе денови` : ""}`);
+      if (r.noMachine) toast.warning(`${r.noMachine} операции немаат машина — во „Машини и капацитет“ означи која машина ги работи`);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -84,9 +89,11 @@ export default function ScheduleBoard() {
                 const row = data.cells.find(c => c.machineId === l.id)!;
                 return (
                   <tr key={l.id}>
-                    <td className="sticky left-0 bg-white z-10 px-3 py-2 border-b align-top">
+                    <td className={`sticky left-0 z-10 px-3 py-2 border-b align-top ${l.id === 0 ? "bg-amber-50" : "bg-white"}`}>
                       <div className="font-medium text-gray-800 text-sm">{l.name}</div>
-                      <div className="text-gray-400">{l.hoursPerDay} ч/ден</div>
+                      {l.id === 0
+                        ? <button className="text-[10.5px] text-amber-700 hover:underline text-left leading-tight mt-0.5" onClick={() => setCfgOpen(true)}>Означи која машина ги работи →</button>
+                        : <div className="text-gray-400">{l.hoursPerDay} ч/ден</div>}
                     </td>
                     {row.days.map(cell => {
                       const w = new Date(cell.date + "T00:00:00Z").getUTCDay();
@@ -104,10 +111,12 @@ export default function ScheduleBoard() {
                           <div className="space-y-1">
                             {cell.items.map(it => (
                               <button key={it.opId} className={`w-full text-left rounded px-1.5 py-1 border text-[10.5px] leading-tight hover:ring-2 hover:ring-amber-300
-                                ${it.status === "in_progress" ? "bg-blue-50 border-blue-200" : it.priority === "urgent" ? "bg-red-50 border-red-200" : it.priority === "high" ? "bg-orange-50 border-orange-200" : "bg-white border-gray-200"}`}
-                                onClick={() => setEdit({ opId: it.opId, label: `${it.woNumber} · ${OPS[it.operation] ?? it.operation}`, machineId: String(l.id || ""), date: cell.date })}>
-                                <div className="font-mono font-semibold">{it.woNumber}</div>
-                                <div className="text-gray-500 truncate">{OPS[it.operation] ?? it.operation} · {it.hours}ч</div>
+                                ${it.status === "in_progress" ? "bg-blue-50 border-blue-200" : it.priority === "urgent" ? "bg-red-50 border-red-200" : it.priority === "high" ? "bg-orange-50 border-orange-200" : "bg-white border-gray-200"}
+                                ${it.parts > 1 ? (it.part === 1 ? "border-l-4" : "border-dashed") : ""}`}
+                                title={it.parts > 1 ? `Вкупно ${it.totalHours} ч, ден ${it.part} од ${it.parts}` : undefined}
+                                onClick={() => setEdit({ opId: it.opId, label: `${it.woNumber} · ${OPS[it.operation] ?? it.operation}`, machineId: String(l.id || ""), date: it.start })}>
+                                <div className="font-mono font-semibold flex items-center justify-between gap-1">{it.woNumber}{it.parts > 1 && <span className="font-sans font-normal text-[9.5px] text-gray-400">{it.part}/{it.parts}</span>}</div>
+                                <div className="text-gray-500 truncate">{OPS[it.operation] ?? it.operation} · {it.hours}ч{it.parts > 1 ? ` од ${it.totalHours}` : ""}</div>
                               </button>
                             ))}
                           </div>
@@ -146,8 +155,8 @@ export default function ScheduleBoard() {
               {data.promises.map(p => (
                 <div key={p.workOrderId} className="flex items-center gap-2 text-sm border-b last:border-b-0 py-1.5">
                   <span className="font-mono text-xs font-semibold w-28">{p.woNumber}</span>
-                  <span className="flex-1 text-gray-600">{p.date ? `готово на ${dm(p.date)}` : "незакажано"}{p.unscheduled > 0 && p.date ? ` (+${p.unscheduled} незакажани)` : ""}</span>
-                  {p.plannedEnd && <span className="text-xs text-gray-400">рок {dm(p.plannedEnd)}</span>}
+                  <span className="flex-1 text-gray-600">{p.date ? `готово на ${dmy(p.date)}` : "незакажано"}{p.unscheduled > 0 && p.date ? ` (+${p.unscheduled} незакажани)` : ""}</span>
+                  {p.plannedEnd && <span className={`text-xs ${p.late ? "text-red-600" : "text-gray-400"}`}>рок {dmy(p.plannedEnd)}</span>}
                   {p.late && <Badge className="bg-red-100 text-red-700 text-[10px] flex items-center gap-1"><AlertTriangle className="h-3 w-3" />доцни</Badge>}
                 </div>
               ))}
@@ -169,7 +178,7 @@ export default function ScheduleBoard() {
                   {machines?.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Input type="date" value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} />
+              <DateInput value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} />
               <div className="flex gap-2">
                 <Button className="flex-1 bg-amber-500 hover:bg-amber-600" onClick={() => { setOp.mutate({ opId: edit.opId, machineId: edit.machineId ? Number(edit.machineId) : null, plannedDate: edit.date }); setEdit(null); }}>Закажи</Button>
                 <Button variant="outline" onClick={() => { setOp.mutate({ opId: edit.opId, machineId: edit.machineId ? Number(edit.machineId) : null, plannedDate: null }); setEdit(null); }}>Отстрани од распоред</Button>
@@ -183,7 +192,7 @@ export default function ScheduleBoard() {
       <Dialog open={cfgOpen} onOpenChange={setCfgOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Машини: капацитет и операции</DialogTitle></DialogHeader>
-          <p className="text-sm text-gray-500">Автоматското закажување ја праќа секоја операција на првата машина што ја прави.</p>
+          <p className="text-sm text-gray-500">Кликни ги операциите што ги работи секоја машина. Ако не означиш ништо, машината се препознава по името (пр. „Ласер“ → ласерско сечење, „Абкант“ → виткање). Потоа кликни „Закажи автоматски“.</p>
           <div className="space-y-3">
             {machines?.map(m => (
               <div key={m.id} className="border rounded-lg p-3 space-y-2">
@@ -196,12 +205,21 @@ export default function ScheduleBoard() {
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(OPS).map(([k, v]) => {
                     const on = m.operations.includes(k);
+                    const auto = !m.operations.length && machineDoes(m, k); // препознаено по името
                     return (
-                      <button key={k} className={`text-xs rounded-full px-2.5 py-1 border ${on ? "bg-amber-100 border-amber-300 text-amber-900" : "bg-white text-gray-500"}`}
-                        onClick={() => saveMachine.mutate({ id: m.id, hoursPerDay: m.hoursPerDay, operations: on ? m.operations.filter(x => x !== k) : [...m.operations, k] })}>{v}</button>
+                      <button key={k} title={auto ? "Препознаено по името на машината — кликни за да го потврдиш" : undefined}
+                        className={`text-xs rounded-full px-2.5 py-1 border ${on ? "bg-amber-100 border-amber-300 text-amber-900" : auto ? "bg-amber-50 border-dashed border-amber-300 text-amber-800" : "bg-white text-gray-500"}`}
+                        onClick={() => {
+                          const base = m.operations.length ? m.operations : Object.keys(OPS).filter(x => machineDoes(m, x));
+                          const next = base.includes(k) ? base.filter(x => x !== k) : [...base, k];
+                          saveMachine.mutate({ id: m.id, hoursPerDay: m.hoursPerDay, operations: next });
+                        }}>{v}</button>
                     );
                   })}
                 </div>
+                {!m.operations.length && (
+                  <p className="text-[11px] text-gray-400">{Object.keys(OPS).some(k => machineDoes(m, k)) ? "Испрекинато = препознаено по името. Кликни за да промениш." : "Не е препознаена ниту една операција — означи ги рачно."}</p>
+                )}
               </div>
             ))}
           </div>
