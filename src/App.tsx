@@ -18,6 +18,7 @@ import Assets from "@/pages/Assets";
 import Finance from "@/pages/Finance";
 import Quality from "@/pages/Quality";
 import Employees from "@/pages/Employees";
+import DealPipeline from "@/pages/DealPipeline";
 
 export default function App() {
   return (
@@ -135,6 +136,14 @@ export default function App() {
         element={
           <Layout>
             <Employees />
+          </Layout>
+        }
+      />
+      <Route
+        path="/tek"
+        element={
+          <Layout>
+            <DealPipeline />
           </Layout>
         }
       />

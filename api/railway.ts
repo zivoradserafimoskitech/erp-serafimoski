@@ -303,6 +303,11 @@ app.get("*", async (c) => {
 serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   console.log(`[BOOT] Server on 0.0.0.0:${port}`);
 
+  // Автоматски потсетници по е-пошта (работи само ако се вклучени во Подесувања)
+  if (process.env.DATABASE_URL && process.env.DISABLE_REMINDERS !== "true") {
+    import("./reminders").then(m => m.startReminderScheduler()).catch(e => console.error("[REMINDERS]", e));
+  }
+
   // Шемата се усогласува сама при секое подигање.
   // Сите изрази се IF NOT EXISTS / ADD COLUMN IF NOT EXISTS, па повторувањето е безопасно.
   // Не смее да го сруши серверот — ако падне, апликацијата работи, само пишува во логот.

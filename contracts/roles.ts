@@ -1,7 +1,7 @@
 // Улоги и дозволи — единствен извор на вистина.
 // Серверот ја спроведува дозволата; интерфејсот само крие копчиња.
 
-export type Role = "admin" | "manager" | "operator" | "viewer";
+export type Role = "admin" | "manager" | "accountant" | "operator" | "viewer";
 
 export const ROLES: Record<Role, { label: string; description: string; rank: number }> = {
   admin: {
@@ -13,6 +13,11 @@ export const ROLES: Record<Role, { label: string; description: string; rank: num
     label: "Раководител",
     description: "Понуди, нарачки, фактури, набавка, производство. Не брише документи и не менува корисници.",
     rank: 3,
+  },
+  accountant: {
+    label: "Сметководител",
+    description: "Фактури, финансии, банка, благајна, ДДВ, основни средства. Производството и складот ги гледа, но не ги менува.",
+    rank: 2,
   },
   operator: {
     label: "Оператор",
@@ -26,7 +31,7 @@ export const ROLES: Record<Role, { label: string; description: string; rank: num
   },
 };
 
-export const ROLE_ORDER: Role[] = ["viewer", "operator", "manager", "admin"];
+export const ROLE_ORDER: Role[] = ["viewer", "operator", "accountant", "manager", "admin"];
 
 export function rankOf(role: string | undefined | null): number {
   return ROLES[(role ?? "viewer") as Role]?.rank ?? 0;
@@ -63,11 +68,29 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   ops: "operator",
   hr: "admin",
   mail: "manager",
+  reminders: "admin",
 
   // Подесувања — само администратор
   settings: "admin",
   appUsers: "admin",
 };
+
+/** Каде сметководителот смее да пишува. */
+export const ACCOUNTANT_ROUTERS = ["accounting", "finance", "bank", "assets", "mail", "ocr", "email", "customers"];
+
+/** Мени по улога: патеки што ги гледа секоја улога (администраторот гледа сè). */
+export const MENU_BY_ROLE: Record<Role, string[] | "all"> = {
+  admin: "all",
+  manager: ["/", "/tek", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva"],
+  accountant: ["/", "/tek", "/smetkovodstvo", "/finansii", "/klienti", "/sredstva"],
+  operator: ["/", "/proizvodstvo", "/sklad", "/kvalitet", "/priemnici"],
+  viewer: ["/", "/tek", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva"],
+};
+
+export function canSeeMenu(role: string | undefined | null, path: string): boolean {
+  const m = MENU_BY_ROLE[(role ?? "viewer") as Role] ?? MENU_BY_ROLE.viewer;
+  return m === "all" || m.includes(path);
+}
 
 /** Постапки што секогаш бараат администратор, без разлика на рутерот. */
 export function isDestructive(procedure: string): boolean {
@@ -113,6 +136,9 @@ export function canRun(role: string | undefined | null, path: string, type?: "qu
 
   // Бришењето бара администратор
   if (isDestructive(procedure)) return atLeast(role, "admin");
+
+  // Сметководителот пишува само во финансиските делови
+  if (role === "accountant") return ACCOUNTANT_ROUTERS.includes(router);
 
   const min = WRITE_ROLE_BY_ROUTER[router] ?? "manager";
   return atLeast(role, min);

@@ -6,7 +6,7 @@ import { appUsers } from "@db/schema";
 import { clearActorCache } from "./context";
 import { logAudit } from "./audit-helper";
 
-const roleEnum = z.enum(["admin", "manager", "operator", "viewer"]);
+const roleEnum = z.enum(["admin", "manager", "accountant", "operator", "viewer"]);
 
 export const appUsersRouter = createRouter({
   /** Кој сум јас — интерфејсот го користи за да знае што да покаже */

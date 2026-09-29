@@ -168,6 +168,7 @@ export default function UsersTab() {
                     <Badge variant="outline" className={
                       u.role === "admin" ? "border-red-300 text-red-700 bg-red-50"
                         : u.role === "manager" ? "border-blue-300 text-blue-700 bg-blue-50"
+                        : u.role === "accountant" ? "border-purple-300 text-purple-700 bg-purple-50"
                         : u.role === "operator" ? "border-emerald-300 text-emerald-700 bg-emerald-50"
                         : "border-gray-300 text-gray-600"
                     }>{ROLES[u.role as Role]?.label ?? u.role}</Badge>

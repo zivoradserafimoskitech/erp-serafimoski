@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, Check, ArrowLeft, AlertCircle, User, Clock, PackageCheck } from "lucide-react";
+import { Play, Pause, Check, ArrowLeft, AlertCircle, User, Clock, PackageCheck, Package, TriangleAlert, Plus } from "lucide-react";
+import { MaterialPicker } from "@/components/MaterialPicker";
 
 const OPERATION_MK: Record<string, string> = {
-  cutting: "Сечење", welding: "Варење", bending: "Свиткување", drilling: "Дупчење",
-  grinding: "Брусење", painting: "Фарбање", assembly: "Монтажа", galvanizing: "Поцинкување",
-  laser: "Ласер", plasma: "Плазма", other: "Друго",
+  cutting_laser: "Ласерско сечење", cutting_plasma: "Плазма сечење", bending: "Виткање",
+  welding_mig: "MIG заварување", welding_tig: "TIG заварување", grinding: "Брусење",
+  drilling: "Дупчење", painting: "Бојадисување", assembly: "Монтажа",
+  quality_control: "Контрола на квалитет", packaging: "Пакување",
 };
 
 function fmtMinutes(min: number): string {
@@ -83,6 +85,27 @@ export default function WorkOrderScan() {
       if (r.allOperationsDone && r.workOrderStatus !== "completed") setFinishWo(true);
     },
   });
+
+  // ---- материјал од подот
+  const [issueFor, setIssueFor] = useState<null | { rowId?: number; name?: string; qty: string; unit?: string }>(null);
+  const [extraMat, setExtraMat] = useState<any>(null);
+  const { data: allMaterials } = trpc.storage.materialList.useQuery(undefined, { enabled: !!issueFor && !issueFor.rowId });
+  const floorIssue = trpc.ops.floorIssue.useMutation({
+    onSuccess: () => { invalidate(); setIssueFor(null); setExtraMat(null); setMsg("Материјалот е издаден од магацин"); },
+    onError: (e) => setMsg(`Грешка: ${e.message}`),
+  });
+  // ---- пријава на проблем
+  const [problem, setProblem] = useState<null | { kind: "product" | "machine"; text: string; machineId: string; downtime: string }>(null);
+  const { data: machines } = trpc.ops.machinesForSchedule.useQuery(undefined, { enabled: problem?.kind === "machine" });
+  const reportQuality = trpc.ops.qualityCreate.useMutation({
+    onSuccess: (r) => { setProblem(null); setMsg(`Пријавено ${r.number} — шефот ќе го види во Квалитет`); },
+    onError: (e) => setMsg(`Грешка: ${e.message}`),
+  });
+  const reportMachine = trpc.ops.maintenanceLogCreate.useMutation({
+    onSuccess: () => { setProblem(null); setMsg("Дефектот на машината е пријавен"); },
+    onError: (e) => setMsg(`Грешка: ${e.message}`),
+  });
+  const today = new Date().toISOString().slice(0, 10);
 
   const closeSessions = trpc.production.closeOpenSessions.useMutation();
   const finishMut = trpc.production.workOrderUpdate.useMutation({
@@ -316,6 +339,101 @@ export default function WorkOrderScan() {
             </div>
           );
         })}
+
+        {/* Материјал */}
+        <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+          <div className="flex items-center gap-2 font-semibold"><Package className="h-5 w-5 text-amber-600" />Материјал</div>
+          {(wo.materials ?? []).length === 0 && <p className="text-sm text-gray-400">Нема планиран материјал.</p>}
+          {(wo.materials ?? []).map((m: any) => {
+            const issued = m.isActual === "actual";
+            return (
+              <div key={m.id} className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{m.name}</div>
+                  <div className="text-xs text-gray-500">{parseFloat(m.quantity)} {m.unit}</div>
+                </div>
+                {issued ? (
+                  <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">Издадено</Badge>
+                ) : (
+                  <Button className="h-11 bg-amber-500 hover:bg-amber-600 text-white" disabled={wo.status === "completed"}
+                    onClick={() => setIssueFor({ rowId: m.id, name: m.name, qty: String(parseFloat(m.quantity)), unit: m.unit })}>Земи од магацин</Button>
+                )}
+              </div>
+            );
+          })}
+          {wo.status !== "completed" && (
+            <Button variant="outline" className="w-full h-11" onClick={() => { setExtraMat(null); setIssueFor({ qty: "" }); }}>
+              <Plus className="h-4 w-4 mr-1.5" />Земи друг материјал
+            </Button>
+          )}
+        </div>
+
+        {issueFor && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-3" onClick={() => setIssueFor(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="font-semibold text-lg">{issueFor.rowId ? issueFor.name : "Друг материјал"}</div>
+              {!issueFor.rowId && (
+                <MaterialPicker materials={(allMaterials ?? []) as any} value={extraMat ? String(extraMat.id) : null}
+                  placeholder="Пребарај материјал…" title="Избери материјал" onSelect={(m: any) => { setExtraMat(m); setIssueFor({ ...issueFor, unit: m.unit }); }} />
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-sm">Количина {issueFor.unit ? `(${issueFor.unit})` : ""}</Label>
+                <Input type="number" inputMode="decimal" className="h-14 text-2xl text-center" autoFocus
+                  value={issueFor.qty} onChange={(e) => setIssueFor({ ...issueFor, qty: e.target.value })} />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1 h-12" onClick={() => setIssueFor(null)}>Откажи</Button>
+                <Button className="flex-1 h-12 bg-amber-500 hover:bg-amber-600 text-white"
+                  disabled={floorIssue.isPending || !(parseFloat(issueFor.qty) > 0) || (!issueFor.rowId && !extraMat)}
+                  onClick={() => floorIssue.mutate({ workOrderId: woId, woMaterialId: issueFor.rowId, materialId: extraMat?.id, quantity: parseFloat(issueFor.qty), operator })}>
+                  {floorIssue.isPending ? "..." : "Издај"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Пријави проблем */}
+        <Button variant="outline" className="w-full h-12 border-red-200 text-red-700 hover:bg-red-50"
+          onClick={() => setProblem({ kind: "product", text: "", machineId: "", downtime: "" })}>
+          <TriangleAlert className="h-4 w-4 mr-2" />Пријави проблем
+        </Button>
+
+        {problem && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-3" onClick={() => setProblem(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="font-semibold text-lg flex items-center gap-2"><TriangleAlert className="h-5 w-5 text-red-600" />Пријави проблем</div>
+              <div className="grid grid-cols-2 gap-2">
+                {([["product", "Дефект на производ"], ["machine", "Дефект на машина"]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setProblem({ ...problem, kind: k })}
+                    className={`h-12 rounded-xl border text-sm font-medium ${problem.kind === k ? "border-red-400 bg-red-50 text-red-800" : "text-gray-600"}`}>{l}</button>
+                ))}
+              </div>
+              {problem.kind === "machine" && (
+                <div className="space-y-2">
+                  <select className="w-full h-12 rounded-lg border px-3 bg-white" value={problem.machineId} onChange={(e) => setProblem({ ...problem, machineId: e.target.value })}>
+                    <option value="">Која машина?</option>
+                    {machines?.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                  <Input type="number" inputMode="decimal" className="h-12" placeholder="Колку часа стои машината? (ако знаеш)"
+                    value={problem.downtime} onChange={(e) => setProblem({ ...problem, downtime: e.target.value })} />
+                </div>
+              )}
+              <textarea className="w-full min-h-[110px] rounded-lg border p-3 text-base" placeholder={problem.kind === "product" ? "Што не е во ред? (на пр. погрешна мера, 5 парчиња)" : "Што се случи со машината?"}
+                value={problem.text} onChange={(e) => setProblem({ ...problem, text: e.target.value })} />
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1 h-12" onClick={() => setProblem(null)}>Откажи</Button>
+                <Button className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white"
+                  disabled={problem.text.trim().length < 3 || (problem.kind === "machine" && !problem.machineId) || reportQuality.isPending || reportMachine.isPending}
+                  onClick={() => problem.kind === "product"
+                    ? reportQuality.mutate({ date: today, kind: "internal", title: problem.text.trim().slice(0, 120), description: `${problem.text.trim()}\n\nПријавил: ${operator} (од телефон)`, workOrderId: woId, responsible: operator })
+                    : reportMachine.mutate({ machineId: Number(problem.machineId), date: today, kind: "breakdown", description: `${problem.text.trim()} · налог ${wo.woNumber}`, downtimeHours: parseFloat(problem.downtime) || 0, performedBy: operator })}>
+                  Пријави
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <Button variant="outline" className="w-full h-12" onClick={() => navigate("/proizvodstvo")}>
           <ArrowLeft className="h-4 w-4 mr-2" />Кон производство

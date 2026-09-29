@@ -1,6 +1,7 @@
 import { trpc } from "@/providers/trpc";
-import { ROLES, type Role } from "@contracts/roles";
-import { useState } from "react";
+import { ROLES, canSeeMenu, type Role } from "@contracts/roles";
+import { useEffect, useState } from "react";
+import GlobalSearch from "@/components/GlobalSearch";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -22,11 +23,14 @@ import {
   BookOpen,
   Building2,
   Landmark,
+  Search,
+  Workflow,
   Contact,
 } from "lucide-react";
 
 const navItems = [
   { path: "/", label: "Контролна табла", icon: LayoutDashboard },
+  { path: "/tek", label: "Тек на нарачки", icon: Workflow },
   { path: "/sklad", label: "Склад", icon: Warehouse },
   { path: "/proizvodstvo", label: "Производство", icon: Factory },
   { path: "/kvalitet", label: "Квалитет и одржување", icon: ShieldCheck },
@@ -38,14 +42,23 @@ const navItems = [
   { path: "/priemnici", label: "Приемници", icon: ClipboardCheck },
   { path: "/katalog", label: "Каталог", icon: BookOpen },
   { path: "/sredstva", label: "Основни средства", icon: Building2 },
-  { path: "/vraboteni", label: "Вработени и плати", icon: Contact, adminOnly: true },
+  { path: "/vraboteni", label: "Вработени и плати", icon: Contact },
   { path: "/podesuvanja", label: "Подесувања", icon: Settings },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { data: me } = trpc.appUsers.appUsersMe.useQuery();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
+  // Ctrl+K / Cmd+K од било каде
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setSearchOpen(o => !o); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const { user, logout } = useAuth();
 
   return (
@@ -107,7 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.filter((item: any) => !item.adminOnly || (me?.role ?? "admin") === "admin").map((item) => {
+          {navItems.filter((item) => canSeeMenu(me?.role ?? "admin", item.path)).map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
             return (
@@ -158,7 +171,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <h1 className="text-lg font-semibold text-gray-800">
             {navItems.find((n) => n.path === location.pathname)?.label || "ERP Систем"}
           </h1>
+          <button onClick={() => setSearchOpen(true)}
+            className="ml-auto flex items-center gap-2 h-9 w-full max-w-xs rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-400 hover:bg-gray-100">
+            <Search className="h-4 w-4" />
+            <span className="flex-1 text-left truncate">Пребарај сè...</span>
+            <kbd className="hidden sm:inline text-[10px] font-mono border rounded px-1.5 py-0.5 bg-white text-gray-500">Ctrl K</kbd>
+          </button>
         </header>
+        <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
         {/* Page content */}
         <main className="flex-1 overflow-auto p-4 lg:p-6">

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,11 @@ export default function Storage() {
   const utils = trpc.useUtils();
   const [mainTab, setMainTab] = useState<"materials" | "finished" | "remnants" | "certs" | "popis">("materials");
   const [search, setSearch] = useState("");
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const qq = params.get("q");
+    if (qq) { setSearch(qq); params.delete("q"); setParams(params, { replace: true }); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
   const [warehouseFilter, setWarehouseFilter] = useState("all");

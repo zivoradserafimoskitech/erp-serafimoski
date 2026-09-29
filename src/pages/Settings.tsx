@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Building2, Ruler, ArrowRightLeft, Save, Shield, Upload, KeyRound, Users } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import RemindersCard from "@/components/RemindersCard";
 
 export default function SettingsPage() {
   const utils = trpc.useUtils();
@@ -175,6 +176,7 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+          <RemindersCard />
         </TabsContent>
 
         <TabsContent value="units" className="space-y-4">

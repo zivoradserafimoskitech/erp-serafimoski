@@ -23,7 +23,156 @@ async function nextNumber(table: string, column: string, prefix: string, date: s
   }
 }
 
+
+// ===================== ТЕК НА НАРАЧКА =====================
+type StageStatus = "done" | "current" | "todo" | "skipped";
+interface Stage { key: string; label: string; status: StageStatus; detail: string; href?: string; action?: string; actionLabel?: string; refId?: number }
+
+/** Групно ги пресметува чекорите за повеќе понуди (без N+1 прашања). */
+async function computeFlows(quoteIds: number[]) {
+  if (!quoteIds.length) return [];
+  const quotes = await q(`SELECT qt.*, c.name AS customer, c.company FROM quotations qt LEFT JOIN customers c ON c.id = qt.customer_id WHERE qt.id = ANY($1)`, [quoteIds]);
+  const orderIds = quotes.map(x => x.converted_order_id).filter(Boolean);
+  const [proformas, wos, dns, invs, allocs, cash, orders] = await Promise.all([
+    q(`SELECT id, invoice_number, quotation_id, total_amount, currency FROM invoices WHERE invoice_type = 'proforma' AND status <> 'cancelled' AND quotation_id = ANY($1)`, [quoteIds]),
+    q(`SELECT id, wo_number, status, order_id, quotation_id FROM work_orders WHERE status <> 'cancelled' AND (quotation_id = ANY($1) OR order_id = ANY($2))`, [quoteIds, orderIds]),
+    orderIds.length ? q(`SELECT id, dn_number, order_id FROM delivery_notes WHERE status <> 'cancelled' AND order_id = ANY($1)`, [orderIds]) : Promise.resolve([]),
+    orderIds.length ? q(`SELECT id, invoice_number, order_id, total_amount, currency, status FROM invoices WHERE invoice_type = 'standard' AND status NOT IN ('cancelled') AND order_id = ANY($1)`, [orderIds]) : Promise.resolve([]),
+    q(`SELECT doc_id, SUM(amount) s FROM payment_allocations WHERE doc_type = 'invoice' GROUP BY doc_id`),
+    q(`SELECT invoice_id, SUM(amount) s FROM cash_transactions WHERE invoice_id IS NOT NULL AND direction = 'in' GROUP BY invoice_id`),
+    orderIds.length ? q(`SELECT id, order_number, status FROM orders WHERE id = ANY($1)`, [orderIds]) : Promise.resolve([]),
+  ]);
+  const paidOf = (invId: number) =>
+    Number(allocs.find(a => Number(a.doc_id) === Number(invId))?.s ?? 0) + Number(cash.find(c => Number(c.invoice_id) === Number(invId))?.s ?? 0);
+  const { parseSchedule, advancePercent } = await import("@contracts/payment-terms");
+  const fmt = (n: number, cur: string) => `${n.toLocaleString("mk-MK", { maximumFractionDigits: 2 })} ${cur === "MKD" ? "ден" : cur}`;
+
+  return quotes.map(qt => {
+    const cur = qt.currency || "MKD";
+    const total = Number(qt.total_amount);
+    const order = orders.find(o => Number(o.id) === Number(qt.converted_order_id));
+    const pf = proformas.filter(p => Number(p.quotation_id) === Number(qt.id));
+    const myWos = wos.filter(w => Number(w.quotation_id) === Number(qt.id) || (order && Number(w.order_id) === Number(order.id)));
+    const myDns = order ? dns.filter(d => Number(d.order_id) === Number(order.id)) : [];
+    const myInv = order ? invs.filter(i => Number(i.order_id) === Number(order.id)) : [];
+    const sched = parseSchedule(qt.payment_schedule);
+    const advPct = sched ? advancePercent(sched) : 0;
+    const advNeeded = Math.round(total * advPct) / 100;
+    const advPaid = pf.reduce((a, p) => a + paidOf(p.id), 0);
+    const invTotal = myInv.reduce((a, i) => a + Number(i.total_amount), 0);
+    const invPaid = myInv.reduce((a, i) => a + paidOf(i.id), 0) + advPaid;
+    const accepted = ["accepted", "converted"].includes(qt.status);
+    const woDone = myWos.length > 0 && myWos.every(w => w.status === "completed");
+    const firstWo = myWos[0];
+
+    const st: Stage[] = [];
+    st.push({ key: "quote", label: "Понуда", status: accepted ? "done" : qt.status === "rejected" || qt.status === "expired" ? "skipped" : "current",
+      detail: `${qt.quote_number} · ${fmt(total, cur)}`, href: `/ponudi?open=${qt.id}`, action: accepted ? undefined : "accept", actionLabel: "Прифатена од клиентот" });
+    st.push({ key: "proforma", label: "Про-фактура", status: pf.length ? "done" : advPct > 0 ? "todo" : "skipped",
+      detail: pf.length ? pf.map(p => p.invoice_number).join(", ") : advPct > 0 ? "потребна за авансот" : "не е потребна (без аванс)",
+      href: pf[0] ? `/smetkovodstvo?open=${pf[0].id}` : undefined, action: pf.length ? undefined : "proforma", actionLabel: "Направи про-фактура" });
+    st.push({ key: "advance", label: `Аванс${advPct ? ` ${advPct}%` : ""}`, status: advPct === 0 ? "skipped" : advPaid >= advNeeded - 0.01 ? "done" : "todo",
+      detail: advPct === 0 ? "нема аванс" : `${fmt(advPaid, cur)} од ${fmt(advNeeded, cur)}`, action: advPct > 0 && advPaid < advNeeded - 0.01 && pf.length ? "payment" : undefined, actionLabel: "Евидентирај уплата", refId: pf[0]?.id });
+    st.push({ key: "order", label: "Нарачка", status: order ? "done" : "todo", detail: order ? order.order_number : "уште не е потврдена",
+      href: order ? `/klienti?order=${order.id}` : undefined, action: order ? undefined : "convert", actionLabel: "Потврди нарачка" });
+    st.push({ key: "wo", label: "Производство", status: woDone ? "done" : myWos.length ? "current" : "todo",
+      detail: myWos.length ? myWos.map(w => `${w.wo_number}${w.status === "completed" ? " ✓" : ""}`).join(", ") : "нема работен налог",
+      href: firstWo ? `/proizvodstvo?open=${firstWo.id}` : undefined, action: myWos.length ? undefined : "workorder", actionLabel: "Отвори работен налог", refId: firstWo?.id });
+    st.push({ key: "delivery", label: "Испратница", status: myDns.length ? "done" : "todo", detail: myDns.length ? myDns.map(d => d.dn_number).join(", ") : woDone ? "производството е готово" : "по завршено производство",
+      href: myDns.length ? `/smetkovodstvo?q=${encodeURIComponent(myDns[0].dn_number)}` : undefined, action: !myDns.length && woDone ? "delivery" : undefined, actionLabel: "Направи испратница", refId: firstWo?.id });
+    st.push({ key: "invoice", label: "Фактура", status: myInv.length ? "done" : "todo", detail: myInv.length ? myInv.map(i => i.invoice_number).join(", ") : "уште не е фактурирано",
+      href: myInv[0] ? `/smetkovodstvo?open=${myInv[0].id}` : undefined, action: !myInv.length && firstWo && order ? "invoice" : undefined, actionLabel: "Направи фактура", refId: firstWo?.id });
+    const paidDone = myInv.length > 0 && invPaid >= invTotal - 0.01;
+    st.push({ key: "payment", label: "Наплата", status: paidDone ? "done" : "todo",
+      detail: myInv.length ? `${fmt(invPaid, cur)} од ${fmt(invTotal, cur)}` : "по фактура", action: myInv.length && !paidDone ? "payment" : undefined, actionLabel: "Евидентирај наплата", refId: myInv[0]?.id });
+
+    // тековен чекор = првиот што не е завршен/прескокнат
+    const cur_i = st.findIndex(x => x.status === "todo" || x.status === "current");
+    if (cur_i >= 0) st[cur_i].status = "current";
+    for (let i = cur_i + 1; cur_i >= 0 && i < st.length; i++) if (st[i].status === "current") st[i].status = "todo";
+    return {
+      quotationId: qt.id, quoteNumber: qt.quote_number, customer: qt.company || qt.customer, total, currency: cur, createdAt: iso(qt.created_at),
+      orderId: order?.id ?? null, closed: cur_i < 0, currentStage: cur_i >= 0 ? st[cur_i].key : null, stages: st,
+    };
+  });
+}
+
 export const opsRouter = createRouter({
+
+  // ===================== ТЕЛЕФОН ЗА ПОДОТ =====================
+  /** Издавање материјал од подот: постоечки ред од налогот, или нов материјал што веднаш се издава. */
+  floorIssue: publicQuery
+    .input(z.object({
+      workOrderId: z.number(), woMaterialId: z.number().optional(), materialId: z.number().optional(),
+      quantity: z.number().positive(), operator: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }): Promise<{ success: boolean; unitCost: string }> => {
+      const wo = (await q(`SELECT id, wo_number, status FROM work_orders WHERE id = $1`, [input.workOrderId]))[0];
+      if (!wo) throw new Error("Налогот не постои");
+      if (wo.status === "completed" || wo.status === "cancelled") throw new Error("Налогот е затворен");
+      const wh = (await q(`SELECT id FROM warehouses ORDER BY (code = 'GL-MAT') DESC, (type = 'raw_materials') DESC, id LIMIT 1`))[0];
+      if (!wh) throw new Error("Нема магацин за материјали");
+      let rowId = input.woMaterialId;
+      let materialId = input.materialId;
+      if (rowId) {
+        const r = (await q(`SELECT material_id, is_actual FROM work_order_materials WHERE id = $1 AND work_order_id = $2`, [rowId, input.workOrderId]))[0];
+        if (!r) throw new Error("Материјалот не е на овој налог");
+        if (r.is_actual === "actual") throw new Error("Овој материјал е веќе издаден");
+        materialId = Number(r.material_id);
+        await q(`UPDATE work_order_materials SET quantity = $2 WHERE id = $1`, [rowId, input.quantity]);
+      } else {
+        if (!materialId) throw new Error("Избери материјал");
+        const ins = await q(`INSERT INTO work_order_materials (work_order_id, material_id, quantity, unit_cost, total_cost, is_actual, notes)
+          VALUES ($1,$2,$3,0,0,'planned',$4) RETURNING id`, [input.workOrderId, materialId, input.quantity, input.operator ? `Од подот: ${input.operator}` : "Од подот"]);
+        rowId = Number(ins[0].id);
+      }
+      // целиот рутер (не под-рутер), за проверката на дозволи да ја види патеката storage.issueMaterial
+      const mod: any = await import("./router");
+      const caller: any = mod.appRouter.createCaller(ctx);
+      try {
+        const r: { unitCost: string } = await caller.storage.issueMaterial({
+          materialId: materialId!, warehouseId: Number(wh.id), quantity: String(input.quantity),
+          sourceDocType: "work_order", sourceDocId: input.workOrderId, reference: wo.wo_number, woMaterialId: rowId,
+        });
+        return { success: true, unitCost: r.unitCost };
+      } catch (e) {
+        // нов ред што не можел да се издаде (нема залиха) -- тргни го, да не остане празен ред
+        if (!input.woMaterialId && rowId) await q(`DELETE FROM work_order_materials WHERE id = $1 AND is_actual <> 'actual'`, [rowId]);
+        throw e;
+      }
+    }),
+
+  // ===================== ТЕК НА НАРАЧКА =====================
+  dealFlow: publicQuery
+    .input(z.object({ quotationId: z.number() }))
+    .query(async ({ input }) => (await computeFlows([input.quotationId]))[0] ?? null),
+
+  dealList: publicQuery
+    .input(z.object({ includeClosed: z.boolean().default(false) }).optional())
+    .query(async ({ input }) => {
+      const ids = (await q(`SELECT id FROM quotations WHERE status NOT IN ('rejected', 'expired') ORDER BY created_at DESC LIMIT 300`)).map(r => Number(r.id));
+      const flows = await computeFlows(ids);
+      const order = ["quote", "proforma", "advance", "order", "wo", "delivery", "invoice", "payment"];
+      return flows.filter(f => input?.includeClosed || !f.closed)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map(f => ({ ...f, stageIndex: f.currentStage ? order.indexOf(f.currentStage) : order.length }));
+    }),
+
+  /** Налог за нарачка: ако веќе има налог од понудата (без нарачка) -- поврзи го; инаку создади нов. */
+  dealCreateWorkOrder: publicQuery
+    .input(z.object({ quotationId: z.number() }))
+    .mutation(async ({ input }) => {
+      const qt = (await q(`SELECT id, converted_order_id FROM quotations WHERE id = $1`, [input.quotationId]))[0];
+      if (!qt?.converted_order_id) throw new Error("Прво потврди ја нарачката");
+      const free = (await q(`SELECT id, wo_number FROM work_orders WHERE quotation_id = $1 AND order_id IS NULL AND status <> 'cancelled' ORDER BY id LIMIT 1`, [input.quotationId]))[0];
+      if (free) {
+        await q(`UPDATE work_orders SET order_id = $2 WHERE id = $1`, [free.id, qt.converted_order_id]);
+        await q(`UPDATE orders SET status = 'in_production' WHERE id = $1 AND status = 'confirmed'`, [qt.converted_order_id]);
+        return { linked: true, woNumber: free.wo_number as string, orderId: Number(qt.converted_order_id) };
+      }
+      return { linked: false, woNumber: null, orderId: Number(qt.converted_order_id) };
+    }),
+
   // ===================== ДОБИВКА ПО НАРАЧКА =====================
   profitabilityReport: publicQuery
     .input(z.object({ from: dateStr, to: dateStr }))

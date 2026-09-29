@@ -117,4 +117,59 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     const tb = await caller.finance.trialBalance({ from: "2000-01-01", to: "2100-01-01" });
     expect(tb.accounts.find((a: any) => a.code === "420")?.debit).toBe(60000);
   });
+
+  it("тек на нарачка со аванс: про-фактура → уплата → нарачка → налог → фактура → наплата, аванс се затвора", async () => {
+    const q = await caller.quotation.quotationCreate({ quoteNumber: "ПО-050/2026", customerId: ids.cust, subtotal: "10000", vatAmount: "1800", totalAmount: "11800",
+      paymentSchedule: JSON.stringify([{ percent: 50, when: "advance" }, { percent: 50, when: "on_delivery" }]),
+      items: [{ itemType: "material", referenceId: ids.mat, description: "Лим", quantity: "100", unit: "kg", unitPrice: "100", totalPrice: "10000", unitCost: "60", totalCost: "6000" }] });
+    let f = await caller.ops.dealFlow({ quotationId: q.id });
+    expect(f.currentStage).toBe("quote");
+    await caller.quotation.quotationUpdate({ id: q.id, status: "accepted" });
+    f = await caller.ops.dealFlow({ quotationId: q.id });
+    expect(f.currentStage).toBe("proforma");
+    const pf = await caller.quotation.quotationToProforma({ quotationId: q.id, issueDate: today, vatRate: "18" });
+    await caller.finance.cashCreate({ txDate: today, direction: "in", amount: 5900, invoiceId: pf.id });
+    f = await caller.ops.dealFlow({ quotationId: q.id });
+    expect(f.stages.find((s: any) => s.key === "advance").status).toBe("done");
+    expect(f.currentStage).toBe("order");
+    const conv = await caller.quotation.quotationConvert({ quotationId: q.id, orderNumber: "НАР-050/2026" });
+    const link = await caller.ops.dealCreateWorkOrder({ quotationId: q.id });
+    if (!link.linked) await caller.production.orderFromChain({ orderId: conv.orderId });
+    f = await caller.ops.dealFlow({ quotationId: q.id });
+    expect(f.currentStage).toBe("wo");
+    const woId = f.stages.find((s: any) => s.key === "wo").refId;
+    // телефон: издај друг материјал
+    await caller.ops.floorIssue({ workOrderId: woId, materialId: ids.mat, quantity: 5, operator: "Марко" });
+    const scan = await caller.production.woScanById({ id: woId });
+    expect(scan.materials.some((m: any) => m.isActual === "actual" && Number(m.quantity) === 5)).toBe(true);
+    await expect(caller.ops.floorIssue({ workOrderId: woId, materialId: ids.mat, quantity: 99999 })).rejects.toThrow(/залиха/);
+    expect((await caller.production.woScanById({ id: woId })).materials).toHaveLength(1); // празниот ред е тргнат
+    await caller.production.workOrderUpdate({ id: woId, status: "completed", producedQty: "1", producedUnit: "ком" });
+    await caller.production.workOrderToDeliveryNote({ workOrderId: woId });
+    const inv = await caller.production.workOrderToInvoice({ workOrderId: woId });
+    await caller.accounting.invoiceUpdate({ id: inv.id, status: "issued" });
+    await caller.finance.cashCreate({ txDate: today, direction: "in", amount: 5900, invoiceId: inv.id });
+    f = await caller.ops.dealFlow({ quotationId: q.id });
+    expect(f.closed).toBe(true);
+    // книжење: аванс 235 е затворен, купувачот 120 за оваа нарачка е на нула
+    const s = await caller.finance.ledgerSync();
+    expect(s.problems).toEqual([]);
+    const tb = await caller.finance.trialBalance({ from: "2000-01-01", to: "2100-01-01" });
+    expect(tb.accounts.find((a: any) => a.code === "235")?.closing ?? 0).toBe(0);
+    expect(tb.totals.debit).toBe(tb.totals.credit);
+    expect((await caller.ops.dealList({})).some((d: any) => d.quotationId === q.id)).toBe(false); // завршена -> не е во тек
+  });
+
+  it("брзо пребарување", async () => {
+    const hits = await caller.search.globalSearch({ q: "ПО-050" });
+    expect(hits[0]).toMatchObject({ type: "Понуда", title: "ПО-050/2026" });
+    expect((await caller.search.globalSearch({ q: "Лим" })).some((h: any) => h.type === "Материјал")).toBe(true);
+  });
+
+  it("потсетници: преглед", async () => {
+    await caller.reminders.remindersSet({ enabled: true, bossEmail: "sef@test.mk", overdueToCustomer: true, overdueEveryDays: 7, quoteFollowupDays: 7, quoteFollowup: true, weekly: true, weeklyWeekday: 1, sendHour: 8 });
+    const p = await caller.reminders.remindersPreview();
+    expect(Array.isArray(p.overdue)).toBe(true);
+    expect(p.weekly.woDone).toBeGreaterThanOrEqual(1);
+  });
 });

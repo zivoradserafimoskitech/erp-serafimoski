@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,14 @@ export default function Customers() {
   const { data: nextOrderNum } = trpc.settings.nextDocNumber.useQuery({ kind: "order" }, { enabled: orderDialog });
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<number | null>(null);
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const oid = Number(params.get("order"));
+    const qq = params.get("q");
+    if (oid) { setSelectedOrder(oid); setDetailOpen(true); }
+    if (qq) setSearch(qq);
+    if (oid || qq) { params.delete("order"); params.delete("q"); setParams(params, { replace: true }); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const EMPTY_CUST = { name: "", company: "", contactPerson: "", email: "", phone: "", address: "", city: "", country: "", taxNumber: "", notes: "", isActive: "active" };
   const [custForm, setCustForm] = useState(EMPTY_CUST);

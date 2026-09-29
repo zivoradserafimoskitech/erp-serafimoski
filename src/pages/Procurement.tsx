@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,11 @@ const poStatusConfig: Record<string, { label: string; className: string }> = {
 export default function Procurement() {
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const qq = params.get("q");
+    if (qq) { setSearch(qq); params.delete("q"); setParams(params, { replace: true }); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [supplierDialog, setSupplierDialog] = useState(false);
   const [poDialog, setPoDialog] = useState(false);
   const { data: nextPoNum } = trpc.settings.nextDocNumber.useQuery({ kind: "po" }, { enabled: poDialog });

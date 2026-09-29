@@ -410,7 +410,17 @@ export const productionRouter = createRouter({
         };
       });
 
-      return { ...(wo[0] as any), operations: opsOut };
+      // Материјали на налогот (за издавање од телефон)
+      const mats = await db
+        .select({
+          id: workOrderMaterials.id, materialId: workOrderMaterials.materialId, quantity: workOrderMaterials.quantity,
+          isActual: workOrderMaterials.isActual, name: materials.name, code: materials.code, unit: materials.unit,
+        })
+        .from(workOrderMaterials)
+        .leftJoin(materials, eq(workOrderMaterials.materialId, materials.id))
+        .where(eq(workOrderMaterials.workOrderId, input.id));
+
+      return { ...(wo[0] as any), operations: opsOut, materials: mats };
     }),
 
   opClockIn: publicQuery

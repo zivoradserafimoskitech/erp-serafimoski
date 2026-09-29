@@ -15,6 +15,7 @@ import ListLimitNote from "@/components/ListLimitNote";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import { printInvoice, printDeliveryNote, printAccountantReport, invoiceHtml } from "@/lib/print-documents";
 import SendEmailDialog from "@/components/SendEmailDialog";
+import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { DnCertificates } from "@/components/DnCertificates";
 import {
@@ -86,6 +87,14 @@ export default function Accounting() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailType, setDetailType] = useState<"" | "out" | "inc">("");
   const [selId, setSelId] = useState<number | null>(null);
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = Number(params.get("open"));
+    const qq = params.get("q");
+    if (id) { setSelId(id); setDetailType("out"); setDetailOpen(true); }
+    if (qq) setSearch(qq);
+    if (id || qq) { params.delete("open"); params.delete("q"); setParams(params, { replace: true }); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [mailOpen, setMailOpen] = useState(false);
   const { data: outDetail } = trpc.accounting.invoiceById.useQuery({ id: selId! }, { enabled: detailType === "out" && !!selId });
   const { data: incDetail } = trpc.accounting.incomingInvoiceById.useQuery({ id: selId! }, { enabled: detailType === "inc" && !!selId });
