@@ -63,7 +63,8 @@ export const customersRouter = createRouter({
         name: z.string().min(1).optional(),
         company: z.string().optional(),
         contactPerson: z.string().optional(),
-        email: z.preprocess((v) => (v === "" ? undefined : v), z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional())),
+        // празно = избриши го е-маилот
+        email: z.union([z.literal(""), z.string().email()]).optional(),
         phone: z.string().optional(),
         address: z.string().optional(),
         city: z.string().optional(),
@@ -75,7 +76,9 @@ export const customersRouter = createRouter({
     )
     .mutation(async ({ input }) => {
       const db = getDb();
-      const { id, ...data } = input;
+      const { id, ...rest } = input;
+      const data: any = { ...rest, updatedAt: new Date() };
+      if (rest.email === "") data.email = null;
       await db.update(customers).set(data).where(eq(customers.id, id));
       return { success: true };
     }),
