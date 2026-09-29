@@ -776,6 +776,17 @@ export default function Quotations() {
               </div>
 
               <div className="px-8 py-6 space-y-6">
+                {Number(qDetail.vatRate) > 0 && isForeign(qDetail.customerId, qDetail.currency ?? "MKD") && (
+                  <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
+                    <span className="text-amber-800">
+                      Понудата е за странство ({qDetail.currency !== "MKD" ? qDetail.currency : "клиент од друга држава"}), а има ДДВ {Number(qDetail.vatRate)}%.
+                    </span>
+                    <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shrink-0" disabled={updateQ.isPending}
+                      onClick={() => updateQ.mutate({ id: qDetail.id, vatRate: "0" })}>
+                      Без ДДВ (извоз)
+                    </Button>
+                  </div>
+                )}
                 {/* Totals — ВКУПНО dominant */}
                 <div className="rounded-xl bg-amber-50/70 border border-amber-200 p-6 flex items-center justify-between">
                   <div className="flex gap-10">
