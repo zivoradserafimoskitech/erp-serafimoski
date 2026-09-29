@@ -37,6 +37,12 @@ export const settingsRouter = createRouter({
       timezone: z.string().default("Europe/Skopje"),
       cutKerfMm: z.string().optional(),
       minRemnantMm: z.string().optional(),
+      nameEn: z.string().optional(),
+      addressEn: z.string().optional(),
+      iban: z.string().optional(),
+      swift: z.string().optional(),
+      bankNameEn: z.string().optional(),
+      bankAddress: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();

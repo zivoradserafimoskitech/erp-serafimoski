@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { printQuotation } from "@/lib/print-documents";
+import { printQuotation, printInvoice, type DocLang } from "@/lib/print-documents";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { MaterialPicker } from "@/components/MaterialPicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package, Pencil, Truck, CalendarClock, CreditCard, Building2 } from "lucide-react";
+import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package, Pencil, Truck, CalendarClock, CreditCard, Building2, Receipt } from "lucide-react";
 
 // Status configs
 const qStatus: Record<string, { label: string; cls: string }> = {
@@ -149,6 +149,70 @@ export default function Quotations() {
       resetQForm();
     },
   });
+  // ===== ПРО-ФАКТУРА ОД ПОНУДА =====
+  const [pfOpen, setPfOpen] = useState(false);
+  const [pf, setPf] = useState({
+    language: "mk" as DocLang, currency: "MKD", rate: "61.5", vatRate: "18", exportExempt: false,
+    issueDate: "", dueDate: "", notes: "", descriptions: [] as string[],
+  });
+  const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+  const pfDefaultNotes = (lang: DocLang, exempt: boolean, quoteNo: string) => {
+    const lines: string[] = [];
+    if (lang === "en") {
+      lines.push(`Based on quotation ${quoteNo.replace(/ПО/g, "PO")}.`);
+      if (exempt) lines.push("VAT exempt – export of goods (Art. 26, Law on VAT of the Republic of North Macedonia).");
+      lines.push("Payment: 100% in advance by bank transfer. Bank charges (OUR) are borne by the payer.");
+    } else {
+      lines.push(`Според понуда ${quoteNo}.`);
+      if (exempt) lines.push("Ослободено од ДДВ согласно член 26 од Законот за ДДВ (извоз на добра).");
+      lines.push("Плаќање: 100% авансно.");
+    }
+    return lines.join("\n");
+  };
+  // множител на цените од понудата кон валутата на про-фактурата (null = не може да се пресмета)
+  const pfFactor = (): number | null => {
+    const from = qDetail?.currency ?? "MKD";
+    if (pf.currency === from) return 1;
+    const r = parseFloat(pf.rate);
+    if (!(r > 0)) return null;
+    if (from === "MKD") return 1 / r;
+    if (pf.currency === "MKD") return r;
+    return null;
+  };
+  const openProforma = (lang?: DocLang) => {
+    if (!qDetail) return;
+    const cur = qDetail.currency ?? "MKD";
+    const language: DocLang = lang ?? (cur !== "MKD" ? "en" : "mk");
+    const exempt = cur !== "MKD";
+    const days = parseInt(String(qDetail.paymentTerms ?? "").match(/\d+/)?.[0] ?? "14", 10) || 14;
+    const today = new Date();
+    setPf({
+      language, currency: cur, rate: "61.5", vatRate: exempt ? "0" : String(Number(qDetail.vatRate ?? 18)), exportExempt: exempt,
+      issueDate: isoDay(today), dueDate: isoDay(new Date(today.getTime() + days * 86400000)),
+      notes: pfDefaultNotes(language, exempt, qDetail.quoteNumber),
+      descriptions: (qDetail.items ?? []).map((i: any) => i.description),
+    });
+    setPfOpen(true);
+  };
+  const createPf = trpc.quotation.quotationToProforma.useMutation({
+    onSuccess: async (d) => {
+      utils.accounting.invoiceList.invalidate();
+      toast.success(`Креирана про-фактура ${d.invoiceNumber}`);
+      setPfOpen(false);
+      const inv = await utils.accounting.invoiceById.fetch({ id: d.id });
+      if (inv) printInvoice(inv, companySettings, pf.language);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const pfPreview = (() => {
+    const f = pfFactor();
+    if (f === null || !qDetail) return null;
+    const sub = (qDetail.items ?? []).reduce((a: number, i: any) =>
+      a + (f === 1 ? Number(i.totalPrice) : Number(i.quantity) * Math.round(Number(i.unitPrice) * f * 100) / 100), 0);
+    const vat = sub * (parseFloat(pf.vatRate) || 0) / 100;
+    return { sub, vat, total: sub + vat };
+  })();
+
   const convertQ = trpc.quotation.quotationConvert.useMutation({
     onSuccess: () => { utils.quotation.quotationList.invalidate(); setConvertDialog(false); setConvOrderNum(""); },
   });
@@ -657,8 +721,14 @@ export default function Quotations() {
                       <Button variant="outline" onClick={() => quoToWO.mutate({ quotationId: qDetail.id })} disabled={quoToWO.isPending}>
                         <ArrowRight className="h-4 w-4 mr-1.5" />Налог
                       </Button>
-                      <Button variant="outline" onClick={() => printQuotation(qDetail, companySettings)}>
-                        <FileText className="h-4 w-4 mr-1.5" />PDF
+                      <Button variant="outline" onClick={() => printQuotation(qDetail, companySettings, "mk")}>
+                        <FileText className="h-4 w-4 mr-1.5" />PDF МК
+                      </Button>
+                      <Button variant="outline" onClick={() => printQuotation(qDetail, companySettings, "en")}>
+                        <FileText className="h-4 w-4 mr-1.5" />PDF EN
+                      </Button>
+                      <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => openProforma()}>
+                        <Receipt className="h-4 w-4 mr-1.5" />Про-фактура
                       </Button>
                     </div>
                   </div>
@@ -755,6 +825,101 @@ export default function Quotations() {
                 )}
               </div>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pro-forma Dialog */}
+      <Dialog open={pfOpen} onOpenChange={setPfOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Про-фактура од понуда {qDetail?.quoteNumber}</DialogTitle></DialogHeader>
+          {qDetail && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1"><Label>Јазик</Label>
+                  <Select value={pf.language} onValueChange={v => setPf({ ...pf, language: v as DocLang, notes: pfDefaultNotes(v as DocLang, pf.exportExempt, qDetail.quoteNumber) })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="mk">Македонски</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label>Валута</Label>
+                  <Select value={pf.currency} onValueChange={v => {
+                    const exempt = v !== "MKD";
+                    setPf({ ...pf, currency: v, exportExempt: exempt, vatRate: exempt ? "0" : String(Number(qDetail.vatRate ?? 18)), notes: pfDefaultNotes(pf.language, exempt, qDetail.quoteNumber) });
+                  }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="MKD">MKD</SelectItem><SelectItem value="EUR">EUR</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                {pf.currency !== (qDetail.currency ?? "MKD") ? (
+                  <div className="space-y-1">
+                    <Label>Курс: 1 {pf.currency === "MKD" ? qDetail.currency : pf.currency} = ? MKD</Label>
+                    <Input type="number" step="0.0001" value={pf.rate} onChange={e => setPf({ ...pf, rate: e.target.value })} />
+                  </div>
+                ) : (
+                  <div className="space-y-1"><Label>ДДВ %</Label><Input type="number" value={pf.vatRate} disabled={pf.exportExempt} onChange={e => setPf({ ...pf, vatRate: e.target.value })} /></div>
+                )}
+              </div>
+              {pfFactor() === null && (
+                <p className="text-sm text-red-600">Конверзија е можна само од/во денари. Понудата е во {qDetail.currency}.</p>
+              )}
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={pf.exportExempt} onChange={e => {
+                  const exempt = e.target.checked;
+                  setPf({ ...pf, exportExempt: exempt, vatRate: exempt ? "0" : String(Number(qDetail.vatRate ?? 18)), notes: pfDefaultNotes(pf.language, exempt, qDetail.quoteNumber) });
+                }} />
+                Извоз / странство — ослободено од ДДВ (0%)
+              </label>
+              {pf.currency !== (qDetail.currency ?? "MKD") && !pf.exportExempt && (
+                <div className="space-y-1 w-1/3"><Label>ДДВ %</Label><Input type="number" value={pf.vatRate} onChange={e => setPf({ ...pf, vatRate: e.target.value })} /></div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Датум на издавање</Label><Input type="date" value={pf.issueDate} onChange={e => setPf({ ...pf, issueDate: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Рок за плаќање</Label><Input type="date" value={pf.dueDate} onChange={e => setPf({ ...pf, dueDate: e.target.value })} /></div>
+              </div>
+              <div className="space-y-1">
+                <Label>Описи на ставките {pf.language === "en" && <span className="text-xs font-normal text-amber-600">— преведи ги на англиски</span>}</Label>
+                <div className="space-y-1.5">
+                  {pf.descriptions.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 w-5 text-right">{i + 1}.</span>
+                      <Input value={d} onChange={e => setPf({ ...pf, descriptions: pf.descriptions.map((x, j) => j === i ? e.target.value : x) })} />
+                      <span className="text-xs text-gray-500 whitespace-nowrap">{qDetail.items?.[i]?.quantity} {qDetail.items?.[i]?.unit}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1"><Label>Забелешка на документот</Label><Textarea rows={4} value={pf.notes} onChange={e => setPf({ ...pf, notes: e.target.value })} /></div>
+              {(pf.language === "en" || pf.currency !== "MKD") && !companySettings?.iban && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  Нема внесено IBAN/SWIFT. Внеси ги во Подесувања → Фирма → Девизна сметка за да се печатат на про-фактурата.
+                </p>
+              )}
+              {pfPreview && (
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm flex justify-between">
+                  <span>Основица: <b>{pfPreview.sub.toFixed(2)}</b> · ДДВ: <b>{pfPreview.vat.toFixed(2)}</b></span>
+                  <span className="font-bold text-blue-700">Вкупно: {pfPreview.total.toFixed(2)} {pf.currency}</span>
+                </div>
+              )}
+              <Button className="w-full bg-blue-600 hover:bg-blue-700" disabled={createPf.isPending || pfFactor() === null || !pf.issueDate}
+                onClick={() => {
+                  const f = pfFactor();
+                  if (f === null) return;
+                  const conv = f !== 1
+                    ? (pf.language === "en"
+                        ? `\nExchange rate: 1 ${pf.currency === "MKD" ? qDetail.currency : pf.currency} = ${pf.rate} MKD.`
+                        : `\nКурс: 1 ${pf.currency === "MKD" ? qDetail.currency : pf.currency} = ${pf.rate} MKD.`)
+                    : "";
+                  createPf.mutate({
+                    quotationId: qDetail.id, language: pf.language, currency: pf.currency, priceFactor: f,
+                    vatRate: pf.exportExempt ? "0" : (pf.vatRate || "0"), issueDate: pf.issueDate, dueDate: pf.dueDate || undefined,
+                    notes: (pf.notes + conv).trim() || undefined, descriptions: pf.descriptions,
+                  });
+                }}>
+                {createPf.isPending ? "Креирање..." : "Креирај про-фактура и печати"}
+              </Button>
+              <p className="text-xs text-gray-500">Про-фактурата се зачувува во Сметководство → Излезни фактури (тип Проформа), каде може повторно да се печати на МК или EN.</p>
+            </div>
           )}
         </DialogContent>
       </Dialog>

@@ -262,6 +262,88 @@ export const quotationRouter = createRouter({
       return { success: true, woNumber, materialsCopied: mats };
     }),
 
+  // Про-фактура од понуда (МК или EN, во валута на понудата или конвертирана со курс)
+  quotationToProforma: publicQuery
+    .input(z.object({
+      quotationId: z.number(),
+      language: z.enum(["mk", "en"]).default("mk"),
+      currency: z.string().default("MKD"),
+      // множител за цените: нова цена = цена од понуда × priceFactor (1 кога валутата е иста)
+      priceFactor: z.number().positive().default(1),
+      vatRate: z.string().default("18"),
+      issueDate: z.string(),
+      dueDate: z.string().optional(),
+      notes: z.string().optional(),
+      // преведени/изменети описи на ставките, по редослед на ставките во понудата
+      descriptions: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { invoices, documentItems } = await import("@db/schema");
+      const quo = await db.select().from(quotations).where(eq(quotations.id, input.quotationId));
+      if (!quo[0]) throw new Error("Понудата не постои");
+      const items = await db.select().from(quotationItems)
+        .where(eq(quotationItems.quotationId, input.quotationId)).orderBy(quotationItems.sortOrder);
+      if (items.length === 0) throw new Error("Понудата нема ставки");
+
+      const f = input.priceFactor;
+      const vatR = parseFloat(input.vatRate) || 0;
+      const lines = items.map((it, idx) => {
+        const qty = parseFloat(String(it.quantity)) || 0;
+        const unitPrice = Math.round(parseFloat(String(it.unitPrice)) * f * 100) / 100;
+        const totalPrice = f === 1 ? parseFloat(String(it.totalPrice)) : Math.round(qty * unitPrice * 100) / 100;
+        const desc = input.descriptions?.[idx]?.trim() || it.description;
+        return { desc, qty, unit: it.unit, unitPrice, totalPrice };
+      });
+      const subtotal = lines.reduce((s, l) => s + l.totalPrice, 0);
+      const vatAmount = Math.round(subtotal * vatR) / 100;
+
+      const { getNextDocNumber } = await import("./counters-helper");
+      const payload: any = {
+        customerId: quo[0].customerId,
+        quotationId: input.quotationId,
+        status: "draft",
+        invoiceType: "proforma",
+        language: input.language,
+        issueDate: new Date(input.issueDate),
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        subtotal: subtotal.toFixed(2),
+        vatRate: vatR.toFixed(2),
+        vatAmount: vatAmount.toFixed(2),
+        totalAmount: (subtotal + vatAmount).toFixed(2),
+        currency: input.currency,
+        notes: input.notes || null,
+      };
+      let insertId = 0;
+      for (let attempt = 0; attempt < 5 && !insertId; attempt++) {
+        payload.invoiceNumber = await getNextDocNumber("proforma");
+        try {
+          const res = await db.insert(invoices).values(payload);
+          insertId = Number(res[0].insertId);
+        } catch (err: any) {
+          const isDup = err?.code === "23505" || /duplicate key|unique constraint/i.test(String(err?.message ?? ""));
+          if (!isDup) throw err;
+        }
+      }
+      if (!insertId) throw new Error("Не може да се додели број на про-фактура");
+
+      await db.insert(documentItems).values(lines.map(l => ({
+        documentId: insertId,
+        documentType: "invoice" as const,
+        description: l.desc,
+        quantity: String(l.qty),
+        unit: l.unit,
+        unitPrice: l.unitPrice.toFixed(2),
+        discount: "0",
+        totalPrice: l.totalPrice.toFixed(2),
+        vatRate: vatR.toFixed(2),
+        itemType: "manual",
+      })) as any);
+
+      await logAudit({ action: "CREATE", entityType: "invoice", entityId: insertId, description: `Про-фактура ${payload.invoiceNumber} од понуда ${quo[0].quoteNumber}` });
+      return { success: true, id: insertId, invoiceNumber: payload.invoiceNumber as string };
+    }),
+
   quotationNextNumber: publicQuery.query(async () => {
     const { peekNextDocNumber } = await import("./counters-helper");
     return peekNextDocNumber("quote");
