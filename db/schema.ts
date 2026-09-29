@@ -43,6 +43,13 @@ export const companySettings = pgTable("company_settings", {
   swift: varchar("swift", { length: 20 }),
   bankNameEn: varchar("bank_name_en", { length: 255 }),
   bankAddress: text("bank_address"),
+  // Праќање е-пошта (SMTP)
+  smtpHost: varchar("smtp_host", { length: 255 }),
+  smtpPort: integer("smtp_port").default(587),
+  smtpSecure: integer("smtp_secure").default(0),
+  smtpUser: varchar("smtp_user", { length: 255 }),
+  smtpPassword: varchar("smtp_password", { length: 255 }),
+  smtpFrom: varchar("smtp_from", { length: 320 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

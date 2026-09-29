@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { printQuotation, printInvoice, type DocLang } from "@/lib/print-documents";
+import { printQuotation, printInvoice, quotationHtml, type DocLang } from "@/lib/print-documents";
+import SendEmailDialog from "@/components/SendEmailDialog";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -9,13 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import ListLimitNote from "@/components/ListLimitNote";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import { PaymentTermsEditor } from "@/components/PaymentTermsEditor";
 import { type Installment, parseSchedule, describeSchedule, scheduleTotal } from "@contracts/payment-terms";
+import { isDomesticCountry } from "@contracts/country";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package, Pencil, Truck, CalendarClock, CreditCard, Building2, Receipt } from "lucide-react";
+import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package, Pencil, Truck, CalendarClock, CreditCard, Building2, Receipt, Mail } from "lucide-react";
 
 // Status configs
 const qStatus: Record<string, { label: string; cls: string }> = {
@@ -80,6 +83,7 @@ export default function Quotations() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [convertDialog, setConvertDialog] = useState(false);
   const [selQ, setSelQ] = useState<number | null>(null);
+  const [mailOpen, setMailOpen] = useState(false);
   const [convOrderNum, setConvOrderNum] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -93,8 +97,6 @@ export default function Quotations() {
     parseSchedule(raw) ?? [{ percent: 100, when: "after_invoice", days: parseInt(String(text ?? "").match(/\d+/)?.[0] ?? "14", 10) || 14 }];
   const [qSchedule, setQSchedule] = useState<Installment[]>(DEFAULT_SCHEDULE);
   // Странство = клиент од друга држава или валута различна од денари -> извоз, без ДДВ
-  const isDomesticCountry = (c?: string | null) =>
-    !c || /^(mk|mkd|македонија|северна македонија|(north |republic of )?macedonia|makedonija|severna makedonija)$/i.test(c.trim());
   const isForeign = (customerId: string | number, currency: string) =>
     currency !== "MKD" || !isDomesticCountry(customers?.find(c => String(c.id) === String(customerId))?.country);
   const [qForm, setQForm] = useState({
@@ -680,6 +682,7 @@ export default function Quotations() {
                   ))}
               </TableBody>
             </Table>
+              <ListLimitNote count={quotationsData?.length} />
           </CardContent>
         </Card>
       )}
@@ -766,6 +769,9 @@ export default function Quotations() {
                       </Button>
                       <Button variant="outline" onClick={() => printQuotation(qDetail, companySettings, "en")}>
                         <FileText className="h-4 w-4 mr-1.5" />PDF EN
+                      </Button>
+                      <Button variant="outline" onClick={() => setMailOpen(true)}>
+                        <Mail className="h-4 w-4 mr-1.5" />Прати
                       </Button>
                       <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => openProforma()}>
                         <Receipt className="h-4 w-4 mr-1.5" />Про-фактура
@@ -886,6 +892,13 @@ export default function Quotations() {
           )}
         </DialogContent>
       </Dialog>
+
+      {qDetail && (
+        <SendEmailDialog open={mailOpen} onOpenChange={setMailOpen} docType="quotation" docId={qDetail.id} docNumber={qDetail.quoteNumber}
+          defaultTo={qDetail.customer?.email} companyName={companySettings?.nameEn || companySettings?.name}
+          defaultLang={(qDetail.currency ?? "MKD") !== "MKD" ? "en" : "mk"}
+          buildHtml={(lang) => quotationHtml(qDetail, companySettings, lang)} />
+      )}
 
       {/* Pro-forma Dialog */}
       <Dialog open={pfOpen} onOpenChange={setPfOpen}>

@@ -322,6 +322,12 @@ export default function Storage() {
                       <TableCell><Badge variant="outline">{materialTypes[m.type] || m.type}</Badge></TableCell>
                       <TableCell>
                         <span className={isLow ? "text-red-600 font-semibold" : ""}>{m.currentStock} {units[m.unit]}</span>
+                        {Number((m as any).reservedQty ?? 0) > 0 && (
+                          <div className="text-[11px] leading-tight mt-0.5" title={`Резервирано за ${(m as any).reservedWorkOrders} отворени налози`}>
+                            <span className="text-amber-700">рез. {parseFloat((m as any).reservedQty)}</span>
+                            <span className={Number((m as any).availableQty) < 0 ? "text-red-600 font-semibold" : "text-emerald-700"}> · слоб. {parseFloat((m as any).availableQty)}</span>
+                          </div>
+                        )}
                         {isLow && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-red-500" />}
                       </TableCell>
                       <TableCell className="text-right">

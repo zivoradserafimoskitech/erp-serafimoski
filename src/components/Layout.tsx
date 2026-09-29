@@ -21,19 +21,24 @@ import {
   Settings,
   BookOpen,
   Building2,
+  Landmark,
+  Contact,
 } from "lucide-react";
 
 const navItems = [
   { path: "/", label: "Контролна табла", icon: LayoutDashboard },
   { path: "/sklad", label: "Склад", icon: Warehouse },
   { path: "/proizvodstvo", label: "Производство", icon: Factory },
+  { path: "/kvalitet", label: "Квалитет и одржување", icon: ShieldCheck },
   { path: "/klienti", label: "Клиенти и нарачки", icon: Users },
   { path: "/nabavka", label: "Набавка", icon: ShoppingCart },
   { path: "/smetkovodstvo", label: "Сметководство", icon: Calculator },
+  { path: "/finansii", label: "Финансии", icon: Landmark },
   { path: "/ponudi", label: "Понуди", icon: FileText },
   { path: "/priemnici", label: "Приемници", icon: ClipboardCheck },
   { path: "/katalog", label: "Каталог", icon: BookOpen },
   { path: "/sredstva", label: "Основни средства", icon: Building2 },
+  { path: "/vraboteni", label: "Вработени и плати", icon: Contact, adminOnly: true },
   { path: "/podesuvanja", label: "Подесувања", icon: Settings },
 ];
 
@@ -102,7 +107,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map((item) => {
+          {navItems.filter((item: any) => !item.adminOnly || (me?.role ?? "admin") === "admin").map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
             return (

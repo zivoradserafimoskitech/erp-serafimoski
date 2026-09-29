@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eq, desc } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
+import { listLimit } from "./list-limit";
 import { getDb } from "./queries/connection";
 import { workOrders, workOrderOperations, workOrderMaterials, orders, orderItems, customers, deliveryNotes, documentItems, materials, warehouses, products, finishedGoodsStock , operationTimeLogs } from "@db/schema";
 import { recalcWorkOrderCost } from "./wo-cost-helper";
@@ -10,7 +11,7 @@ import { logAudit } from "./audit-helper";
 export const productionRouter = createRouter({
   // === WORK ORDERS ===
   workOrderList: publicQuery
-    .input(z.object({ status: z.string().optional(), priority: z.string().optional(), search: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().int().min(1).optional(), status: z.string().optional(), priority: z.string().optional(), search: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const result = await db
@@ -26,7 +27,7 @@ export const productionRouter = createRouter({
         })
         .from(workOrders)
         .leftJoin(orders, eq(workOrders.orderId, orders.id))
-        .orderBy(desc(workOrders.createdAt));
+        .orderBy(desc(workOrders.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);
@@ -741,7 +742,12 @@ export const productionRouter = createRouter({
           })();
       const subtotal = Math.round(lines.reduce((a, l) => a + Number(l.totalPrice), 0) * 100) / 100;
       if (!(subtotal > 0)) throw new Error("Налогот нема цена (ни во нарачката, ни пресметан трошок) — креирај фактура рачно");
-      const vat = Math.round(subtotal * 0.18 * 100) / 100;
+      // Валута и ДДВ од понудата од која е нарачката (извоз во EUR = 0% ДДВ); без понуда -- денари, 18%
+      const { quotations } = await import("@db/schema");
+      const quo = oItems.length > 0 ? (await db.select().from(quotations).where(eq(quotations.convertedOrderId, wo[0].orderId!)))[0] : undefined;
+      const currency = quo?.currency || "MKD";
+      const vatRate = quo ? Number(quo.vatRate ?? 18) : 18;
+      const vat = Math.round(subtotal * vatRate) / 100;
 
       const { getNextDocNumber } = await import("./counters-helper");
       const invoiceNumber = await getNextDocNumber("invoice");
@@ -751,13 +757,13 @@ export const productionRouter = createRouter({
         invoiceNumber, customerId, orderId: wo[0].orderId, workOrderId: input.workOrderId,
         invoiceType: "standard",
         issueDate: today, dueDate: due, status: "draft",
-        subtotal: subtotal.toFixed(2), vatRate: "18", vatAmount: vat.toFixed(2),
-        totalAmount: (subtotal + vat).toFixed(2), currency: "MKD",
+        subtotal: subtotal.toFixed(2), vatRate: vatRate.toFixed(2), vatAmount: vat.toFixed(2),
+        totalAmount: (subtotal + vat).toFixed(2), currency,
       } as any);
       const invId = Number((res as any)[0]?.insertId ?? 0);
       if (invId) {
         await db.insert(documentItems).values(lines.map(l => ({
-          documentId: invId, documentType: "invoice", ...l, vatRate: "18", itemType: "manual",
+          documentId: invId, documentType: "invoice", ...l, vatRate: vatRate.toFixed(2), itemType: "manual",
         })) as any);
       }
       return { success: true, invoiceNumber, id: invId };

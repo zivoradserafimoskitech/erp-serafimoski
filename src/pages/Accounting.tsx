@@ -11,8 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import ListLimitNote from "@/components/ListLimitNote";
 import { MaterialPicker } from "@/components/MaterialPicker";
-import { printInvoice, printDeliveryNote, printAccountantReport } from "@/lib/print-documents";
+import { printInvoice, printDeliveryNote, printAccountantReport, invoiceHtml } from "@/lib/print-documents";
+import SendEmailDialog from "@/components/SendEmailDialog";
 import { formatDate } from "@/lib/utils";
 import { DnCertificates } from "@/components/DnCertificates";
 import {
@@ -84,6 +86,7 @@ export default function Accounting() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailType, setDetailType] = useState<"" | "out" | "inc">("");
   const [selId, setSelId] = useState<number | null>(null);
+  const [mailOpen, setMailOpen] = useState(false);
   const { data: outDetail } = trpc.accounting.invoiceById.useQuery({ id: selId! }, { enabled: detailType === "out" && !!selId });
   const { data: incDetail } = trpc.accounting.incomingInvoiceById.useQuery({ id: selId! }, { enabled: detailType === "inc" && !!selId });
 
@@ -774,6 +777,7 @@ export default function Accounting() {
                   ))}
               </TableBody>
             </Table>
+              <ListLimitNote count={outgoing?.length} />
           </CardContent>
         </Card>
       )}
@@ -991,7 +995,12 @@ export default function Accounting() {
                 <Button size="sm" variant="outline" onClick={() => generateUJPXml(outDetail)}><FileText className="h-3.5 w-3.5 mr-1" />УЈП XML</Button>
                 <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings, "mk")}><Download className="h-3.5 w-3.5 mr-1" />PDF МК</Button>
                 <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings, "en")}><Download className="h-3.5 w-3.5 mr-1" />PDF EN</Button>
+                <Button size="sm" variant="outline" onClick={() => setMailOpen(true)}><FileText className="h-3.5 w-3.5 mr-1" />Прати по е-пошта</Button>
               </div>
+              <SendEmailDialog open={mailOpen} onOpenChange={setMailOpen} docType="invoice" docId={outDetail.id} docNumber={outDetail.invoiceNumber}
+                defaultTo={outDetail.customer?.email} companyName={companySettings?.name}
+                defaultLang={(outDetail as any).language === "en" || outDetail.currency !== "MKD" ? "en" : "mk"}
+                buildHtml={(lang) => invoiceHtml(outDetail, companySettings, lang)} />
             </div>
           )}
           {detailType === "inc" && incDetail && (

@@ -72,3 +72,12 @@ export default defineConfig([
 ])
 ```
 # Render deploy Thu Jul 16 03:13:18 CST 2026
+
+## Тестови
+
+```bash
+npm test                      # единечни тестови (книжење, курсеви, плати, распоред, дозволи)
+TEST_DATABASE_URL=postgres://user:pass@localhost:5432/erp_test npm test   # + интеграциски тест на цел тек
+```
+
+Интеграцискиот тест **ја брише и ја создава одново** базата во `TEST_DATABASE_URL` — користи посебна празна база, никогаш продукциска.

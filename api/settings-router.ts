@@ -19,8 +19,8 @@ export const settingsRouter = createRouter({
     const result = await db.select().from(companySettings);
     if (!result[0]) return null;
     // Паролата за е-пошта не смее да стигне до прелистувачот (ја чита само серверот)
-    const { emailPassword, ...safe } = result[0];
-    return { ...safe, emailPasswordSet: !!emailPassword };
+    const { emailPassword, smtpPassword, ...safe } = result[0] as any;
+    return { ...safe, emailPasswordSet: !!emailPassword, smtpPasswordSet: !!smtpPassword };
   }),
 
   settingsUpsert: publicQuery
@@ -46,9 +46,16 @@ export const settingsRouter = createRouter({
       swift: z.string().optional(),
       bankNameEn: z.string().optional(),
       bankAddress: z.string().optional(),
+      smtpHost: z.string().optional(),
+      smtpPort: z.number().int().optional(),
+      smtpSecure: z.number().int().optional(),
+      smtpUser: z.string().optional(),
+      smtpPassword: z.string().optional(),
+      smtpFrom: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      if (!input.smtpPassword) delete (input as any).smtpPassword;
       const existing = await db.select().from(companySettings);
       if (existing.length === 0) {
         await db.insert(companySettings).values(input as any);

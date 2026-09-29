@@ -15,6 +15,9 @@ import NotFound from "@/pages/NotFound";
 import RemnantScan from "@/pages/RemnantScan";
 import WorkOrderScan from "@/pages/WorkOrderScan";
 import Assets from "@/pages/Assets";
+import Finance from "@/pages/Finance";
+import Quality from "@/pages/Quality";
+import Employees from "@/pages/Employees";
 
 export default function App() {
   return (
@@ -108,6 +111,30 @@ export default function App() {
         element={
           <Layout>
             <Assets />
+          </Layout>
+        }
+      />
+      <Route
+        path="/finansii"
+        element={
+          <Layout>
+            <Finance />
+          </Layout>
+        }
+      />
+      <Route
+        path="/kvalitet"
+        element={
+          <Layout>
+            <Quality />
+          </Layout>
+        }
+      />
+      <Route
+        path="/vraboteni"
+        element={
+          <Layout>
+            <Employees />
           </Layout>
         }
       />

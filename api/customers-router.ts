@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq, desc, like } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
+import { listLimit } from "./list-limit";
 import { getDb } from "./queries/connection";
 import { customers, orders, orderItems } from "@db/schema";
 
@@ -94,7 +95,7 @@ export const customersRouter = createRouter({
   // === ORDERS ===
   orderList: publicQuery
     .input(
-      z.object({
+      z.object({ limit: z.number().int().min(1).optional(),
         status: z.string().optional(),
         customerId: z.number().optional(),
         search: z.string().optional(),
@@ -121,7 +122,7 @@ export const customersRouter = createRouter({
         })
         .from(orders)
         .leftJoin(customers, eq(orders.customerId, customers.id))
-        .orderBy(desc(orders.createdAt));
+        .orderBy(desc(orders.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
 

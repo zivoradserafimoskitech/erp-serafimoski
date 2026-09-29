@@ -12,9 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import ListLimitNote from "@/components/ListLimitNote";
 import { printWorkOrder, printRequisition } from "@/lib/print-documents";
 import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck, Clock } from "lucide-react";
 import { MaterialPicker } from "@/components/MaterialPicker";
+import ScheduleBoard from "@/components/ScheduleBoard";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
   pending: { label: "На чекање", cls: "bg-gray-100 text-gray-700" },
@@ -56,6 +58,7 @@ export default function Production() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: nextWorkOrderNum } = trpc.settings.nextDocNumber.useQuery({ kind: "workOrder" }, { enabled: dialogOpen });
   const [detailOpen, setDetailOpen] = useState(false);
+  const [view, setView] = useState<"list" | "schedule">("list");
   const [selWO, setSelWO] = useState<number | null>(null);
   const [completeWO, setCompleteWO] = useState<{ id: number; woNumber: string } | null>(null);
   const [completeForm, setCompleteForm] = useState({ producedQty: "1", producedUnit: "ком" });
@@ -137,6 +140,10 @@ export default function Production() {
     if (!selWO || !matForm.materialId || !matForm.quantity) return;
     const mat = materialsData?.find(m => m.id.toString() === matForm.materialId);
     const qty = parseFloat(matForm.quantity);
+    const avail = parseFloat(String((mat as any)?.availableQty ?? "NaN"));
+    if (Number.isFinite(avail) && qty > avail) {
+      toast.warning(`Слободна залиха е само ${avail} ${mat?.unit ?? ""} (останатото е резервирано за други налози). Материјалот ќе фали — провери во Набавка.`);
+    }
     const cost = parseFloat(mat?.avgCost ?? "0");
     matCreateMut.mutate({
       workOrderId: selWO, materialId: parseInt(matForm.materialId),
@@ -195,6 +202,14 @@ export default function Production() {
         </Dialog>
       </div>
 
+      <div className="inline-flex rounded-lg bg-gray-100 p-1">
+        <button className={`px-4 py-1.5 text-sm rounded-md ${view === "list" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`} onClick={() => setView("list")}>Работни налози</button>
+        <button className={`px-4 py-1.5 text-sm rounded-md ${view === "schedule" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`} onClick={() => setView("schedule")}>Распоред по машини</button>
+      </div>
+
+      {view === "schedule" && <ScheduleBoard />}
+
+      {view === "list" && (<>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {[
           { label: "Вкупно", value: stats?.total ?? 0, cls: "text-gray-700" },
@@ -248,8 +263,11 @@ export default function Production() {
                   })}
             </TableBody>
           </Table>
+              <ListLimitNote count={workOrders?.length} />
         </CardContent>
       </Card>
+
+      </>)}
 
       {/* Дијалог за завршување на налог — произведена количина */}
       <Dialog open={!!completeWO} onOpenChange={(o) => { if (!o) setCompleteWO(null); }}>

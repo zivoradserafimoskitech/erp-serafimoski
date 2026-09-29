@@ -27,6 +27,8 @@ export default function SettingsPage() {
     valuationMethod: settings?.valuationMethod ?? "weighted_average", currency: settings?.currency ?? "MKD",
     nameEn: settings?.nameEn ?? "", addressEn: settings?.addressEn ?? "", iban: settings?.iban ?? "",
     swift: settings?.swift ?? "", bankNameEn: settings?.bankNameEn ?? "", bankAddress: settings?.bankAddress ?? "",
+    smtpHost: (settings as any)?.smtpHost ?? "", smtpPort: String((settings as any)?.smtpPort ?? "587"), smtpUser: (settings as any)?.smtpUser ?? "",
+    smtpPassword: "", smtpFrom: (settings as any)?.smtpFrom ?? "",
   });
 
   // Подесувањата стигнуваат асинхроно -- пополни ја формата кога ќе се вчитаат
@@ -39,6 +41,8 @@ export default function SettingsPage() {
       valuationMethod: settings.valuationMethod ?? "weighted_average", currency: settings.currency ?? "MKD",
       nameEn: settings.nameEn ?? "", addressEn: settings.addressEn ?? "", iban: settings.iban ?? "",
       swift: settings.swift ?? "", bankNameEn: settings.bankNameEn ?? "", bankAddress: settings.bankAddress ?? "",
+      smtpHost: (settings as any).smtpHost ?? "", smtpPort: String((settings as any).smtpPort ?? "587"), smtpUser: (settings as any).smtpUser ?? "",
+      smtpPassword: "", smtpFrom: (settings as any).smtpFrom ?? "",
     });
   }, [settings]);
 
@@ -77,7 +81,9 @@ export default function SettingsPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const handleSave = () => upsertMutation.mutate(form);
+  const handleSave = () => upsertMutation.mutate({ ...form, smtpPort: parseInt(form.smtpPort) || 587, smtpSecure: parseInt(form.smtpPort) === 465 ? 1 : 0 } as any);
+  const [testTo, setTestTo] = useState("");
+  const mailTest = trpc.mail.mailTest.useMutation({ onSuccess: () => toast.success("Тест пораката е пратена"), onError: (e) => toast.error(e.message) });
 
   return (
     <div className="space-y-4">
@@ -146,6 +152,29 @@ export default function SettingsPage() {
               <Button onClick={handleSave} disabled={upsertMutation.isPending} className="bg-emerald-700 hover:bg-emerald-800"><Save className="h-4 w-4 mr-1" /> Зачувај</Button>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Праќање е-пошта (SMTP)</CardTitle>
+              <p className="text-xs text-gray-500">Од оваа адреса се праќаат понудите и фактурите. За Gmail користи „App password“ (smtp.gmail.com, порта 587).</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-[1fr_7rem] gap-3">
+                <div className="space-y-1"><Label>SMTP сервер</Label><Input value={form.smtpHost} onChange={e => setForm({ ...form, smtpHost: e.target.value })} placeholder="smtp.gmail.com" /></div>
+                <div className="space-y-1"><Label>Порта</Label><Input value={form.smtpPort} onChange={e => setForm({ ...form, smtpPort: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Корисничко име</Label><Input value={form.smtpUser} onChange={e => setForm({ ...form, smtpUser: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Лозинка {(settings as any)?.smtpPasswordSet && <span className="text-xs text-emerald-600">(зачувана — остави празно)</span>}</Label>
+                  <Input type="password" value={form.smtpPassword} onChange={e => setForm({ ...form, smtpPassword: e.target.value })} /></div>
+              </div>
+              <div className="space-y-1"><Label>Испраќач (од)</Label><Input value={form.smtpFrom} onChange={e => setForm({ ...form, smtpFrom: e.target.value })} placeholder="Serafimoski Tech <info@serafimoski.mk>" /></div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleSave} disabled={upsertMutation.isPending} className="bg-emerald-700 hover:bg-emerald-800"><Save className="h-4 w-4 mr-1" /> Зачувај</Button>
+                <Input className="w-64" placeholder="Тест до: moj@email.com" value={testTo} onChange={e => setTestTo(e.target.value)} />
+                <Button variant="outline" disabled={!testTo || mailTest.isPending} onClick={() => mailTest.mutate({ to: testTo })}>Прати тест</Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="units" className="space-y-4">
@@ -171,7 +200,7 @@ export default function SettingsPage() {
                 <TableBody>
                   {unitsData?.map(u => (
                     <TableRow key={u.id}><TableCell className="font-medium">{u.code}</TableCell><TableCell>{u.name}</TableCell><TableCell>{u.category}</TableCell>
-                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => unitDelete.mutate({ id: u.id })}>Избриши</Button></TableCell>
+                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) unitDelete.mutate({ id: u.id }); }}>Избриши</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -204,7 +233,7 @@ export default function SettingsPage() {
                     const fromU = unitsData?.find(u => u.id === c.fromUnitId);
                     const toU = unitsData?.find(u => u.id === c.toUnitId);
                     return <TableRow key={c.id}><TableCell>{fromU?.code ?? c.fromUnitId}</TableCell><TableCell>{toU?.code ?? c.toUnitId}</TableCell><TableCell>{c.factor}</TableCell><TableCell>{c.materialType ?? "-"}</TableCell>
-                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => convDelete.mutate({ id: c.id })}>Избриши</Button></TableCell>
+                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) convDelete.mutate({ id: c.id }); }}>Избриши</Button></TableCell>
                     </TableRow>;
                   })}
                 </TableBody>

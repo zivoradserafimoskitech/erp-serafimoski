@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eq, desc, and } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
+import { listLimit } from "./list-limit";
 import { getDb } from "./queries/connection";
 import { recalcWorkOrderCost } from "./wo-cost-helper";
 import {
@@ -34,10 +35,26 @@ export const storageRouter = createRouter({
         .from(materialStock)
         .groupBy(materialStock.materialId);
       const sumMap = new Map(sums.map((r: any) => [r.materialId, r.total]));
-      const withStock = all.map((m: any) => ({
-        ...m,
-        currentStock: sumMap.has(m.id) ? sumMap.get(m.id) : m.currentStock,
-      }));
+      // Резервирано = планиран (сè уште неиздаден) материјал на отворени работни налози
+      const resRows: any = await db.execute(sql`
+        SELECT wm.material_id AS mid, SUM(wm.quantity) AS qty, COUNT(DISTINCT wm.work_order_id) AS wos
+        FROM work_order_materials wm JOIN work_orders w ON w.id = wm.work_order_id
+        WHERE wm.is_actual <> 'actual' AND w.status NOT IN ('completed', 'cancelled')
+        GROUP BY wm.material_id`);
+      const resMap = new Map<number, { qty: number; wos: number }>(
+        (resRows?.rows ?? resRows ?? []).map((r: any) => [Number(r.mid), { qty: Number(r.qty) || 0, wos: Number(r.wos) || 0 }]));
+      const withStock = all.map((m: any) => {
+        const stock = sumMap.has(m.id) ? sumMap.get(m.id) : m.currentStock;
+        const res = resMap.get(m.id);
+        const reserved = res?.qty ?? 0;
+        return {
+          ...m,
+          currentStock: stock,
+          reservedQty: reserved.toFixed(3),
+          reservedWorkOrders: res?.wos ?? 0,
+          availableQty: ((parseFloat(String(stock ?? "0")) || 0) - reserved).toFixed(3),
+        };
+      });
 
       let result = withStock;
       if (input?.search) {
@@ -425,7 +442,7 @@ export const storageRouter = createRouter({
 
   // === INVENTORY TRANSACTIONS ===
   transactionList: publicQuery
-    .input(z.object({ materialId: z.number().optional(), type: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().int().min(1).optional(), materialId: z.number().optional(), type: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       let query = db
@@ -449,7 +466,7 @@ export const storageRouter = createRouter({
         .from(inventoryTransactions)
         .leftJoin(materials, eq(inventoryTransactions.materialId, materials.id));
 
-      const result = await query.orderBy(desc(inventoryTransactions.createdAt));
+      const result = await query.orderBy(desc(inventoryTransactions.createdAt)).limit(listLimit(input as any));
       let filtered = result;
       if (input?.materialId) filtered = filtered.filter(r => r.materialId === input.materialId);
       if (input?.type) filtered = filtered.filter(r => r.type === input.type);
