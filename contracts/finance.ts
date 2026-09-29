@@ -21,7 +21,9 @@ export const DEFAULT_ACCOUNTS: { code: string; name: string; type: AccountType }
   { code: "241", name: "Обврски за придонеси од плата", type: "liability" },
   { code: "242", name: "Обврски за персонален данок", type: "liability" },
   { code: "310", name: "Суровини и материјали", type: "asset" },
+  { code: "019", name: "Исправка на вредноста на опрема (амортизација)", type: "asset" },
   { code: "400", name: "Трошоци за материјали", type: "expense" },
+  { code: "430", name: "Трошоци за амортизација", type: "expense" },
   { code: "420", name: "Бруто плати", type: "expense" },
   { code: "449", name: "Други трошоци", type: "expense" },
   { code: "470", name: "Негативни курсни разлики", type: "expense" },
@@ -47,6 +49,8 @@ export const POSTING_RULES: { key: string; label: string; defaultCode: string }[
   { key: "fx_gain", label: "Позитивни курсни разлики", defaultCode: "770" },
   { key: "fx_loss", label: "Негативни курсни разлики", defaultCode: "470" },
   { key: "cash_other", label: "Благајна — друга промена (контра конто)", defaultCode: "449" },
+  { key: "depreciation_expense", label: "Амортизација — трошок", defaultCode: "430" },
+  { key: "depreciation_accumulated", label: "Амортизација — исправка на вредноста", defaultCode: "019" },
   { key: "salary_expense", label: "Плати — бруто трошок", defaultCode: "420" },
   { key: "salary_net", label: "Плати — обврска за нето", defaultCode: "240" },
   { key: "salary_contrib", label: "Плати — обврска за придонеси", defaultCode: "241" },
@@ -238,4 +242,12 @@ export function payrollLines(p: { gross: number; contributions: number; incomeTa
     { account: p.rules.salary_contrib, debit: 0, credit: p.contributions, description: `Придонеси ${p.period}` },
     { account: p.rules.salary_tax, debit: 0, credit: p.incomeTax, description: `Персонален данок ${p.period}` },
   ]));
+}
+
+/** Годишна амортизација: трошок / исправка на вредноста. */
+export function depreciationLines(p: { amount: number; year: number; rules: Rules }): GlLine[] {
+  return normalizeLines([
+    { account: p.rules.depreciation_expense, debit: p.amount, credit: 0, description: `Амортизација ${p.year}` },
+    { account: p.rules.depreciation_accumulated, debit: 0, credit: p.amount, description: `Амортизација ${p.year}` },
+  ]);
 }

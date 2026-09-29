@@ -102,3 +102,13 @@ describe("плати", () => {
     expect(isBalanced(payrollLines({ ...c, period: "2026-09", rules }))).toBe(true);
   });
 });
+
+import { depreciationLines } from "./finance";
+describe("амортизација", () => {
+  it("трошок / исправка на вредноста, во рамнотежа", () => {
+    const l = depreciationLines({ amount: 24000, year: 2025, rules });
+    expect(l.find(x => x.account === "430")?.debit).toBe(24000);
+    expect(l.find(x => x.account === "019")?.credit).toBe(24000);
+    expect(isBalanced(l)).toBe(true);
+  });
+});

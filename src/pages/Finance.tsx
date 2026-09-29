@@ -20,7 +20,7 @@ const fmt = (n: number | null | undefined) =>
 const fmtDate = (d: string) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : "—");
 
 const SOURCE_LBL: Record<string, string> = {
-  invoice: "Фактура", incoming_invoice: "Влезна ф.", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", manual: "Рачен",
+  invoice: "Фактура", incoming_invoice: "Влезна ф.", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", depreciation: "Амортизација", manual: "Рачен",
 };
 
 function PeriodPicker({ from, to, onChange }: { from: string; to: string; onChange: (f: string, t: string) => void }) {
@@ -63,8 +63,13 @@ function JournalTab() {
     },
     onError: (e) => toast.error(e.message),
   });
-  // Секое отворање го усогласува книжењето со документите
-  useEffect(() => { sync.mutate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Секое отворање го усогласува книжењето со документите (само кој смее да книжи)
+  const { data: me } = trpc.appUsers.appUsersMe.useQuery();
+  const canPost = !me || me.role === "admin" || me.role === "manager";
+  const [autoSynced, setAutoSynced] = useState(false);
+  useEffect(() => {
+    if (me && canPost && !autoSynced) { setAutoSynced(true); sync.mutate(); }
+  }, [me, canPost, autoSynced]); // eslint-disable-line react-hooks/exhaustive-deps
   const del = trpc.finance.manualEntryDelete.useMutation({ onSuccess: () => utils.finance.journalList.invalidate(), onError: (e) => toast.error(e.message) });
 
   const [mDate, setMDate] = useState(today());
@@ -83,7 +88,7 @@ function JournalTab() {
         <PeriodPicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); setPage(0); }} />
         <div className="flex gap-2">
           <Input placeholder="Пребарај..." className="h-9 w-48" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
-          <Button size="sm" variant="outline" className="h-9" onClick={() => sync.mutate()} disabled={sync.isPending}><RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${sync.isPending ? "animate-spin" : ""}`} />Книжи документи</Button>
+          <Button size="sm" variant="outline" className="h-9" onClick={() => sync.mutate()} disabled={sync.isPending || !canPost}><RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${sync.isPending ? "animate-spin" : ""}`} />Книжи документи</Button>
           <Button size="sm" className="h-9 bg-amber-500 hover:bg-amber-600" onClick={() => setManualOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Рачен налог</Button>
         </div>
       </div>
