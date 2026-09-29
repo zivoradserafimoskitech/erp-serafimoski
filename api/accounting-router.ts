@@ -115,6 +115,8 @@ export const accountingRouter = createRouter({
       }
       const db = getDb();
       const { items, ...invData } = input;
+      const cust = await db.select({ id: customers.id }).from(customers).where(eq(customers.id, invData.customerId));
+      if (!cust[0]) throw new Error("Клиентот не постои");
 
       // Validate stock for products
       if (items) {

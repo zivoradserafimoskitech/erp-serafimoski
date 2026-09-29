@@ -161,6 +161,17 @@ function PayrollTab() {
 }
 
 export default function Employees() {
+  const { data: me, isLoading } = trpc.appUsers.appUsersMe.useQuery();
+  if (isLoading) return null;
+  if (me && me.role !== "admin") {
+    return (
+      <div className="py-20 text-center">
+        <Users className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+        <p className="font-medium text-gray-700">Платите ги гледа само администраторот</p>
+        <p className="text-sm text-gray-400 mt-1">Побарај пристап од администраторот ако ти треба.</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       <div>

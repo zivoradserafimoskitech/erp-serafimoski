@@ -7,7 +7,7 @@ import { getPool } from "./queries/connection";
 import { logAudit } from "./audit-helper";
 import {
   DEFAULT_ACCOUNTS, POSTING_RULES, rulesWithDefaults, invoiceLines, incomingLines, paymentLines,
-  cashOtherLines, payrollLines, linesSignature, isBalanced, normalizeLines, toMkd, convert, round2,
+  cashOtherLines, payrollLines, depreciationLines, linesSignature, isBalanced, normalizeLines, toMkd, convert, round2,
   parseNbrmRates, type GlLine, type Rules, type RateLookup,
 } from "@contracts/finance";
 import { isDomesticCountry } from "@contracts/country";
@@ -147,6 +147,15 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
     const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
     desired.push({ sourceType: "payroll", sourceId: r.id, date: last, description: `Плати за ${r.period}`,
       lines: payrollLines({ gross: Number(r.g), contributions: Number(r.c), incomeTax: Number(r.t), net: Number(r.n), period: r.period, rules }) });
+  }
+
+  // 6) Амортизација (проведена по години) -- едно книжење по година, на 31.12
+  const dep = await q(`SELECT year, SUM(amount) s FROM depreciation_entries GROUP BY year`);
+  for (const d of dep) {
+    const amount = Number(d.s);
+    if (!(amount > 0)) continue;
+    desired.push({ sourceType: "depreciation", sourceId: Number(d.year), date: `${d.year}-12-31`, description: `Амортизација за ${d.year}`,
+      lines: depreciationLines({ amount: round2(amount), year: Number(d.year), rules }) });
   }
 
   return { desired, problems };
