@@ -4,7 +4,7 @@ import { auditLog } from "@db/schema";
 export async function logAudit(opts: {
   userId?: number;
   userName?: string;
-  action: "CREATE" | "UPDATE" | "DELETE" | "CONFIRM" | "CANCEL" | "CONVERT";
+  action: "CREATE" | "UPDATE" | "DELETE" | "CONFIRM" | "CANCEL" | "CONVERT" | "EMAIL";
   entityType: string;
   entityId?: number;
   oldValue?: any;

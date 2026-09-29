@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eq, desc } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
+import { listLimit } from "./list-limit";
 import { getDb } from "./queries/connection";
 import {
   quotations, quotationItems,
@@ -356,7 +357,7 @@ export const quotationRouter = createRouter({
   }),
 
   quotationList: publicQuery
-    .input(z.object({ status: z.string().optional(), search: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().int().min(1).optional(), status: z.string().optional(), search: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const result = await db
@@ -373,7 +374,7 @@ export const quotationRouter = createRouter({
         })
         .from(quotations)
         .leftJoin(customers, eq(quotations.customerId, customers.id))
-        .orderBy(desc(quotations.createdAt));
+        .orderBy(desc(quotations.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);

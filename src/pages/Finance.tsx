@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download } from "lucide-react";
+import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -588,6 +588,89 @@ function ChartTab() {
   );
 }
 
+
+// ───────────────────────── ДОБИВКА ПО НАРАЧКА ─────────────────────────
+function ProfitTab() {
+  const [from, setFrom] = useState(yearStart());
+  const [to, setTo] = useState(today());
+  const { data, isLoading } = trpc.ops.profitabilityReport.useQuery({ from, to });
+  const t = data?.totals;
+  const margin = t && t.revenue ? (t.profit / t.revenue) * 100 : null;
+  const exportCsv = () => csvDownload(`dobivka-${from}-${to}.csv`, [
+    ["Нарачка", "Клиент", "Датум", "Приход (ден)", "Извор", "План. трошок", "Реален трошок", "Материјал", "Операции", "Часови", "Добивка", "Маржа %"],
+    ...(data?.rows ?? []).map(r => [r.orderNumber, r.customer ?? "", r.date, r.revenue ?? "", r.revenueSource === "invoiced" ? "фактурирано" : "по нарачка",
+      r.plannedCost, r.actualCost, r.materialCost, r.operationCost, r.hours, r.profit ?? "", r.marginPct ?? ""]),
+  ]);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <PeriodPicker from={from} to={to} onChange={(a, b) => { setFrom(a); setTo(b); }} />
+        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!data?.rows.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel (CSV)</Button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { l: "Приход", v: fmt(t?.revenue), c: "" },
+          { l: "Планиран трошок", v: fmt(t?.plannedCost), c: "text-gray-600" },
+          { l: "Реален трошок", v: fmt(t?.actualCost), c: "text-gray-800" },
+          { l: `Добивка${margin !== null ? ` · ${margin.toFixed(1)}%` : ""}`, v: fmt(t?.profit), c: (t?.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600" },
+        ].map(k => (
+          <Card key={k.l}><CardContent className="p-4">
+            <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">{k.l}</p>
+            <p className={`text-2xl font-bold tabular-nums ${k.c}`}>{k.v}</p>
+          </CardContent></Card>
+        ))}
+      </div>
+      <Card><CardContent className="p-0">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Нарачка</TableHead><TableHead>Клиент</TableHead>
+            <TableHead className="text-right">Приход</TableHead><TableHead className="text-right">План</TableHead><TableHead className="text-right">Реално</TableHead>
+            <TableHead className="text-right">Отстапување</TableHead><TableHead className="text-right">Добивка</TableHead><TableHead className="w-40">Маржа</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {isLoading ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>
+              : !data?.rows.length ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Нема нарачки за периодот</TableCell></TableRow>
+              : data.rows.map(r => {
+                const m = r.marginPct;
+                return (
+                  <TableRow key={r.orderId}>
+                    <TableCell>
+                      <div className="font-mono text-xs font-semibold">{r.orderNumber}</div>
+                      <div className="text-[11px] text-gray-400">{fmtDate(r.date)}{r.workOrders.length ? ` · ${r.workOrders.join(", ")}` : " · без налог"}{!r.finished && r.workOrders.length ? " · во тек" : ""}</div>
+                    </TableCell>
+                    <TableCell className="text-sm">{r.customer}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {r.revenue === null ? <span className="text-red-600 text-xs">нема курс</span> : fmt(r.revenue)}
+                      <div className="text-[10px] text-gray-400">{r.revenueSource === "invoiced" ? "фактурирано" : "по нарачка"}{r.currency !== "MKD" ? ` · ${r.currency}` : ""}</div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-gray-500">{fmt(r.plannedCost)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmt(r.actualCost)}
+                      <div className="text-[10px] text-gray-400">мат. {fmt(r.materialCost)} · опер. {fmt(r.operationCost)}</div>
+                    </TableCell>
+                    <TableCell className={`text-right tabular-nums text-sm ${r.variance > 0 ? "text-red-600" : "text-emerald-700"}`}>{r.variance > 0 ? "+" : ""}{fmt(r.variance)}</TableCell>
+                    <TableCell className={`text-right tabular-nums font-semibold ${(r.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>{r.profit === null ? "—" : fmt(r.profit)}</TableCell>
+                    <TableCell>
+                      {m === null ? <span className="text-xs text-gray-400">—</span> : (
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
+                            <div className={`h-full rounded-full ${m >= 20 ? "bg-emerald-500" : m >= 0 ? "bg-amber-400" : "bg-red-500"}`} style={{ width: `${Math.min(100, Math.abs(m))}%` }} />
+                          </div>
+                          <span className={`text-xs tabular-nums w-12 text-right ${m < 0 ? "text-red-600" : ""}`}>{m.toFixed(1)}%</span>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+          </TableBody>
+        </Table>
+      </CardContent></Card>
+      <p className="text-xs text-gray-400">Реален трошок = материјал на налозите (издаден, или планиран ако уште не е издаден) + операции (реално време × цена/час, или проценето). Приход = фактурирано без ДДВ, или вредноста на нарачката.</p>
+    </div>
+  );
+}
+
 export default function Finance() {
   const [tab, setTab] = useState("journal");
   const [cardCode, setCardCode] = useState("");
@@ -599,6 +682,7 @@ export default function Finance() {
       </div>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="bg-amber-50 flex-wrap h-auto">
+          <TabsTrigger value="profit"><TrendingUp className="h-4 w-4 mr-1.5" />Добивка по нарачка</TabsTrigger>
           <TabsTrigger value="journal"><BookOpen className="h-4 w-4 mr-1.5" />Налози</TabsTrigger>
           <TabsTrigger value="trial"><Scale className="h-4 w-4 mr-1.5" />Бруто биланс</TabsTrigger>
           <TabsTrigger value="card"><FileSpreadsheet className="h-4 w-4 mr-1.5" />Картица</TabsTrigger>
@@ -607,6 +691,7 @@ export default function Finance() {
           <TabsTrigger value="rates"><Coins className="h-4 w-4 mr-1.5" />Курсна листа</TabsTrigger>
           <TabsTrigger value="chart"><ListTree className="h-4 w-4 mr-1.5" />Контен план</TabsTrigger>
         </TabsList>
+        <TabsContent value="profit" className="mt-4"><ProfitTab /></TabsContent>
         <TabsContent value="journal" className="mt-4"><JournalTab /></TabsContent>
         <TabsContent value="trial" className="mt-4"><TrialBalanceTab onOpenCard={(c) => { setCardCode(c); setTab("card"); }} /></TabsContent>
         <TabsContent value="card" className="mt-4"><AccountCardTab code={cardCode} setCode={setCardCode} /></TabsContent>

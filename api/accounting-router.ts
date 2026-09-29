@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eq, desc, and } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
+import { listLimit } from "./list-limit";
 import { getDb } from "./queries/connection";
 import {
   invoices, incomingInvoices, documentItems,
@@ -18,7 +19,7 @@ import { getNextDocNumber } from "./counters-helper";
 export const accountingRouter = createRouter({
   // ===== OUTGOING INVOICES =====
   invoiceList: publicQuery
-    .input(z.object({ status: z.string().optional(), customerId: z.number().optional(), search: z.string().optional(), type: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().int().min(1).optional(), status: z.string().optional(), customerId: z.number().optional(), search: z.string().optional(), type: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const result = await db
@@ -36,7 +37,7 @@ export const accountingRouter = createRouter({
         })
         .from(invoices)
         .leftJoin(customers, eq(invoices.customerId, customers.id))
-        .orderBy(desc(invoices.createdAt));
+        .orderBy(desc(invoices.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);
@@ -207,7 +208,7 @@ export const accountingRouter = createRouter({
 
   // ===== INCOMING INVOICES =====
   incomingInvoiceList: publicQuery
-    .input(z.object({ status: z.string().optional(), supplierId: z.number().optional(), search: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().int().min(1).optional(), status: z.string().optional(), supplierId: z.number().optional(), search: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const result = await db
@@ -224,7 +225,7 @@ export const accountingRouter = createRouter({
         })
         .from(incomingInvoices)
         .leftJoin(suppliers, eq(incomingInvoices.supplierId, suppliers.id))
-        .orderBy(desc(incomingInvoices.createdAt));
+        .orderBy(desc(incomingInvoices.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);
@@ -315,7 +316,7 @@ export const accountingRouter = createRouter({
 
   // ===== RECEIPTS =====
   receiptList: publicQuery
-    .input(z.object({ status: z.string().optional(), search: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().int().min(1).optional(), status: z.string().optional(), search: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const result = await db
@@ -331,7 +332,7 @@ export const accountingRouter = createRouter({
         })
         .from(receipts)
         .leftJoin(suppliers, eq(receipts.supplierId, suppliers.id))
-        .orderBy(desc(receipts.createdAt));
+        .orderBy(desc(receipts.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);
@@ -444,7 +445,7 @@ export const accountingRouter = createRouter({
 
   // ===== DELIVERY NOTES =====
   deliveryNoteList: publicQuery
-    .input(z.object({ status: z.string().optional(), search: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().int().min(1).optional(), status: z.string().optional(), search: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const result = await db
@@ -458,7 +459,7 @@ export const accountingRouter = createRouter({
         })
         .from(deliveryNotes)
         .leftJoin(customers, eq(deliveryNotes.customerId, customers.id))
-        .orderBy(desc(deliveryNotes.createdAt));
+        .orderBy(desc(deliveryNotes.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);

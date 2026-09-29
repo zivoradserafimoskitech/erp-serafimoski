@@ -17,6 +17,9 @@ import { appUsersRouter } from "./app-users-router";
 import { bankRouter } from "./bank-router";
 import { assetsRouter } from "./assets-router";
 import { financeRouter } from "./finance-router";
+import { opsRouter } from "./ops-router";
+import { hrRouter } from "./hr-router";
+import { mailRouter } from "./mail-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -40,6 +43,9 @@ export const appRouter = createRouter({
   bank: bankRouter,
   assets: assetsRouter,
   finance: financeRouter,
+  ops: opsRouter,
+  hr: hrRouter,
+  mail: mailRouter,
 });
 
 export type AppRouter = typeof appRouter;

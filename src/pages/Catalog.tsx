@@ -108,7 +108,7 @@ export default function CatalogPage() {
                   {machinesData?.map(m => (
                     <TableRow key={m.id}><TableCell className="font-medium">{m.code}</TableCell><TableCell>{m.name}</TableCell><TableCell>{machineTypes[m.type]}</TableCell>
                       <TableCell>{m.costPerHour} ден.</TableCell><TableCell>{m.annualAmortization} ден/год</TableCell>
-                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => machDelete.mutate({ id: m.id })}>Избриши</Button></TableCell>
+                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) machDelete.mutate({ id: m.id }); }}>Избриши</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -229,7 +229,7 @@ export default function CatalogPage() {
                   {laborData?.map(l => (
                     <TableRow key={l.id}><TableCell className="font-medium">{l.role}</TableCell><TableCell>{l.roleCode}</TableCell><TableCell>{l.costPerHour} ден.</TableCell>
                       <TableCell>{l.grossSalary} ден.</TableCell><TableCell>{l.contributionsPct}%</TableCell>
-                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => laborDelete.mutate({ id: l.id })}>Избриши</Button></TableCell>
+                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) laborDelete.mutate({ id: l.id }); }}>Избриши</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -258,7 +258,7 @@ export default function CatalogPage() {
                   {overheadData?.map(o => (
                     <TableRow key={o.id}><TableCell className="font-medium">{o.name}</TableCell><TableCell>{rateTypes[o.rateType]}</TableCell>
                       <TableCell>{o.rateValue}</TableCell><TableCell>{o.annualAmount} ден.</TableCell>
-                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => ohDelete.mutate({ id: o.id })}>Избриши</Button></TableCell>
+                      <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) ohDelete.mutate({ id: o.id }); }}>Избриши</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -339,7 +339,7 @@ export default function CatalogPage() {
                           <TableCell><Badge className={c.kind === "material" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}>{c.kind === "material" ? "Мат" : "Усл"}</Badge></TableCell>
                           <TableCell className="text-xs">{c.refName}</TableCell><TableCell>{c.perUnit}</TableCell><TableCell>{c.wastePct}%</TableCell>
                           <TableCell className="text-xs">{c.scale === "area" ? "m2" : c.scale === "perimeter" ? "перим." : c.scale === "length" ? "долж." : "фикс"}</TableCell>
-                          <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => bomDelete.mutate({ id: c.id })}>Избриши</Button></TableCell>
+                          <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) bomDelete.mutate({ id: c.id }); }}>Избриши</Button></TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

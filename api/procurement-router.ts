@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq, desc, like } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
+import { listLimit } from "./list-limit";
 import { getDb } from "./queries/connection";
 import { suppliers, purchaseOrders, purchaseOrderItems, materials, workOrders, workOrderMaterials } from "@db/schema";
 // audit helper available for future use
@@ -78,7 +79,7 @@ export const procurementRouter = createRouter({
 
   // === PURCHASE ORDERS ===
   poList: publicQuery
-    .input(z.object({ status: z.string().optional(), supplierId: z.number().optional(), search: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().int().min(1).optional(), status: z.string().optional(), supplierId: z.number().optional(), search: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const result = await db
@@ -92,7 +93,7 @@ export const procurementRouter = createRouter({
         })
         .from(purchaseOrders)
         .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-        .orderBy(desc(purchaseOrders.createdAt));
+        .orderBy(desc(purchaseOrders.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
       if (input?.status) filtered = filtered.filter(r => r.status === input.status);

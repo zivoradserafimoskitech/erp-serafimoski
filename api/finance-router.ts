@@ -11,39 +11,12 @@ import {
   parseNbrmRates, type GlLine, type Rules, type RateLookup,
 } from "@contracts/finance";
 import { isDomesticCountry } from "@contracts/country";
+import { loadRates, iso } from "./rates-helper";
 
 const q = async (text: string, params: any[] = []) => (await getPool().query(text, params)).rows as any[];
-const iso = (d: any): string => {
-  if (!d) return "";
-  if (d instanceof Date) {
-    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${dd}`;
-  }
-  return String(d).slice(0, 10);
-};
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 // ───────────────────────── курсна листа ─────────────────────────
-
-async function loadRates(): Promise<RateLookup> {
-  const rows = await q(`SELECT rate_date, currency, rate FROM exchange_rates ORDER BY currency, rate_date`);
-  const byCur = new Map<string, { d: string; r: number }[]>();
-  for (const r of rows) {
-    const list = byCur.get(r.currency) ?? [];
-    list.push({ d: iso(r.rate_date), r: Number(r.rate) });
-    byCur.set(r.currency, list);
-  }
-  // Курсот важи до следната објава (викенди, празници) -- земи го последниот до тој датум, најмногу 10 дена назад
-  return (cur, date) => {
-    const list = byCur.get(cur.toUpperCase());
-    if (!list) return null;
-    let best: { d: string; r: number } | null = null;
-    for (const x of list) { if (x.d <= date) best = x; else break; }
-    if (!best) return null;
-    const age = (new Date(date).getTime() - new Date(best.d).getTime()) / 86400000;
-    return age <= 10 ? best.r : null;
-  };
-}
 
 const ddmmyyyy = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
 

@@ -62,6 +62,7 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   finance: "manager",
   ops: "operator",
   hr: "admin",
+  mail: "manager",
 
   // Подесувања — само администратор
   settings: "admin",
