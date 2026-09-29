@@ -343,7 +343,9 @@ ${STEEL_CSS}</style></head><body>
   </tr></thead><tbody>${rows || `<tr><td colspan="${cols}" class="c" style="padding:16px;color:#999">${T.noItems}</td></tr>`}</tbody></table>
   <div class="sum-wrap"><div class="sum">
     <div class="row"><span>${T.subtotal}:</span><b>${money(inv?.subtotal, cur, lang)}</b></div>
-    <div class="row vat"><span>${T.vat} (${vatRate}%):</span><b>${money(inv?.vatAmount, cur, lang)}</b></div>
+    ${vatRate > 0
+      ? `<div class="row vat"><span>${T.vat} (${vatRate}%):</span><b>${money(inv?.vatAmount, cur, lang)}</b></div>`
+      : `<div class="row vat"><span>${T.vat}:</span><b>${lang === "en" ? "exempt (export)" : "ослободено (извоз)"}</b></div>`}
     <div class="grand"><small>${T.toPay}</small><span>${money(inv?.totalAmount, cur, lang)}</span></div>
     ${isProforma && advPct > 0 && advPct < 100 ? `<div class="row" style="margin-top:6px;color:var(--amber);font-weight:700"><span>${T.advanceDue} (${advPct}%):</span><span>${money(Math.round(Number(inv?.totalAmount ?? 0) * advPct) / 100, cur, lang)}</span></div>` : ""}
   </div></div>
@@ -561,7 +563,9 @@ ${STEEL_CSS}</style></head><body>
   <div class="sum-wrap"><div class="sum">
     ${hasKg ? `<div class="row"><span>${T.totalWeight}:</span><b>${n(totalKg)} ${lang === "en" ? "kg" : "кг"}</b></div>` : ""}
     <div class="row"><span>${T.subtotal}:</span><b>${money(q?.subtotal, cur, lang)}</b></div>
-    <div class="row"><span>${T.vat} (${vatRate}%):</span><b>${money(q?.vatAmount, cur, lang)}</b></div>
+    ${vatRate > 0
+      ? `<div class="row"><span>${T.vat} (${vatRate}%):</span><b>${money(q?.vatAmount, cur, lang)}</b></div>`
+      : `<div class="row"><span>${T.vat}:</span><b>${lang === "en" ? "exempt (export)" : "ослободено (извоз)"}</b></div>`}
     <div class="grand"><small>${T.grand}</small><span>${money(q?.totalAmount, cur, lang)}</span></div>
   </div></div>
   <div class="terms"><span class="lbl">${T.terms}</span>

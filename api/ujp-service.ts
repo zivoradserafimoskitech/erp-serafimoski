@@ -448,7 +448,7 @@ function buildUJPPayload(p: UJPInvoicePayload): any {
         taxType: "VAT",
         taxableAmount: p.subtotal,
         taxAmount: p.vatAmount,
-        taxPercentage: p.items[0]?.vatRate || 18,
+        taxPercentage: p.items[0]?.vatRate ?? 18,
       },
     ],
     legalMonetaryTotal: {
@@ -535,7 +535,7 @@ export function generateUJPXml(invoice: any): string {
   const total = invoice.totalAmount || "0";
   const vat = invoice.vatAmount || "0";
   const subtotal = invoice.subtotal || "0";
-  const vatRate = invoice.vatRate || "18";
+  const vatRate = invoice.vatRate ?? "18";
   const currency = invoice.currency || "MKD";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
