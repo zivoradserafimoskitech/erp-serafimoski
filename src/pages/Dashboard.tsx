@@ -249,7 +249,14 @@ export default function Dashboard() {
             </div>
             <div className="h-px bg-gray-100" />
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Обврски</span>
+              <span className="text-sm text-gray-600">Ненаплатени побарувања</span>
+              <span className="text-lg font-bold text-emerald-700">
+                {stats?.financial.totalReceivables ?? "0"} ден.
+              </span>
+            </div>
+            <div className="h-px bg-gray-100" />
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Неплатени обврски</span>
               <span className="text-lg font-bold text-red-600">
                 {stats?.financial.totalPayables ?? "0"} ден.
               </span>

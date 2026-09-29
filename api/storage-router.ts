@@ -10,6 +10,7 @@ import {
   inventoryTransactions, warehouses,
 } from "@db/schema";
 import { isLowStock } from "@contracts/stock";
+import { adjustStock, warehouseQty, syncMaterialTotal } from "./stock-helper";
 import { logAudit } from "./audit-helper";
 
 export const storageRouter = createRouter({
@@ -108,8 +109,20 @@ export const storageRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const result = await db.insert(materials).values(input);
+      const opening = parseFloat(input.currentStock) || 0;
+      const result = await db.insert(materials).values({ ...input, currentStock: "0" });
       const insertId = Number(result[0].insertId);
+      // Почетната залиха оди во магацин за суровини, за да може да се издава и пренесува
+      if (opening > 0) {
+        const whs = await db.select().from(warehouses);
+        const wh = whs.find((w: any) => w.type === "raw_materials") ?? whs[0];
+        if (wh) {
+          await adjustStock(insertId, wh.id, opening, { unitCost: parseFloat((input as any).avgCost ?? "0") || 0 });
+          await db.insert(inventoryTransactions).values({ materialId: insertId, warehouseId: wh.id, type: "adjustment",
+            quantity: opening.toFixed(3), reference: "Почетна залиха", notes: "Почетна залиха при внес на материјал" } as any);
+        }
+        else await db.update(materials).set({ currentStock: opening.toFixed(3) }).where(eq(materials.id, insertId));
+      }
       await logAudit({ action: "CREATE", entityType: "material", entityId: insertId, description: `Креиран материјал ${input.name}` });
       return { success: true, id: insertId };
     }),
@@ -312,6 +325,7 @@ export const storageRouter = createRouter({
             lastPurchasePrice: unitPrice.toFixed(2),
           })
           .where(eq(materials.id, item.materialId));
+        await syncMaterialTotal(item.materialId);
 
         // Create lot for FIFO option
         await db.insert(materialLots).values({
@@ -382,34 +396,8 @@ export const storageRouter = createRouter({
       }
 
       const unitCost = stock[0].avgCost;
-      const newQty = parseFloat(stock[0].quantity) - qty;
-
-      await db.update(materialStock)
-        .set({ quantity: newQty.toFixed(3) })
-        .where(eq(materialStock.id, stock[0].id));
-
-      // Update global stock
-      const mat = await db.select().from(materials).where(eq(materials.id, materialId));
-      if (mat[0]) {
-        await db.update(materials)
-          .set({ currentStock: (parseFloat(mat[0].currentStock) - qty).toFixed(3) })
-          .where(eq(materials.id, materialId));
-      }
-
-      // Лотови (шаржи/атести): FIFO -- намали ги најстарите со преостаната количина
-      {
-        const lots = (await db.select().from(materialLots)
-          .where(and(eq(materialLots.materialId, materialId), eq(materialLots.warehouseId, warehouseId)))
-          .orderBy(materialLots.id)).filter((l: any) => parseFloat(String(l.remainingQty)) > 0);
-        let left = qty;
-        for (const l of lots) {
-          if (left <= 0) break;
-          const rem = parseFloat(String(l.remainingQty));
-          const take = Math.min(rem, left);
-          await db.update(materialLots).set({ remainingQty: (rem - take).toFixed(3) }).where(eq(materialLots.id, l.id));
-          left -= take;
-        }
-      }
+      // Магацин + партии (FIFO) + вкупна залиха на материјалот
+      await adjustStock(materialId, warehouseId, -qty);
 
       if (woMaterialId) {
         const { workOrderMaterials } = await import("@db/schema");
@@ -489,19 +477,15 @@ export const storageRouter = createRouter({
       const db = getDb();
       const { warehouseId, ...txData } = input;
 
-      await db.insert(inventoryTransactions).values({ ...txData, warehouseId } as any);
-
-      // Update material stock
-      const mat = await db.select().from(materials).where(eq(materials.id, input.materialId));
-      if (mat[0]) {
-        const current = parseFloat(mat[0].currentStock);
-        const qty = parseFloat(input.quantity);
-        let newStock = current;
-        if (input.type === "receipt" || input.type === "return") newStock = current + qty;
-        else if (input.type === "issue" || input.type === "scrap") newStock = current - qty;
-        else if (input.type === "adjustment") newStock = qty;
-        await db.update(materials).set({ currentStock: newStock.toFixed(3) }).where(eq(materials.id, input.materialId));
-      }
+      const qty = parseFloat(input.quantity);
+      if (!(qty >= 0)) throw new Error("Количината мора да е позитивна");
+      // Корекција = нова состојба во магацинот; другите типови се влез/излез
+      const cur = await warehouseQty(input.materialId, warehouseId);
+      const delta = input.type === "adjustment" ? qty - cur
+        : (input.type === "receipt" || input.type === "return") ? qty : -qty;
+      await adjustStock(input.materialId, warehouseId, delta, { unitCost: input.unitPrice ? parseFloat(input.unitPrice) : undefined });
+      await db.insert(inventoryTransactions).values({ ...txData, warehouseId,
+        notes: input.type === "adjustment" ? `${input.notes ? input.notes + " · " : ""}Корекција од ${cur} на ${qty}` : input.notes } as any);
       return { success: true };
     }),
 

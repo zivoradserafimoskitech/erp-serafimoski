@@ -12,6 +12,7 @@ import {
 } from "@contracts/finance";
 import { isDomesticCountry } from "@contracts/country";
 import { loadRates, iso } from "./rates-helper";
+import { refreshPaymentStatus, openDocs, type OpenDoc } from "./payment-status";
 
 const q = async (text: string, params: any[] = []) => (await getPool().query(text, params)).rows as any[];
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -349,6 +350,9 @@ export const financeRouter = createRouter({
   cashCreate: publicQuery
     .input(cashInput)
     .mutation(async ({ input, ctx }) => {
+      if (input.invoiceId && input.direction !== "in") throw new TRPCError({ code: "BAD_REQUEST", message: "Наплата по излезна фактура е прием во благајна" });
+      if (input.incomingInvoiceId && input.direction !== "out") throw new TRPCError({ code: "BAD_REQUEST", message: "Плаќање на влезна фактура е исплата од благајна" });
+      if (input.invoiceId && input.incomingInvoiceId) throw new TRPCError({ code: "BAD_REQUEST", message: "Избери само еден документ" });
       if (input.direction === "out") {
         const b = await q(`SELECT COALESCE(SUM(CASE WHEN direction='in' THEN amount ELSE -amount END),0) b FROM cash_transactions WHERE tx_date <= $1`, [input.txDate]);
         if (Number(b[0].b) - input.amount < -0.005) throw new TRPCError({ code: "BAD_REQUEST", message: `Во благајната нема доволно пари (салдо ${round2(Number(b[0].b))} ден.)` });
@@ -367,30 +371,27 @@ export const financeRouter = createRouter({
         [docNumber, input.txDate, input.direction, input.amount.toFixed(2), input.description ?? null, input.partnerName ?? null,
          input.invoiceId ?? null, input.incomingInvoiceId ?? null, input.accountCode ?? null, (ctx as any)?.actor?.name ?? null]);
       await logAudit({ action: "CREATE", entityType: "cash", entityId: r[0].id, description: `Благајна ${docNumber} ${input.amount}` }).catch(() => {});
+      if (input.invoiceId) await refreshPaymentStatus("invoice", input.invoiceId);
+      if (input.incomingInvoiceId) await refreshPaymentStatus("incoming_invoice", input.incomingInvoiceId);
       return { success: true, id: r[0].id, docNumber };
     }),
 
   cashDelete: publicQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
-      await q(`DELETE FROM cash_transactions WHERE id = $1`, [input.id]);
+      const del = await q(`DELETE FROM cash_transactions WHERE id = $1 RETURNING invoice_id, incoming_invoice_id`, [input.id]);
+      if (del[0]?.invoice_id) await refreshPaymentStatus("invoice", Number(del[0].invoice_id));
+      if (del[0]?.incoming_invoice_id) await refreshPaymentStatus("incoming_invoice", Number(del[0].incoming_invoice_id));
       return { success: true };
     }),
 
   cashOpenDocs: publicQuery.query(async () => {
-    const inv = await q(`SELECT i.id, i.invoice_number AS number, c.name AS partner, i.total_amount AS total, i.currency,
-        i.total_amount - COALESCE((SELECT SUM(amount) FROM payment_allocations a WHERE a.doc_type='invoice' AND a.doc_id=i.id),0)
-          - COALESCE((SELECT SUM(amount) FROM cash_transactions ct WHERE ct.invoice_id=i.id),0) AS open
-      FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
-      WHERE i.invoice_type IN ('standard','proforma') AND i.status NOT IN ('cancelled','paid') AND (i.invoice_type = 'proforma' OR i.status <> 'draft')
-      ORDER BY i.issue_date DESC LIMIT 300`);
-    const inc = await q(`SELECT ii.id, ii.supplier_invoice_number AS number, s.name AS partner, ii.total_amount AS total, ii.currency,
-        ii.total_amount - COALESCE((SELECT SUM(amount) FROM payment_allocations a WHERE a.doc_type='incoming_invoice' AND a.doc_id=ii.id),0)
-          - COALESCE((SELECT SUM(amount) FROM cash_transactions ct WHERE ct.incoming_invoice_id=ii.id),0) AS open
-      FROM incoming_invoices ii LEFT JOIN suppliers s ON s.id = ii.supplier_id
-      WHERE ii.status NOT IN ('cancelled','paid') ORDER BY ii.received_date DESC LIMIT 300`);
-    const map = (r: any) => ({ id: r.id, number: r.number, partner: r.partner, total: Number(r.total), currency: r.currency, open: round2(Number(r.open)) });
-    return { invoices: inv.map(map).filter(x => x.open > 0.005), incoming: inc.map(map).filter(x => x.open > 0.005) };
+    // Истото салдо како во банка/побарувања: платеното се пресметува во валутата на документот
+    const docs = await openDocs({ includeProforma: true });
+    const map = (d: OpenDoc) => ({ id: d.id, number: d.number, partner: d.partner, total: d.total, currency: d.currency, open: d.open });
+    const byDate = (a: OpenDoc, b: OpenDoc) => b.date.localeCompare(a.date);
+    return { invoices: docs.filter(d => d.docType === "invoice").sort(byDate).slice(0, 300).map(map),
+      incoming: docs.filter(d => d.docType === "incoming_invoice").sort(byDate).slice(0, 300).map(map) };
   }),
 
   // ===== КОНТЕН ПЛАН И ПРАВИЛА =====

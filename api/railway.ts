@@ -323,6 +323,9 @@ serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
       } else {
         console.log(`[MIGRATE] Шемата е усогласена — ${r.created} извршени, ${r.skipped} прескокнати`);
       }
+      import("./reconcile").then(m => m.reconcileData())
+        .then(n => n && console.log(`[RECONCILE] Усогласени ${n} записи (залиха, статуси на плаќање)`))
+        .catch(e => console.error("[RECONCILE]", e?.message ?? e));
     })
     .catch((e) => console.error("[MIGRATE] Не успеа:", e?.message ?? e));
 });

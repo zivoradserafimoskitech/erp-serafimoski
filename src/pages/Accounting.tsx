@@ -30,6 +30,7 @@ const invStatus: Record<string, { label: string; cls: string }> = {
   draft: { label: "Нацрт", cls: "bg-gray-100 text-gray-700" },
   issued: { label: "Издадена", cls: "bg-blue-100 text-blue-700" },
   sent: { label: "Испратена", cls: "bg-amber-100 text-amber-700" },
+  partial: { label: "Делумно платена", cls: "bg-teal-100 text-teal-700" },
   paid: { label: "Платена", cls: "bg-emerald-100 text-emerald-700" },
   overdue: { label: "Задоцнета", cls: "bg-red-100 text-red-700" },
   cancelled: { label: "Откажана", cls: "bg-gray-100 text-gray-500" },
@@ -37,6 +38,7 @@ const invStatus: Record<string, { label: string; cls: string }> = {
 const incStatus: Record<string, { label: string; cls: string }> = {
   received: { label: "Примена", cls: "bg-blue-100 text-blue-700" },
   verified: { label: "Верифицирана", cls: "bg-emerald-100 text-emerald-700" },
+  partial: { label: "Делумно платена", cls: "bg-teal-100 text-teal-700" },
   paid: { label: "Платена", cls: "bg-emerald-100 text-emerald-700" },
   disputed: { label: "Оспорена", cls: "bg-red-100 text-red-700" },
   cancelled: { label: "Откажана", cls: "bg-gray-100 text-gray-500" },
