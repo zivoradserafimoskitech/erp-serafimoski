@@ -75,13 +75,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-50
-          w-64 bg-slate-900 text-white flex flex-col
+          w-64 h-screen lg:h-full shrink-0 bg-slate-900 text-white flex flex-col
           transform transition-transform duration-200
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+        <div className="flex items-center justify-between p-4 border-b border-slate-700 shrink-0">
           <div className="flex items-center min-w-0 flex-1 mr-2">
             <img src="/logo.png?v=3" alt="Serafimoski Tech"
               className="w-full max-w-[180px] h-auto object-contain" />
@@ -95,7 +95,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* User info */}
-        <div className="px-4 py-3 border-b border-slate-700">
+        <div className="px-4 py-3 border-b border-slate-700 shrink-0">
           <div className="flex items-center gap-2 text-sm">
             <ShieldCheck className="h-4 w-4 text-amber-400" />
             <span className="text-slate-300">{me?.name || user?.name || "Корисник"}</span>
@@ -119,7 +119,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        {/* менито се скролува само по себе кога прозорецот е низок -- темната позадина останува до дното */}
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1 [scrollbar-width:thin] [scrollbar-color:#334155_transparent]">
           {navItems.filter((item) => canSeeMenu(me?.role ?? "admin", item.path)).map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -127,6 +128,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.path}
                 to={item.path}
+                ref={isActive ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                 onClick={() => setSidebarOpen(false)}
                 className={`
                   flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm
@@ -146,7 +148,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Logout */}
-        <div className="p-3 border-t border-slate-700">
+        <div className="p-3 border-t border-slate-700 shrink-0">
           <Button
             variant="ghost"
             className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-800"
@@ -159,7 +161,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Top bar */}
         <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
           <button
