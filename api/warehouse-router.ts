@@ -7,6 +7,7 @@ import {
   inventoryCounts, inventoryCountItems, materials,
   inventoryTransactions,
 } from "@db/schema";
+import { adjustStock, transferStock, warehouseQty } from "./stock-helper";
 import { logAudit } from "./audit-helper";
 
 export const warehouseRouter = createRouter({
@@ -131,39 +132,19 @@ export const warehouseRouter = createRouter({
 
       const items = await db.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, input.id));
 
-      for (const item of items) {
-        // Deduct from source
-        const fromStock = await db.select().from(materialStock)
-          .where(and(
-            eq(materialStock.materialId, item.materialId),
-            eq(materialStock.warehouseId, transfer[0].fromWarehouseId)
-          ));
-        if (fromStock[0]) {
-          const newQty = parseFloat(fromStock[0].quantity) - parseFloat(item.quantity);
-          if (newQty < 0) throw new Error(`Нема доволно залиха за материјал ${item.materialId}`);
-          await db.update(materialStock)
-            .set({ quantity: newQty.toFixed(3) })
-            .where(eq(materialStock.id, fromStock[0].id));
+      // Прво провери ги сите ставки, па потоа движи (да не остане пренос до половина)
+      const need = new Map<number, number>();
+      for (const item of items) need.set(item.materialId, (need.get(item.materialId) ?? 0) + parseFloat(item.quantity));
+      for (const [materialId, qty] of need) {
+        const have = await warehouseQty(materialId, transfer[0].fromWarehouseId);
+        if (have < qty - 0.0005) {
+          const m = (await db.select().from(materials).where(eq(materials.id, materialId)))[0];
+          throw new Error(`Нема доволно залиха за ${m?.name ?? materialId} во изворниот магацин (има ${have}, потребно ${qty})`);
         }
+      }
 
-        // Add to destination
-        const toStock = await db.select().from(materialStock)
-          .where(and(
-            eq(materialStock.materialId, item.materialId),
-            eq(materialStock.warehouseId, transfer[0].toWarehouseId)
-          ));
-        if (toStock[0]) {
-          await db.update(materialStock)
-            .set({ quantity: (parseFloat(toStock[0].quantity) + parseFloat(item.quantity)).toFixed(3) })
-            .where(eq(materialStock.id, toStock[0].id));
-        } else {
-          await db.insert(materialStock).values({
-            materialId: item.materialId,
-            warehouseId: transfer[0].toWarehouseId,
-            quantity: item.quantity,
-            avgCost: item.unitCost ?? "0",
-          } as any);
-        }
+      for (const item of items) {
+        await transferStock(item.materialId, transfer[0].fromWarehouseId, transfer[0].toWarehouseId, parseFloat(item.quantity), item.unitCost ? parseFloat(item.unitCost) : undefined);
 
         // Log transactions
         await db.insert(inventoryTransactions).values({
@@ -294,25 +275,15 @@ export const warehouseRouter = createRouter({
       const count = await db.select().from(inventoryCounts).where(eq(inventoryCounts.id, input.id));
       if (!count[0]) throw new Error("Пописот не постои");
 
+      if (count[0].status === "completed") throw new Error("Пописот е веќе завршен");
       const items = await db.select().from(inventoryCountItems).where(eq(inventoryCountItems.countId, input.id));
 
       for (const item of items) {
         const diff = parseFloat(item.difference ?? "0");
         if (diff === 0) continue;
 
-        // Update material_stock
-        const stock = await db.select().from(materialStock)
-          .where(and(
-            eq(materialStock.materialId, item.materialId),
-            eq(materialStock.warehouseId, count[0].warehouseId)
-          ));
-
-        if (stock[0]) {
-          const newQty = (parseFloat(stock[0].quantity) + diff).toFixed(3);
-          await db.update(materialStock)
-            .set({ quantity: newQty })
-            .where(eq(materialStock.id, stock[0].id));
-        }
+        // Магацин + партии + вкупна залиха на материјалот
+        await adjustStock(item.materialId, count[0].warehouseId, diff, { unitCost: parseFloat(item.unitCost ?? "0") || 0 });
 
         // Log adjustment transaction
         await db.insert(inventoryTransactions).values({

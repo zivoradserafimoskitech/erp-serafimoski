@@ -6,6 +6,9 @@ import {
   quotations,
 } from "@db/schema";
 import { isLowStock } from "@contracts/stock";
+import { openDocs } from "./payment-status";
+import { loadRates, iso } from "./rates-helper";
+import { toMkd } from "@contracts/finance";
 
 export const dashboardRouter = createRouter({
   stats: publicQuery.query(async () => {
@@ -50,15 +53,24 @@ export const dashboardRouter = createRouter({
     const partialPO = allPOs.filter((p) => p.status === "partial").length;
 
     // Revenue & Profit
-    const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0);
-    const totalCost = allOrders.reduce((sum, o) => sum + parseFloat(o.costAmount), 0);
-    const totalMargin = allOrders.reduce((sum, o) => sum + parseFloat(o.marginAmount), 0);
-    const totalInvoiced = allInvoices
-      .filter(i => i.invoiceType === "standard")
-      .reduce((sum, i) => sum + parseFloat(i.totalAmount), 0);
-    const totalPayables = allIncoming
-      .filter(i => i.status === "received")
-      .reduce((sum, i) => sum + parseFloat(i.totalAmount), 0);
+    // Сè во денари: нарачката е во валутата на понудата, фактурите во својата валута
+    const rate = await loadRates();
+    const quoteCur = new Map(allQuotes.map((q: any) => [q.id, String(q.currency || "MKD").toUpperCase()]));
+    const mkd = (v: any, cur: string, d: any) => { const n = parseFloat(v) || 0; return cur === "MKD" ? n : (toMkd(n, cur, iso(d), rate) ?? n); };
+    const liveOrders = allOrders.filter((o: any) => o.status !== "cancelled");
+    const oMkd = (o: any, f: string) => mkd(o[f], o.quoteId ? quoteCur.get(o.quoteId) ?? "MKD" : "MKD", o.createdAt);
+    const totalRevenue = liveOrders.reduce((sum: number, o: any) => sum + oMkd(o, "totalAmount"), 0);
+    const totalCost = liveOrders.reduce((sum: number, o: any) => sum + oMkd(o, "costAmount"), 0);
+    const totalMargin = liveOrders.reduce((sum: number, o: any) => sum + oMkd(o, "marginAmount"), 0);
+    // Само книжени фактури (како во главната книга и ДДВ книгите); книжното одобрување се одзема
+    const booked = allInvoices.filter((i: any) => ["standard", "credit_note"].includes(i.invoiceType) && !["draft", "cancelled"].includes(i.status));
+    const iSign = (i: any) => i.invoiceType === "credit_note" ? -1 : 1;
+    const iCur = (i: any) => String(i.currency || "MKD").toUpperCase();
+    const totalInvoiced = booked.reduce((sum: number, i: any) => sum + iSign(i) * Math.abs(mkd(i.totalAmount, iCur(i), i.issueDate)), 0);
+    // Отворени обврски/побарувања: вистинско салдо по плаќања (банка + благајна), во денари
+    const open = await openDocs();
+    const totalPayables = open.filter(d => d.docType === "incoming_invoice").reduce((s, d) => s + d.openMkd, 0);
+    const totalReceivables = open.filter(d => d.docType === "invoice").reduce((s, d) => s + d.openMkd, 0);
 
     // Customers
     const activeCustomers = allCustomers.filter((c) => c.isActive === "active").length;
@@ -70,8 +82,9 @@ export const dashboardRouter = createRouter({
     const warehouseCount = allWarehouses.length;
 
     // VAT
-    const outgoingVat = allInvoices.reduce((sum, i) => sum + parseFloat(i.vatAmount), 0);
-    const incomingVat = allIncoming.reduce((sum, i) => sum + parseFloat(i.vatAmount), 0);
+    const outgoingVat = booked.reduce((sum: number, i: any) => sum + iSign(i) * Math.abs(mkd(i.vatAmount, iCur(i), i.issueDate)), 0);
+    const incomingVat = allIncoming.filter((i: any) => i.status !== "cancelled")
+      .reduce((sum: number, i: any) => sum + mkd(i.vatAmount, String(i.currency || "MKD").toUpperCase(), i.receivedDate), 0);
 
     return {
       orders: {
@@ -108,6 +121,7 @@ export const dashboardRouter = createRouter({
         totalMargin: totalMargin.toFixed(2),
         totalInvoiced: totalInvoiced.toFixed(2),
         totalPayables: totalPayables.toFixed(2),
+        totalReceivables: totalReceivables.toFixed(2),
         outgoingVat: outgoingVat.toFixed(2),
         incomingVat: incomingVat.toFixed(2),
         vatBalance: (outgoingVat - incomingVat).toFixed(2),

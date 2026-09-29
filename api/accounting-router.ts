@@ -3,7 +3,8 @@ import { eq, desc, and } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
-import { getDb } from "./queries/connection";
+import { openDocs, refreshPaymentStatus, assertNoPayments, type OpenDoc } from "./payment-status";
+import { getDb, getPool } from "./queries/connection";
 import {
   invoices, incomingInvoices, documentItems,
   receipts, receiptItems, deliveryNotes,
@@ -118,8 +119,14 @@ export const accountingRouter = createRouter({
       const cust = await db.select({ id: customers.id }).from(customers).where(eq(customers.id, invData.customerId));
       if (!cust[0]) throw new Error("Клиентот не постои");
 
+      // Готовиот производ излегува од залиха со испратницата; ако нарачката веќе има испратница, фактурата не одзема повторно
+      const hasDn = invData.orderId
+        ? (await getPool().query(`SELECT 1 FROM delivery_notes WHERE order_id = $1 AND status <> 'cancelled' LIMIT 1`, [invData.orderId])).rows.length > 0
+        : false;
+      const movesStock = !hasDn && (invData.invoiceType ?? "standard") === "standard";
+
       // Validate stock for products
-      if (items) {
+      if (items && movesStock) {
         for (const item of items) {
           if (item.itemType === "product" && item.productId) {
             const stock = await db.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.productId, item.productId));
@@ -158,7 +165,7 @@ export const accountingRouter = createRouter({
       }
 
       // Deduct stock for products when invoice is issued
-      if (items && invData.status === "issued") {
+      if (items && movesStock && invData.status === "issued") {
         for (const item of items) {
           if (item.itemType === "product" && item.productId) {
             const stockEntries = await db.select().from(finishedGoodsStock)
@@ -186,7 +193,7 @@ export const accountingRouter = createRouter({
   invoiceUpdate: publicQuery
     .input(z.object({
       id: z.number(),
-      status: z.enum(["draft", "issued", "sent", "paid", "overdue", "cancelled"]).optional(),
+      status: z.enum(["draft", "issued", "sent", "partial", "paid", "overdue", "cancelled"]).optional(),
       dueDate: z.string().optional(),
       notes: z.string().optional(),
     }))
@@ -196,6 +203,10 @@ export const accountingRouter = createRouter({
       const updateData: any = { ...data };
       if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
       await db.update(invoices).set(updateData).where(eq(invoices.id, id));
+      // Платено/делумно се изведува од уплатите; рачно „Платена“ останува (на пр. компензација)
+      if (data.status && data.status !== "paid") await refreshPaymentStatus("invoice", id);
+      const cur: any = (await db.select().from(invoices).where(eq(invoices.id, id)))[0];
+      if (cur?.invoiceType === "credit_note" && cur.originalInvoiceId) await refreshPaymentStatus("invoice", Number(cur.originalInvoiceId));
       return { success: true };
     }),
 
@@ -203,8 +214,11 @@ export const accountingRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      await assertNoPayments("invoice", input.id);
+      const cur: any = (await db.select().from(invoices).where(eq(invoices.id, input.id)))[0];
       await db.delete(documentItems).where(and(eq(documentItems.documentId, input.id), eq(documentItems.documentType, "invoice")));
       await db.delete(invoices).where(eq(invoices.id, input.id));
+      if (cur?.invoiceType === "credit_note" && cur.originalInvoiceId) await refreshPaymentStatus("invoice", Number(cur.originalInvoiceId));
       return { success: true };
     }),
 
@@ -297,13 +311,14 @@ export const accountingRouter = createRouter({
   incomingInvoiceUpdate: publicQuery
     .input(z.object({
       id: z.number(),
-      status: z.enum(["received", "verified", "paid", "disputed", "cancelled"]).optional(),
+      status: z.enum(["received", "verified", "partial", "paid", "disputed", "cancelled"]).optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...data } = input;
       await db.update(incomingInvoices).set(data).where(eq(incomingInvoices.id, id));
+      if (data.status && data.status !== "paid") await refreshPaymentStatus("incoming_invoice", id);
       return { success: true };
     }),
 
@@ -311,6 +326,7 @@ export const accountingRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      await assertNoPayments("incoming_invoice", input.id);
       await db.delete(documentItems).where(and(eq(documentItems.documentId, input.id), eq(documentItems.documentType, "incoming_invoice")));
       await db.delete(incomingInvoices).where(eq(incomingInvoices.id, input.id));
       return { success: true };
@@ -746,6 +762,7 @@ export const accountingRouter = createRouter({
       if (input.items && input.items.length > 0) {
         await db.insert(documentItems).values(input.items.map(i => ({ ...i, documentId: insertId, documentType: "invoice" as const })));
       }
+      await refreshPaymentStatus("invoice", input.originalInvoiceId);
       return { success: true, id: insertId };
     }),
 
@@ -938,46 +955,20 @@ export const accountingRouter = createRouter({
 
   // ===== PAYABLES / RECEIVABLES =====
   payablesReceivables: publicQuery.query(async () => {
-    const db = getDb();
-    // Payables (incoming invoices not paid)
-    const incoming = await db
-      .select()
-      .from(incomingInvoices)
-      .where(eq(incomingInvoices.status, "received"));
-
-    const payablesBySupplier = incoming.reduce((acc: any[], inv) => {
-      const existing = acc.find(a => a.supplierId === inv.supplierId);
-      if (existing) {
-        existing.total += parseFloat(inv.totalAmount);
-        existing.count += 1;
-      } else {
-        acc.push({ supplierId: inv.supplierId, total: parseFloat(inv.totalAmount), count: 1 });
-      }
-      return acc;
-    }, []);
-
-    // Receivables (outgoing invoices not paid)
-    const outgoing = await db
-      .select()
-      .from(invoices)
-      .where(eq(invoices.status, "issued"));
-
-    const receivablesByCustomer = outgoing.reduce((acc: any[], inv) => {
-      const existing = acc.find(a => a.customerId === inv.customerId);
-      if (existing) {
-        existing.total += parseFloat(inv.totalAmount);
-        existing.count += 1;
-      } else {
-        acc.push({ customerId: inv.customerId, total: parseFloat(inv.totalAmount), count: 1 });
-      }
-      return acc;
-    }, []);
-
+    // Вистинско отворено салдо (минус банка и благајна), во денари
+    const docs = await openDocs();
+    const group = (list: OpenDoc[], key: "supplierId" | "customerId") => {
+      const m = new Map<number | null, { total: number; count: number }>();
+      for (const d of list) { const g = m.get(d.partnerId) ?? { total: 0, count: 0 }; g.total += d.openMkd; g.count++; m.set(d.partnerId, g); }
+      return Array.from(m, ([id, g]) => ({ [key]: id, total: Math.round(g.total * 100) / 100, count: g.count }));
+    };
+    const payables = group(docs.filter(d => d.docType === "incoming_invoice"), "supplierId");
+    const receivables = group(docs.filter(d => d.docType === "invoice"), "customerId");
     return {
-      totalPayables: payablesBySupplier.reduce((s, p) => s + p.total, 0).toFixed(2),
-      totalReceivables: receivablesByCustomer.reduce((s, r) => s + r.total, 0).toFixed(2),
-      payables: payablesBySupplier,
-      receivables: receivablesByCustomer,
+      totalPayables: payables.reduce((s, p) => s + p.total, 0).toFixed(2),
+      totalReceivables: receivables.reduce((s, r) => s + r.total, 0).toFixed(2),
+      payables,
+      receivables,
     };
   }),
 

@@ -87,6 +87,14 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     await caller.accounting.invoiceUpdate({ id: ids.inv, status: "issued" });
     await caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "F-1", supplierId: ids.sup, receivedDate: today, issueDate: today, subtotal: "60000", vatAmount: "10800", totalAmount: "70800" });
     await caller.finance.cashCreate({ txDate: today, direction: "in", amount: 1000, invoiceId: ids.inv });
+    // благајната го менува статусот и салдото исто како банката
+    expect((await caller.accounting.invoiceById({ id: ids.inv }))?.status).toBe("partial");
+    await caller.accounting.invoiceUpdate({ id: ids.inv, status: "sent" });
+    expect((await caller.accounting.invoiceById({ id: ids.inv }))?.status).toBe("partial");
+    await expect(caller.accounting.invoiceDelete({ id: ids.inv })).rejects.toThrow(/благајнички/);
+    const pr = await caller.accounting.payablesReceivables();
+    expect(Number(pr.totalReceivables)).toBe(10800);
+    expect(Number(pr.totalPayables)).toBe(70800);
     const s1 = await caller.finance.ledgerSync();
     expect(s1.problems).toEqual([]);
     expect(s1.created).toBe(3);
@@ -149,6 +157,7 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     const inv = await caller.production.workOrderToInvoice({ workOrderId: woId });
     await caller.accounting.invoiceUpdate({ id: inv.id, status: "issued" });
     await caller.finance.cashCreate({ txDate: today, direction: "in", amount: 5900, invoiceId: inv.id });
+    expect((await caller.accounting.invoiceById({ id: inv.id }))?.status).toBe("paid");
     f = await caller.ops.dealFlow({ quotationId: q.id });
     expect(f.closed).toBe(true);
     // книжење: аванс 235 е затворен, купувачот 120 за оваа нарачка е на нула

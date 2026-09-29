@@ -8,6 +8,7 @@ import {
 } from "@db/schema";
 import { detectAndParse, dedupeKey, type ParsedTx } from "./bank-parsers";
 import { logAudit } from "./audit-helper";
+import { refreshPaymentStatus } from "./payment-status";
 
 /** Извлекува броеви на фактури од целта на дознаката */
 export function extractInvoiceRefs(text: string): string[] {
@@ -37,33 +38,9 @@ const norm = (s: string) => String(s ?? "").toUpperCase().replace(/[^0-9A-ZА-Я
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
-/** Колку е платено по еден документ */
-async function paidOf(docType: string, docId: number): Promise<number> {
-  const db = getDb();
-  const rows = (await db.select().from(paymentAllocations)) as any[];
-  return r2(rows
-    .filter((a) => a.docType === docType && a.docId === docId)
-    .reduce((s, a) => s + Number(a.amount), 0));
-}
-
-/** Статусот на фактурата се изведува од распределеното, не се поставува рачно */
-async function refreshDocStatus(docType: string, docId: number) {
-  const db = getDb();
-  const paid = await paidOf(docType, docId);
-  if (docType === "invoice") {
-    const inv: any = (await db.select().from(invoices).where(eq(invoices.id, docId)))[0];
-    if (!inv) return;
-    const total = Number(inv.totalAmount);
-    const status = paid <= 0.005 ? "pending" : paid >= total - 0.005 ? "paid" : "partial";
-    await db.update(invoices).set({ status, updatedAt: new Date() } as any).where(eq(invoices.id, docId));
-  } else {
-    const inv: any = (await db.select().from(incomingInvoices).where(eq(incomingInvoices.id, docId)))[0];
-    if (!inv) return;
-    const total = Number(inv.totalAmount);
-    const status = paid <= 0.005 ? "pending" : paid >= total - 0.005 ? "paid" : "partial";
-    await db.update(incomingInvoices).set({ status, updatedAt: new Date() } as any).where(eq(incomingInvoices.id, docId));
-  }
-}
+/** Статусот на фактурата се изведува од платеното (банка + благајна), не се поставува рачно */
+const refreshDocStatus = (docType: string, docId: number) =>
+  refreshPaymentStatus(docType === "invoice" ? "invoice" : "incoming_invoice", docId);
 
 /** Статусот на банкарската ставка се изведува од распределеното */
 async function refreshTxStatus(txId: number) {
@@ -280,7 +257,7 @@ export const bankRouter = createRouter({
         const custs = (await db.select().from(customers)) as any[];
         const cmap = new Map(custs.map((c) => [c.id, c]));
         for (const inv of invs) {
-          if (inv.status === "paid") continue;
+          if (["paid", "draft", "cancelled"].includes(inv.status)) continue;
           const total = Number(inv.totalAmount);
           let score = 0;
           const reasons: string[] = [];
@@ -306,7 +283,7 @@ export const bankRouter = createRouter({
         const sups = (await db.select().from(suppliers)) as any[];
         const smap = new Map(sups.map((s) => [s.id, s]));
         for (const inv of invs) {
-          if (inv.status === "paid") continue;
+          if (["paid", "draft", "cancelled"].includes(inv.status)) continue;
           const total = Number(inv.totalAmount);
           let score = 0;
           const reasons: string[] = [];
