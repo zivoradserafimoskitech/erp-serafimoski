@@ -165,6 +165,18 @@ export function getExtraSql(): string[] {
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "smtp_password" varchar(255)`,
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "smtp_from" varchar(320)`,
 
+    // ===== ПОТСЕТНИЦИ =====
+    `CREATE TABLE IF NOT EXISTS "app_kv" ("key" varchar(80) PRIMARY KEY NOT NULL, "value" text, "updated_at" timestamp DEFAULT now() NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS "reminder_log" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "kind" varchar(30) NOT NULL,
+      "doc_type" varchar(30),
+      "doc_id" bigint,
+      "sent_to" text,
+      "sent_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "reminder_log_doc_idx" ON "reminder_log" ("kind", "doc_type", "doc_id")`,
+
     // ===== Индекси за побрзи листи =====
     `CREATE INDEX IF NOT EXISTS "invoices_created_idx" ON "invoices" ("created_at")`,
     `CREATE INDEX IF NOT EXISTS "invoices_issue_idx" ON "invoices" ("issue_date")`,

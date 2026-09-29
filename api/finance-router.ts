@@ -82,6 +82,13 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
       lines: invoiceLines({ subtotalMkd: sub, vatMkd: vat, foreign, customerId: i.customer_id, number: i.invoice_number, rules }) });
   }
 
+  // 1б) Про-фактури: не се книжат, но уплатите по нив се аванс
+  const pfs = await q(`SELECT i.id, i.invoice_number, i.issue_date, i.currency, i.customer_id, i.quotation_id, c.country
+    FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.invoice_type = 'proforma' AND i.status <> 'cancelled'`);
+  const proformaInfo = new Map<number, { cur: string; date: string; customerId: number; number: string; quotationId: number | null }>();
+  for (const p of pfs) proformaInfo.set(p.id, { cur: String(p.currency || "MKD").toUpperCase(), date: iso(p.issue_date), customerId: p.customer_id, number: p.invoice_number, quotationId: p.quotation_id ? Number(p.quotation_id) : null });
+  const advanceMkd = new Map<number, { mkd: number; lastDate: string }>(); // по про-фактура
+
   // 2) Влезни фактури
   const incs = await q(`SELECT ii.id, ii.supplier_invoice_number, ii.issue_date, ii.received_date, ii.subtotal, ii.vat_amount,
       ii.currency, ii.supplier_id, s.country, s.name AS sname
@@ -101,6 +108,21 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
 
   // Плаќање по документ (банка или благајна) со курсна разлика
   const payFor = (p: { sourceType: string; sourceId: number; docType: string; docId: number; amount: number; moneyCur: string; date: string; moneyAccount: string; ref: string }) => {
+    // Уплата по про-фактура = примен аванс (без курсна разлика -- се затвора при конечната фактура)
+    const pf = p.docType === "invoice" ? proformaInfo.get(p.docId) : undefined;
+    if (pf) {
+      const moneyMkd = toMkd(p.amount, p.moneyCur, p.date, rate);
+      if (moneyMkd === null) { problems.push({ sourceType: p.sourceType, sourceId: p.sourceId, ref: p.ref, reason: `Нема курс за ${p.moneyCur}` }); return; }
+      const a = advanceMkd.get(p.docId) ?? { mkd: 0, lastDate: p.date };
+      a.mkd = round2(a.mkd + moneyMkd); if (p.date > a.lastDate) a.lastDate = p.date;
+      advanceMkd.set(p.docId, a);
+      desired.push({ sourceType: p.sourceType, sourceId: p.sourceId, date: p.date, description: `Аванс по ${pf.number}${p.ref ? " · " + p.ref : ""}`,
+        lines: normalizeLines([
+          { account: p.moneyAccount, debit: moneyMkd, credit: 0, description: `Аванс ${pf.number}` },
+          { account: rules.advances_received, debit: 0, credit: moneyMkd, partnerType: "customer", partnerId: pf.customerId, description: `Аванс ${pf.number}` },
+        ]) });
+      return;
+    }
     const doc = p.docType === "invoice" ? invInfo.get(p.docId) : incInfo.get(p.docId);
     if (!doc) return; // документот не е книжен (нацрт/откажан) -- нема што да се затвора
     const moneyMkd = toMkd(p.amount, p.moneyCur, p.date, rate);
@@ -136,6 +158,25 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
     } else {
       desired.push({ sourceType: "cash", sourceId: c.id, date, description: `Благајна ${c.doc_number}${c.description ? " · " + c.description : ""}`,
         lines: cashOtherLines({ direction: c.direction === "in" ? "in" : "out", amount: Number(c.amount), cashAccount: rules.cash, contra: c.account_code || rules.cash_other, ref: c.doc_number }) });
+    }
+  }
+
+  // 4б) Затворање на аванс: конечна фактура за нарачката од понудата на про-фактурата
+  if (advanceMkd.size) {
+    const links = await q(`SELECT qt.id AS qid, i.id AS inv_id, i.issue_date, i.invoice_number, c.country, i.currency
+      FROM quotations qt JOIN invoices i ON i.order_id = qt.converted_order_id AND i.invoice_type = 'standard' AND i.status NOT IN ('draft','cancelled')
+      LEFT JOIN customers c ON c.id = i.customer_id`);
+    for (const [pfId, a] of advanceMkd) {
+      const pf = proformaInfo.get(pfId)!;
+      const inv = links.filter(l => Number(l.qid) === pf.quotationId).sort((x, y) => iso(x.issue_date).localeCompare(iso(y.issue_date)))[0];
+      if (!inv || !(a.mkd > 0)) continue;
+      const foreign = String(inv.currency || "MKD").toUpperCase() !== "MKD" || !isDomesticCountry(inv.country);
+      const date = iso(inv.issue_date) > a.lastDate ? iso(inv.issue_date) : a.lastDate;
+      desired.push({ sourceType: "advance_settle", sourceId: pfId, date, description: `Затворање аванс ${pf.number} со фактура ${inv.invoice_number}`,
+        lines: normalizeLines([
+          { account: rules.advances_received, debit: a.mkd, credit: 0, partnerType: "customer", partnerId: pf.customerId, description: `Аванс ${pf.number}` },
+          { account: foreign ? rules.customers_foreign : rules.customers_domestic, debit: 0, credit: a.mkd, partnerType: "customer", partnerId: pf.customerId, description: `Аванс ${pf.number} → ${inv.invoice_number}` },
+        ]) });
     }
   }
 
@@ -341,7 +382,8 @@ export const financeRouter = createRouter({
         i.total_amount - COALESCE((SELECT SUM(amount) FROM payment_allocations a WHERE a.doc_type='invoice' AND a.doc_id=i.id),0)
           - COALESCE((SELECT SUM(amount) FROM cash_transactions ct WHERE ct.invoice_id=i.id),0) AS open
       FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
-      WHERE i.invoice_type='standard' AND i.status NOT IN ('draft','cancelled','paid') ORDER BY i.issue_date DESC LIMIT 300`);
+      WHERE i.invoice_type IN ('standard','proforma') AND i.status NOT IN ('cancelled','paid') AND (i.invoice_type = 'proforma' OR i.status <> 'draft')
+      ORDER BY i.issue_date DESC LIMIT 300`);
     const inc = await q(`SELECT ii.id, ii.supplier_invoice_number AS number, s.name AS partner, ii.total_amount AS total, ii.currency,
         ii.total_amount - COALESCE((SELECT SUM(amount) FROM payment_allocations a WHERE a.doc_type='incoming_invoice' AND a.doc_id=ii.id),0)
           - COALESCE((SELECT SUM(amount) FROM cash_transactions ct WHERE ct.incoming_invoice_id=ii.id),0) AS open

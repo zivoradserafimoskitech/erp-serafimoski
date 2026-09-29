@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { printQuotation, printInvoice, quotationHtml, type DocLang } from "@/lib/print-documents";
 import SendEmailDialog from "@/components/SendEmailDialog";
+import DealFlow from "@/components/DealFlow";
+import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -84,6 +86,17 @@ export default function Quotations() {
   const [convertDialog, setConvertDialog] = useState(false);
   const [selQ, setSelQ] = useState<number | null>(null);
   const [mailOpen, setMailOpen] = useState(false);
+  // ?open=ID од брзото пребарување / тек на нарачка
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = Number(params.get("open"));
+    if (id) {
+      setSelQ(id); setDetailOpen(true);
+      if (params.get("action") === "proforma") setPendingAction("proforma");
+      params.delete("open"); params.delete("action"); setParams(params, { replace: true });
+    }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [convOrderNum, setConvOrderNum] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -211,9 +224,13 @@ export default function Quotations() {
     });
     setPfOpen(true);
   };
+  useEffect(() => {
+    if (pendingAction === "proforma" && qDetail && qDetail.id === selQ) { setPendingAction(null); openProforma(); }
+  }, [pendingAction, qDetail]); // eslint-disable-line react-hooks/exhaustive-deps
   const createPf = trpc.quotation.quotationToProforma.useMutation({
     onSuccess: async (d) => {
       utils.accounting.invoiceList.invalidate();
+      utils.ops.dealFlow.invalidate();
       toast.success(`Креирана про-фактура ${d.invoiceNumber}`);
       setPfOpen(false);
       const inv = await utils.accounting.invoiceById.fetch({ id: d.id });
@@ -782,6 +799,7 @@ export default function Quotations() {
               </div>
 
               <div className="px-8 py-6 space-y-6">
+                <DealFlow quotationId={qDetail.id} onProforma={() => openProforma()} />
                 {Number(qDetail.vatRate) > 0 && isForeign(qDetail.customerId, qDetail.currency ?? "MKD") && (
                   <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
                     <span className="text-amber-800">

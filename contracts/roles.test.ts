@@ -22,3 +22,22 @@ describe("дозволи", () => {
     expect(canRun("viewer", "appUsers.appUsersMe", "query")).toBe(true);
   });
 });
+
+import { canSeeMenu } from "./roles";
+describe("сметководител и мени по улога", () => {
+  it("сметководителот пишува во финансии, не во производство", () => {
+    expect(canRun("accountant", "accounting.invoiceCreate", "mutation")).toBe(true);
+    expect(canRun("accountant", "finance.cashCreate", "mutation")).toBe(true);
+    expect(canRun("accountant", "production.operationCreate", "mutation")).toBe(false);
+    expect(canRun("accountant", "accounting.invoiceDelete", "mutation")).toBe(false);
+    expect(canRun("accountant", "production.workOrderList", "query")).toBe(true);
+  });
+  it("операторот гледа само подот", () => {
+    expect(canSeeMenu("operator", "/proizvodstvo")).toBe(true);
+    expect(canSeeMenu("operator", "/finansii")).toBe(false);
+    expect(canSeeMenu("accountant", "/finansii")).toBe(true);
+    expect(canSeeMenu("accountant", "/proizvodstvo")).toBe(false);
+    expect(canSeeMenu("admin", "/vraboteni")).toBe(true);
+    expect(canSeeMenu("manager", "/vraboteni")).toBe(false);
+  });
+});

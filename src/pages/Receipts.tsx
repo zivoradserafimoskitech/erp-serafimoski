@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,11 @@ interface ParsedItem {
 
 export default function Receipts() {
   const [search, setSearch] = useState("");
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const qq = params.get("q");
+    if (qq) { setSearch(qq); params.delete("q"); setParams(params, { replace: true }); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: nextReceiptNum } = trpc.settings.nextDocNumber.useQuery({ kind: "receipt" }, { enabled: dialogOpen });

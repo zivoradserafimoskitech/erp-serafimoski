@@ -17,6 +17,7 @@ import { printWorkOrder, printRequisition } from "@/lib/print-documents";
 import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck, Clock } from "lucide-react";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import ScheduleBoard from "@/components/ScheduleBoard";
+import { useSearchParams } from "react-router";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
   pending: { label: "На чекање", cls: "bg-gray-100 text-gray-700" },
@@ -59,6 +60,11 @@ export default function Production() {
   const { data: nextWorkOrderNum } = trpc.settings.nextDocNumber.useQuery({ kind: "workOrder" }, { enabled: dialogOpen });
   const [detailOpen, setDetailOpen] = useState(false);
   const [view, setView] = useState<"list" | "schedule">("list");
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = Number(params.get("open"));
+    if (id) { setSelWO(id); setDetailOpen(true); params.delete("open"); setParams(params, { replace: true }); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [selWO, setSelWO] = useState<number | null>(null);
   const [completeWO, setCompleteWO] = useState<{ id: number; woNumber: string } | null>(null);
   const [completeForm, setCompleteForm] = useState({ producedQty: "1", producedUnit: "ком" });

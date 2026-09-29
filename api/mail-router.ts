@@ -6,7 +6,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getPool } from "./queries/connection";
 import { logAudit } from "./audit-helper";
 
-async function transport() {
+export async function mailTransport() {
   const s = (await getPool().query(`SELECT * FROM company_settings LIMIT 1`)).rows[0];
   if (!s?.smtp_host || !s?.smtp_user || !s?.smtp_password) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Не е поставена е-пошта за праќање. Внеси SMTP во Подесувања → Фирма." });
@@ -28,7 +28,7 @@ export const mailRouter = createRouter({
   mailTest: publicQuery
     .input(z.object({ to: z.string().email() }))
     .mutation(async ({ input }) => {
-      const { t, from, company } = await transport();
+      const { t, from, company } = await mailTransport();
       try {
         await t.sendMail({ from, to: input.to, subject: `Тест порака — ${company}`, text: "Праќањето е-пошта од ERP работи." });
       } catch (e: any) {
@@ -49,7 +49,7 @@ export const mailRouter = createRouter({
       docId: z.number(),
     }))
     .mutation(async ({ input }) => {
-      const { t, from } = await transport();
+      const { t, from } = await mailTransport();
       try {
         await t.sendMail({
           from, to: input.to.join(", "), cc: input.cc?.length ? input.cc.join(", ") : undefined,

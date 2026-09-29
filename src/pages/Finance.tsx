@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,7 @@ const fmt = (n: number | null | undefined) =>
 const fmtDate = (d: string) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : "—");
 
 const SOURCE_LBL: Record<string, string> = {
-  invoice: "Фактура", incoming_invoice: "Влезна ф.", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", depreciation: "Амортизација", manual: "Рачен",
+  invoice: "Фактура", incoming_invoice: "Влезна ф.", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", depreciation: "Амортизација", advance_settle: "Аванс", manual: "Рачен",
 };
 
 function PeriodPicker({ from, to, onChange }: { from: string; to: string; onChange: (f: string, t: string) => void }) {
@@ -65,7 +66,7 @@ function JournalTab() {
   });
   // Секое отворање го усогласува книжењето со документите (само кој смее да книжи)
   const { data: me } = trpc.appUsers.appUsersMe.useQuery();
-  const canPost = !me || me.role === "admin" || me.role === "manager";
+  const canPost = !me || me.role === "admin" || me.role === "manager" || me.role === "accountant";
   const [autoSynced, setAutoSynced] = useState(false);
   useEffect(() => {
     if (me && canPost && !autoSynced) { setAutoSynced(true); sync.mutate(); }
@@ -371,7 +372,7 @@ function VatTab() {
 }
 
 // ───────────────────────── БЛАГАЈНА ─────────────────────────
-function CashTab() {
+function CashTab({ presetInvoiceId }: { presetInvoiceId?: number | null }) {
   const utils = trpc.useUtils();
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
@@ -387,6 +388,16 @@ function CashTab() {
   const del = trpc.finance.cashDelete.useMutation({ onSuccess: () => utils.finance.cashList.invalidate(), onError: (e) => toast.error(e.message) });
   const docs = dlg === "in" ? open?.invoices : open?.incoming;
   const openDlg = (d: "in" | "out") => { setF({ date: today(), amount: "", description: "", partnerName: "", docId: "", account: "" }); setDlg(d); };
+  // Од текот на нарачката: отвори уплатница за фактурата (ако уште има отворено)
+  const [presetDone, setPresetDone] = useState(false);
+  useEffect(() => {
+    if (!presetInvoiceId || presetDone || !open) return;
+    setPresetDone(true);
+    const d = open.invoices.find(x => x.id === presetInvoiceId);
+    if (!d) { toast.info("Фактурата е веќе платена или не е издадена"); return; }
+    setF({ date: today(), amount: d.currency === "MKD" ? String(d.open) : "", description: `Наплата ${d.number}`, partnerName: d.partner ?? "", docId: String(d.id), account: "" });
+    setDlg("in");
+  }, [presetInvoiceId, open, presetDone]);
 
   return (
     <div className="space-y-4">
@@ -677,7 +688,10 @@ function ProfitTab() {
 }
 
 export default function Finance() {
-  const [tab, setTab] = useState("journal");
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState(params.get("tab") || "journal");
+  const [cashInvoice] = useState<number | null>(Number(params.get("invoice")) || null);
+  useEffect(() => { if (params.get("tab") || params.get("invoice")) setParams({}, { replace: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [cardCode, setCardCode] = useState("");
   return (
     <div className="space-y-6">
@@ -701,7 +715,7 @@ export default function Finance() {
         <TabsContent value="trial" className="mt-4"><TrialBalanceTab onOpenCard={(c) => { setCardCode(c); setTab("card"); }} /></TabsContent>
         <TabsContent value="card" className="mt-4"><AccountCardTab code={cardCode} setCode={setCardCode} /></TabsContent>
         <TabsContent value="vat" className="mt-4"><VatTab /></TabsContent>
-        <TabsContent value="cash" className="mt-4"><CashTab /></TabsContent>
+        <TabsContent value="cash" className="mt-4"><CashTab presetInvoiceId={cashInvoice} /></TabsContent>
         <TabsContent value="rates" className="mt-4"><RatesTab /></TabsContent>
         <TabsContent value="chart" className="mt-4"><ChartTab /></TabsContent>
       </Tabs>
