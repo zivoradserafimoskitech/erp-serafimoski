@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { DateInput } from "@/components/ui/date-input";
 import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
@@ -13,7 +12,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -31,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { MaterialPicker } from "@/components/MaterialPicker";
+import PurchaseOrderCreateDialog from "@/components/PurchaseOrderCreateDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ProcurementNeeds from "@/components/ProcurementNeeds";
 import {
@@ -62,7 +60,6 @@ export default function Procurement() {
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [supplierDialog, setSupplierDialog] = useState(false);
   const [poDialog, setPoDialog] = useState(false);
-  const { data: nextPoNum } = trpc.settings.nextDocNumber.useQuery({ kind: "po" }, { enabled: poDialog });
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<number | null>(null);
 
@@ -71,14 +68,6 @@ export default function Procurement() {
     address: "", city: "", country: "Македонија", materials: "",
   });
 
-  const [poForm, setPoForm] = useState({
-    poNumber: "", supplierId: "", expectedDate: "", notes: "",
-  });
-
-  const [items, setItems] = useState<Array<{
-    materialId: string; description: string; quantity: string;
-    unitPrice: string; totalPrice: string; notes: string;
-  }>>([]);
 
   const { data: suppliers } = trpc.procurement.supplierList.useQuery({
     search: search || undefined,
@@ -88,7 +77,6 @@ export default function Procurement() {
     search: search || undefined,
   });
 
-  const { data: allMaterials } = trpc.storage.materialList.useQuery({});
 
   const { data: poDetail } = trpc.procurement.poById.useQuery(
     { id: selectedPO! },
@@ -105,16 +93,6 @@ export default function Procurement() {
 
   const supDelete = trpc.procurement.supplierDelete.useMutation({
     onSuccess: () => utils.procurement.supplierList.invalidate(),
-  });
-
-  const poCreate = trpc.procurement.poCreate.useMutation({
-    onSuccess: () => {
-      utils.procurement.poList.invalidate();
-      utils.dashboard.stats.invalidate();
-      setPoDialog(false);
-      setPoForm({ poNumber: "", supplierId: "", expectedDate: "", notes: "" });
-      setItems([]);
-    },
   });
 
   const poUpdate = trpc.procurement.poUpdate.useMutation({
@@ -137,44 +115,6 @@ export default function Procurement() {
     supCreate.mutate(supForm);
   };
 
-  const handlePoSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!poForm.supplierId || items.length === 0) return;
-    poCreate.mutate({
-      ...poForm,
-      supplierId: parseInt(poForm.supplierId),
-      items: items.map((i) => ({ ...i, materialId: parseInt(i.materialId) })),
-    });
-  };
-
-  const addItem = () => {
-    setItems([...items, { materialId: "", description: "", quantity: "", unitPrice: "", totalPrice: "", notes: "" }]);
-  };
-
-  const updateItem = (idx: number, field: string, value: string) => {
-    const newItems = [...items];
-    (newItems[idx] as any)[field] = value;
-    if (field === "materialId") {
-      const mat = allMaterials?.find((m) => m.id.toString() === value);
-      if (mat) newItems[idx].description = mat.name;
-    }
-    if (field === "quantity" || field === "unitPrice") {
-      const q = parseFloat(newItems[idx].quantity) || 0;
-      const p = parseFloat(newItems[idx].unitPrice) || 0;
-      newItems[idx].totalPrice = (q * p).toFixed(2);
-    }
-    setItems(newItems);
-  };
-
-  const removeItem = (idx: number) => {
-    setItems(items.filter((_, i) => i !== idx));
-  };
-
-  useEffect(() => {
-    if (poDialog && nextPoNum && !poForm.poNumber) {
-      setPoForm(prev => ({ ...prev, poNumber: nextPoNum }));
-    }
-  }, [poDialog, nextPoNum]);
 
   return (
     <div className="space-y-6">
@@ -239,91 +179,11 @@ export default function Procurement() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={poDialog} onOpenChange={setPoDialog}>
-            <DialogTrigger asChild>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white">
-                <Plus className="h-4 w-4 mr-2" />
-                Нова набавна нарачка
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Нова набавна нарачка</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handlePoSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Број на нарачка *</Label>
-                    <Input value={poForm.poNumber} onChange={(e) => setPoForm({ ...poForm, poNumber: e.target.value })} required placeholder="на пр. PO-2026-001" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Добавувач *</Label>
-                    <Select value={poForm.supplierId} onValueChange={(v) => setPoForm({ ...poForm, supplierId: v })}>
-                      <SelectTrigger><SelectValue placeholder="Избери добавувач" /></SelectTrigger>
-                      <SelectContent>
-                        {suppliers?.map((s) => (
-                          <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Очекуван датум на прием</Label>
-                  <DateInput value={poForm.expectedDate} onChange={(e) => setPoForm({ ...poForm, expectedDate: e.target.value })} />
-                </div>
-
-                {/* Items */}
-                <div className="border rounded-lg p-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Ставки</Label>
-                    <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Додади ставка
-                    </Button>
-                  </div>
-                  {items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-50 p-2 rounded">
-                      <div className="col-span-4">
-                        <MaterialPicker
-                          materials={allMaterials as any}
-                          value={item.materialId}
-                          placeholder="Избери материјал…"
-                          title="Избери материјал"
-                          onSelect={(m) => updateItem(idx, "materialId", m.id.toString())}
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <Input size={1} placeholder="Опис" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} />
-                      </div>
-                      <div className="col-span-2">
-                        <Input size={1} type="number" step="0.001" placeholder="Кол." value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} />
-                      </div>
-                      <div className="col-span-2">
-                        <Input size={1} type="number" step="0.01" placeholder="Цена" value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} />
-                      </div>
-                      <div className="col-span-1">
-                        <Button type="button" size="sm" variant="ghost" className="text-red-500" onClick={() => removeItem(idx)}>×</Button>
-                      </div>
-                    </div>
-                  ))}
-                  {items.length > 0 && (
-                    <div className="text-right text-sm font-semibold">
-                      Вкупно: {items.reduce((s, i) => s + parseFloat(i.totalPrice || "0"), 0).toFixed(2)} ден.
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Белешки</Label>
-                  <Textarea value={poForm.notes} onChange={(e) => setPoForm({ ...poForm, notes: e.target.value })} />
-                </div>
-                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={poCreate.isPending || !poForm.supplierId || items.length === 0}>
-                  {poCreate.isPending ? "Зачувување..." : "Креирај набавна нарачка"}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setPoDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Нова набавна нарачка
+          </Button>
+          <PurchaseOrderCreateDialog open={poDialog} onOpenChange={setPoDialog} onCreated={(id) => { setSelectedPO(id); setDetailOpen(true); }} />
         </div>
       </div>
 

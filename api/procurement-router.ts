@@ -42,8 +42,8 @@ export const procurementRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db.insert(suppliers).values(input);
-      return { success: true };
+      const r = await db.insert(suppliers).values(input);
+      return { success: true, id: Number((r as any)[0]?.insertId) };
     }),
 
   supplierUpdate: publicQuery
@@ -300,6 +300,10 @@ export const procurementRouter = createRouter({
       }
       const db = getDb();
       const { items, ...poData } = input;
+      const dup = await db.select({ id: purchaseOrders.id }).from(purchaseOrders).where(eq(purchaseOrders.poNumber, input.poNumber));
+      if (dup[0]) throw new Error(`Бројот ${input.poNumber} веќе постои`);
+      const sup = await db.select({ id: suppliers.id }).from(suppliers).where(eq(suppliers.id, input.supplierId));
+      if (!sup[0]) throw new Error("Добавувачот не постои");
       const insertData: any = { ...poData };
       if (poData.expectedDate) insertData.expectedDate = new Date(poData.expectedDate);
       const result = await db.insert(purchaseOrders).values(insertData);
