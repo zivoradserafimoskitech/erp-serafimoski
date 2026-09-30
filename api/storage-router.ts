@@ -506,7 +506,10 @@ export const storageRouter = createRouter({
       const delta = input.type === "adjustment" ? qty - cur
         : (input.type === "receipt" || input.type === "return") ? qty : -qty;
       await adjustStock(input.materialId, warehouseId, delta, { unitCost: input.unitPrice ? parseFloat(input.unitPrice) : undefined });
-      await db.insert(inventoryTransactions).values({ ...txData, warehouseId,
+      // вредност по набавна (просечна) цена, со знак -- за книжење на кусок/вишок
+      const matRow: any = (await db.select().from(materials).where(eq(materials.id, input.materialId)))[0];
+      const uc = input.unitPrice ? parseFloat(input.unitPrice) : parseFloat(matRow?.avgCost ?? "0") || 0;
+      await db.insert(inventoryTransactions).values({ ...txData, warehouseId, unitCost: uc.toFixed(2), totalCost: (delta * uc).toFixed(2),
         notes: input.type === "adjustment" ? `${input.notes ? input.notes + " · " : ""}Корекција од ${cur} на ${qty}` : input.notes } as any);
       return { success: true };
     }),

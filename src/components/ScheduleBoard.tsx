@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { machineDoes } from "@contracts/schedule";
-import { CalendarDays, ChevronLeft, ChevronRight, Wand2, Settings2, AlertTriangle } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Wand2, Settings2, AlertTriangle, X } from "lucide-react";
 
 const OPS: Record<string, string> = {
   cutting_laser: "Ласерско сечење", cutting_plasma: "Плазма сечење", bending: "Виткање",
@@ -38,6 +38,19 @@ export default function ScheduleBoard() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // Откажи операција што не треба да се работи: станува „прескокната“ (останува во налогот, може да се врати)
+  const skipOp = trpc.production.operationUpdate.useMutation({ onSuccess: () => { utils.ops.scheduleBoard.invalidate(); utils.production.workOrderById.invalidate(); }, onError: (e) => toast.error(e.message) });
+  const skip = (u: { opId: number; woNumber: string; operation: string }) => {
+    skipOp.mutate({ id: u.opId, status: "skipped" } as any, {
+      onSuccess: () => toast.success(`${u.woNumber} · ${OPS[u.operation] ?? u.operation} — откажана`, {
+        action: { label: "Врати", onClick: () => skipOp.mutate({ id: u.opId, status: "pending" } as any) },
+      }),
+    });
+  };
+  const skipAll = (list: { opId: number }[]) => {
+    if (!confirm(`Да се откажат сите ${list.length} незакажани операции? (остануваат во налозите како прескокнати)`)) return;
+    Promise.all(list.map(u => skipOp.mutateAsync({ id: u.opId, status: "skipped" } as any))).then(() => toast.success(`Откажани ${list.length} операции`));
+  };
   const setOp = trpc.ops.scheduleSet.useMutation({ onSuccess: () => utils.ops.scheduleBoard.invalidate(), onError: (e) => toast.error(e.message) });
   const saveMachine = trpc.ops.machineScheduleSettings.useMutation({
     onSuccess: () => { utils.ops.machinesForSchedule.invalidate(); utils.ops.scheduleBoard.invalidate(); toast.success("Зачувано"); },
@@ -133,17 +146,24 @@ export default function ScheduleBoard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card><CardContent className="p-4">
-          <p className="font-semibold text-sm mb-2">Незакажани операции <span className="text-gray-400 font-normal">({data?.unscheduled.length ?? 0})</span></p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="font-semibold text-sm">Незакажани операции <span className="text-gray-400 font-normal">({data?.unscheduled.length ?? 0})</span></p>
+            {(data?.unscheduled.length ?? 0) > 1 && <button className="text-xs text-red-600 hover:underline" onClick={() => skipAll(data!.unscheduled)}>Откажи ги сите</button>}
+          </div>
           {!data?.unscheduled.length ? <p className="text-sm text-gray-400">Сите отворени операции се закажани.</p> : (
             <div className="space-y-1 max-h-72 overflow-y-auto">
               {data.unscheduled.map(u => (
-                <button key={u.opId} className="w-full flex items-center gap-2 text-left text-sm border rounded-lg px-3 py-1.5 hover:bg-amber-50"
-                  onClick={() => setEdit({ opId: u.opId, label: `${u.woNumber} · ${OPS[u.operation] ?? u.operation}`, machineId: u.machineId ? String(u.machineId) : "", date: from })}>
-                  <span className="font-mono text-xs font-semibold w-28">{u.woNumber}</span>
-                  <span className="flex-1">{u.sequence}. {OPS[u.operation] ?? u.operation}</span>
-                  <span className="text-xs text-gray-400">{u.hours} ч</span>
-                  {u.priority === "urgent" && <Badge className="bg-red-100 text-red-700 text-[10px]">итно</Badge>}
-                </button>
+                <div key={u.opId} className="flex items-center gap-1 border rounded-lg hover:bg-amber-50">
+                  <button className="flex-1 min-w-0 flex items-center gap-2 text-left text-sm px-3 py-1.5" title="Закажи"
+                    onClick={() => setEdit({ opId: u.opId, label: `${u.woNumber} · ${OPS[u.operation] ?? u.operation}`, machineId: u.machineId ? String(u.machineId) : "", date: from })}>
+                    <span className="font-mono text-xs font-semibold w-28 shrink-0">{u.woNumber}</span>
+                    <span className="flex-1 truncate">{u.sequence}. {OPS[u.operation] ?? u.operation}</span>
+                    <span className="text-xs text-gray-400">{u.hours} ч</span>
+                    {u.priority === "urgent" && <Badge className="bg-red-100 text-red-700 text-[10px]">итно</Badge>}
+                  </button>
+                  <button className="p-1.5 mr-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50" title="Откажи ја операцијата (не се работи)" aria-label="Откажи"
+                    disabled={skipOp.isPending} onClick={() => skip(u)}><X className="h-4 w-4" /></button>
+                </div>
               ))}
             </div>
           )}
@@ -183,6 +203,9 @@ export default function ScheduleBoard() {
                 <Button className="flex-1 bg-amber-500 hover:bg-amber-600" onClick={() => { setOp.mutate({ opId: edit.opId, machineId: edit.machineId ? Number(edit.machineId) : null, plannedDate: edit.date }); setEdit(null); }}>Закажи</Button>
                 <Button variant="outline" onClick={() => { setOp.mutate({ opId: edit.opId, machineId: edit.machineId ? Number(edit.machineId) : null, plannedDate: null }); setEdit(null); }}>Отстрани од распоред</Button>
               </div>
+              <button className="w-full text-sm text-red-600 hover:underline" onClick={() => { const [wo, ...rest] = edit.label.split(" · "); skip({ opId: edit.opId, woNumber: wo, operation: rest.join(" · ") }); setEdit(null); }}>
+                Откажи ја операцијата — не се работи
+              </button>
             </div>
           )}
         </DialogContent>

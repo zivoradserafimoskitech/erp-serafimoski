@@ -177,6 +177,10 @@ export function getExtraSql(): string[] {
     )`,
     `CREATE INDEX IF NOT EXISTS "reminder_log_doc_idx" ON "reminder_log" ("kind", "doc_type", "doc_id")`,
 
+    // ===== Конто на влезна фактура (трошок / залиха) =====
+    `ALTER TABLE "incoming_invoices" ADD COLUMN IF NOT EXISTS "expense_account" varchar(10)`,
+    `ALTER TABLE "suppliers" ADD COLUMN IF NOT EXISTS "default_expense_account" varchar(10)`,
+
     // ===== Индекси за побрзи листи =====
     `CREATE INDEX IF NOT EXISTS "invoices_created_idx" ON "invoices" ("created_at")`,
     `CREATE INDEX IF NOT EXISTS "invoices_issue_idx" ON "invoices" ("issue_date")`,

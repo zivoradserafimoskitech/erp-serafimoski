@@ -122,11 +122,14 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(Number(pr.totalPayables)).toBe(70800);
     const s1 = await caller.finance.ledgerSync();
     expect(s1.problems).toEqual([]);
-    expect(s1.created).toBe(3);
+    // фактура + влезна фактура + благајна + потрошен материјал (издавање за налогот) + корекција на залиха (кусок)
+    expect(s1.created).toBe(5);
     const s2 = await caller.finance.ledgerSync();
     expect(s2.created + s2.updated + s2.removed).toBe(0);
     const tb = await caller.finance.trialBalance({ from: "2000-01-01", to: "2100-01-01" });
     expect(tb.totals.debit).toBe(tb.totals.credit);
+    expect(tb.accounts.find((a: any) => a.code === "400")?.closing ?? 0).toBeGreaterThan(0); // потрошен материјал
+    expect(tb.accounts.find((a: any) => a.code === "469")?.closing ?? 0).toBeGreaterThan(0); // кусок
     const vat = await caller.finance.vatBooks({ from: "2000-01-01", to: "2100-01-01" });
     expect(vat.summary.outVat).toBe(1800);
     expect(vat.summary.inVat).toBe(10800);
