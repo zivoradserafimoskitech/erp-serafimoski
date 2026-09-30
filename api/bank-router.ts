@@ -72,7 +72,7 @@ export const bankRouter = createRouter({
     )
     .mutation(async ({ input }) => {
       const db = getDb();
-      let statementsAdded = 0, txAdded = 0, txSkipped = 0;
+      let statementsAdded = 0, txAdded = 0, txSkipped = 0, stSkipped = 0;
       const warnings: string[] = [];
       const formats = new Set<string>();
 
@@ -94,11 +94,11 @@ export const bankRouter = createRouter({
       // Заглавија
       for (const { f, r } of parsedAll) {
         for (const st of r.statements) {
-          if (!st.accountNumber || !st.statementDate) continue;
+          if (!st.accountNumber || !st.statementDate) { warnings.push("Во изводот не е пронајден број на сметка или датум — заглавјето не е внесено."); continue; }
           const dup = stIndex.find(
             (x) => x.account === st.accountNumber && x.date === st.statementDate
           );
-          if (dup) continue;
+          if (dup) { stSkipped++; continue; }
           const res = await db.insert(bankStatements).values({
             accountNumber: st.accountNumber,
             statementNo: st.statementNo,
@@ -162,6 +162,11 @@ export const bankRouter = createRouter({
           matchStatus: "unmatched",
         } as any);
         txAdded++;
+      }
+
+      if (stSkipped) warnings.push(`${stSkipped} ${stSkipped === 1 ? "извод веќе постоеше" : "изводи веќе постоеја"} (иста сметка и датум) — не се внесени повторно.`);
+      if (!statementsAdded && !txAdded && !txSkipped && !stSkipped && !warnings.length) {
+        warnings.push("Во датотеката не е пронајден ниту еден извод ни ставка. Провери дали е извод од банката (.300, MT940 или PDF).");
       }
 
       await logAudit({

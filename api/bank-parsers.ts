@@ -232,14 +232,74 @@ export function parseMT940(text: string): ParsedStatement[] {
 }
 
 // ══════════ 4. PDF (извлечен текст) ══════════
-// Најслаб извор — редовите се кршат, износите се лепат. Служи како резерва.
+// PDF-от нема стандарден формат: прво се бара заглавјето на КБ, а ставките се читаат по редови —
+// ред со датум и износ(и). Кога има две колони за износ (должи / побарува), насоката е од колоната.
+const MK_AMOUNT = /-?\d{1,3}(?:[.\s]\d{3})*,\d{2}(?!\d)|-?\d+,\d{2}(?!\d)|-?\d{1,3}(?:,\d{3})*\.\d{2}(?!\d)/g;
+const DATE_RX = /(\d{2})[./](\d{2})[./](\d{4}|\d{2})(?!\d)/;
+const ACC_RX = /(?<!\d)(\d{3})[- ]?(\d{10})[- ]?(\d{2})(?!\d)/;
+const IN_WORDS = /(уплат|прилив|приход|наплат|побарува|кредит|credit|incoming)/i;
+const OUT_WORDS = /(исплат|одлив|плаќањ|провизиј|надомест|должи|дебит|debit|outgoing|налог за пренос)/i;
+const isoDate = (m: RegExpMatchArray) => `${m[3].length === 2 ? "20" + m[3] : m[3]}-${m[2]}-${m[1]}`;
+
+export function parsePdfTransactions(text: string): { txs: ParsedTx[]; unsure: number } {
+  const txs: ParsedTx[] = [];
+  let unsure = 0;
+  let last: ParsedTx | null = null, cont = 0;
+  for (const raw of text.split(/\n/)) {
+    const line = raw.replace(/\s+/g, " ").trim();
+    const dm = line.match(DATE_RX);
+    if (!dm) {
+      // продолжение на ставката (текстот во тесна колона се префрла во следниот ред): цел, сметка на партнерот
+      if (last && line && cont < 3 && !/(салдо|вкупно|страна|страница|page)/i.test(line) && !(line.match(MK_AMOUNT) ?? []).length) {
+        const acc = line.match(ACC_RX);
+        if (acc && !last.counterpartyAccount) last.counterpartyAccount = `${acc[1]}${acc[2]}${acc[3]}`;
+        const extra = line.replace(new RegExp(ACC_RX.source, "g"), " ").replace(/\s+/g, " ").trim();
+        if (extra) last.purpose = `${last.purpose} ${extra}`.trim();
+        cont++;
+      } else { last = null; }
+      continue;
+    }
+    // датумите и сметките не се износи (29.09.2026 инаку би изгледало како 29.09)
+    const forAmounts = line.replace(new RegExp(DATE_RX.source, "g"), " ").replace(new RegExp(ACC_RX.source, "g"), " ");
+    const amounts = (forAmounts.match(MK_AMOUNT) ?? []).map(numAny);
+    if (!amounts.length) continue;
+    // заглавија/збирови не се ставки
+    if (/(претходно салдо|ново салдо|вкупно|состојба|салдо на ден|промет вкупно|број на извод)/i.test(line)) continue;
+    let direction: "in" | "out" | null = null;
+    let amount = 0;
+    const nonZero = amounts.map((v, i) => ({ v: Math.abs(v), i })).filter(x => x.v > 0.004);
+    if (amounts.length >= 2 && nonZero.length >= 1 && (Math.abs(amounts[0]) < 0.005 || Math.abs(amounts[1]) < 0.005)) {
+      // колони должи | побарува (| салдо): која е пополнета
+      const first = Math.abs(amounts[0]) > 0.004;
+      direction = first ? "out" : "in";
+      amount = first ? Math.abs(amounts[0]) : Math.abs(amounts[1]);
+    } else if (nonZero.length >= 1) {
+      amount = nonZero[0].v;
+      if (amounts[nonZero[0].i] < 0) direction = "out";
+      else if (OUT_WORDS.test(line) && !IN_WORDS.test(line)) direction = "out";
+      else if (IN_WORDS.test(line) && !OUT_WORDS.test(line)) direction = "in";
+    }
+    if (!direction || !(amount > 0)) { unsure++; last = null; continue; }
+    const acc = line.match(ACC_RX);
+    const rest = line.replace(new RegExp(DATE_RX.source, "g"), " ").replace(MK_AMOUNT, " ").replace(new RegExp(ACC_RX.source, "g"), " ").replace(/\s+/g, " ").trim();
+    last = {
+      txDate: isoDate(dm), direction, amount, provision: 0,
+      counterpartyName: rest.slice(0, 120), counterpartyAccount: acc ? `${acc[1]}${acc[2]}${acc[3]}` : "",
+      purpose: rest, code: "", refPbo: "", refPbz: "", bankRef: "",
+    };
+    cont = 0;
+    txs.push(last);
+  }
+  return { txs, unsure };
+}
+
 export function parsePdfText(text: string): { statements: ParsedStatement[]; warnings: string[] } {
   const warnings: string[] = [];
   const statements: ParsedStatement[] = [];
   const chunks = text.split(/Извод за промените и состојбата на сметката за ден/i).slice(1);
 
   for (const ch of chunks) {
-    const head = ch.match(/(\d{2})\.(\d{2})\.(\d{4}),\s*број на извод\s*(\d+)/i);
+    const head = ch.match(/(\d{2})\.(\d{2})\.(\d{4}),?\s*број на извод\s*(\d+)/i);
     const acc = ch.match(/Број на сметката:\s*(\d+)/i);
     if (!head) continue;
     const [, dd, mm, yyyy, no] = head;
@@ -261,19 +321,57 @@ export function parsePdfText(text: string): { statements: ParsedStatement[]; war
     });
   }
 
-  if (statements.length > 0) {
-    warnings.push(
-      "PDF-от дава само заглавија на изводите — поединечните ставки не се читаат сигурно од него. " +
-      "За ставки користи ги .300 или MT940 датотеките."
-    );
+  // Друг распоред (друга банка): заглавје од општи зборови
+  if (!statements.length) {
+    const no = text.match(/извод\s*(?:бр(?:ој)?\.?|број|no\.?)\s*[:#]?\s*(\d+)/i);
+    const dt = text.match(/(?:за ден|на ден|датум(?: на извод)?)\s*:?\s*(\d{2})[./](\d{2})[./](\d{4})/i) ?? text.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    const acc = text.match(/(?:сметка|account)[^\d]{0,20}(\d{3}[- ]?\d{10}[- ]?\d{2})/i) ?? text.match(ACC_RX);
+    const bal = (rx: RegExp) => { const m = text.match(rx); return m ? numAny(m[1]) : 0; };
+    if (dt && acc) {
+      statements.push({
+        accountNumber: String(acc[1] ?? acc[0]).replace(/\D/g, ""),
+        statementNo: no ? no[1] : "",
+        statementDate: `${dt[3]}-${dt[2]}-${dt[1]}`,
+        prevBalance: bal(/(?:претходно салдо|почетно салдо|салдо на почеток)[^\d-]*(-?[\d.,\s]+,\d{2})/i),
+        debitTotal: bal(/(?:вкупно должи|вкупно одливи|промет должи)[^\d-]*(-?[\d.,\s]+,\d{2})/i),
+        creditTotal: bal(/(?:вкупно побарува|вкупно приливи|промет побарува)[^\d-]*(-?[\d.,\s]+,\d{2})/i),
+        newBalance: bal(/(?:ново салдо|крајно салдо|салдо на крај)[^\d-]*(-?[\d.,\s]+,\d{2})/i),
+        currency: /\bEUR\b/.test(text) && !/\bMKD\b|ден/.test(text) ? "EUR" : "MKD",
+        transactions: [],
+      });
+    }
   }
-  return { statements, warnings };
+
+  // Ставки по редови
+  const { txs, unsure } = parsePdfTransactions(text);
+  if (statements.length === 1) statements[0].transactions = txs;
+  else if (statements.length > 1) {
+    for (const t of txs) (statements.find(s => s.statementDate === t.txDate) ?? statements[statements.length - 1]).transactions.push(t);
+  }
+
+  if (txs.length) warnings.push(`Од PDF-от се прочитани ${txs.length} ставки — провери ги износите и насоката (прилив/одлив).`);
+  if (unsure) warnings.push(`${unsure} редови со датум и износ не се внесени, бидејќи не е јасно дали се прилив или одлив.`);
+  if (!statements.length && !txs.length) {
+    warnings.push("PDF-от е прочитан, но форматот на изводот не е препознаен. Испрати слика од изводот за да се додаде, или внеси го .300 / MT940 од е-банкарството.");
+  }
+  return { statements, warnings: statements.length && !txs.length ? [...warnings, "Од PDF-от се прочитани само заглавијата. За ставки користи ги .300 или MT940 датотеките."] : warnings };
+}
+
+// Ставки од PDF без заглавје се враќаат како „слободни“
+export function parsePdfOutcome(text: string): ParseOutcome {
+  const r = parsePdfText(text);
+  if (r.statements.length) return { format: "PDF", statements: r.statements, looseTransactions: [], warnings: r.warnings };
+  const { txs } = parsePdfTransactions(text);
+  return { format: "PDF", statements: [], looseTransactions: txs, warnings: r.warnings };
 }
 
 // ══════════ Препознавање на форматот ══════════
 export function detectAndParse(fileName: string, text: string): ParseOutcome {
   const warnings: string[] = [];
   const name = (fileName || "").toLowerCase();
+
+  // PDF: секогаш како PDF (текстот од PDF има долги редови и порано се препознаваше како „KB ставки“ -> 0 ставки)
+  if (name.endsWith(".pdf")) return parsePdfOutcome(text);
 
   if (text.includes("{1:F01") || /:20:[A-Z0-9]/.test(text)) {
     return { format: "MT940", statements: parseMT940(text), looseTransactions: [], warnings };
@@ -299,10 +397,7 @@ export function detectAndParse(fileName: string, text: string): ParseOutcome {
     }
   }
 
-  if (text.includes("Извод за промените")) {
-    const r = parsePdfText(text);
-    return { format: "PDF", statements: r.statements, looseTransactions: [], warnings: r.warnings };
-  }
+  if (text.includes("Извод за промените")) return parsePdfOutcome(text);
 
   warnings.push("Форматот не е препознаен.");
   return { format: "непознат", statements: [], looseTransactions: [], warnings };
