@@ -167,8 +167,18 @@ app.get("/assets/:filename{.+}", async (c) => {
   try {
     const content = fs.readFileSync(filePath);
     const ext = path.extname(filePath);
+    // .mjs мора да е JavaScript: PDF читачот (pdf.worker.mjs) се вчитува како модул,
+    // а прелистувачот одбива модул со тип application/octet-stream
     const mimeTypes: Record<string, string> = {
       ".js": "application/javascript",
+      ".mjs": "application/javascript",
+      ".wasm": "application/wasm",
+      ".json": "application/json",
+      ".map": "application/json",
+      ".webp": "image/webp",
+      ".gif": "image/gif",
+      ".ttf": "font/ttf",
+      ".bcmap": "application/octet-stream",
       ".css": "text/css",
       ".png": "image/png",
       ".jpg": "image/jpeg",
