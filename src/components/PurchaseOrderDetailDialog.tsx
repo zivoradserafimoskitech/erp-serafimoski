@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -23,6 +24,7 @@ const qty = (v: any) => Number(v ?? 0).toLocaleString("mk-MK", { maximumFraction
 /** Преглед на набавна нарачка: печатење (МК/EN), праќање до добавувачот со PDF, промена на статус. */
 export default function PurchaseOrderDetailDialog({ poId, open, onOpenChange }: { poId: number | null; open: boolean; onOpenChange: (o: boolean) => void }) {
   const utils = trpc.useUtils();
+  const navigate = useNavigate();
   const [lang, setLang] = useState<DocLang>("mk");
   const [mailOpen, setMailOpen] = useState(false);
   const { data: po } = trpc.procurement.poById.useQuery({ id: poId! }, { enabled: !!poId && open });
@@ -67,6 +69,11 @@ export default function PurchaseOrderDetailDialog({ poId, open, onOpenChange }: 
             </div>
             <Button size="sm" variant="outline" disabled={!po} onClick={() => po && printPurchaseOrder(po, settings, lang)}><Printer className="h-4 w-4 mr-1.5" />Печати / PDF</Button>
             <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={!po || po.status === "cancelled"} onClick={() => setMailOpen(true)}><Mail className="h-4 w-4 mr-1.5" />Прати на добавувачот</Button>
+            {po && ["sent", "confirmed", "partial", "draft"].includes(po.status) && (
+              <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={() => { onOpenChange(false); navigate(`/priemnici?po=${po.id}`); }}>
+                <PackageCheck className="h-4 w-4 mr-1.5" />Прими роба
+              </Button>
+            )}
             <div className="flex-1" />
             {po?.status === "draft" && <Button size="sm" variant="outline" onClick={() => setStatus("sent", "Означена како испратена")}><Send className="h-4 w-4 mr-1.5" />Испратена</Button>}
             {po && ["draft", "sent"].includes(po.status) && <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={() => setStatus("confirmed", "Добавувачот ја потврди нарачката")}><CheckCircle2 className="h-4 w-4 mr-1.5" />Потврдена</Button>}

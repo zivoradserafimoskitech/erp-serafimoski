@@ -422,6 +422,12 @@ export const accountingRouter = createRouter({
       }
       const db = getDb();
       const { items, ...data } = input;
+      if (data.poId) {
+        const po: any = (await getPool().query(`SELECT supplier_id, status, po_number FROM purchase_orders WHERE id = $1`, [data.poId])).rows[0];
+        if (!po) throw new Error("Набавната нарачка не постои");
+        if (po.status === "cancelled") throw new Error(`Нарачката ${po.po_number} е откажана`);
+        if (!data.supplierId) data.supplierId = Number(po.supplier_id);
+      }
       const result = await db.insert(receipts).values({
         ...data,
         receiptDate: new Date(data.receiptDate),
@@ -456,6 +462,8 @@ export const accountingRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      const rc: any = (await db.select().from(receipts).where(eq(receipts.id, input.id)))[0];
+      if (rc?.status === "confirmed") throw new Error("Потврдена приемница не може да се брише — залихата е веќе зголемена. Направи корекција на залихата.");
       await db.delete(receiptItems).where(eq(receiptItems.receiptId, input.id));
       await db.delete(receipts).where(eq(receipts.id, input.id));
       return { success: true };

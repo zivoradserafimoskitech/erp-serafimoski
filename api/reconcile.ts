@@ -25,7 +25,12 @@ export async function reconcileData() {
       left -= take; fixed++;
     }
   }
-  // 3) Статус платена/делумно според уплатите (банка, благајна, книжни одобренија)
+  // 3) Приемници што веќе ја зголемиле залихата, а останале „нацрт“ (порано статусот не се менуваше) -> потврдени
+  const r3 = await getPool().query(`UPDATE receipts r SET status = 'confirmed' WHERE r.status = 'draft'
+    AND EXISTS (SELECT 1 FROM inventory_transactions t WHERE t.source_doc_type = 'receipt' AND t.source_doc_id = r.id)`);
+  fixed += r3.rowCount ?? 0;
+
+  // 4) Статус платена/делумно според уплатите (банка, благајна, книжни одобренија)
   fixed += await refreshAllPaymentStatuses();
   return fixed;
 }
