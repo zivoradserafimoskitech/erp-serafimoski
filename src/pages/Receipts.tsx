@@ -59,6 +59,7 @@ export default function Receipts() {
   const [form, setForm] = useState({
     receiptNumber: "",
     supplierId: "",
+    poId: "",
     warehouseId: "",
     receiptDate: new Date().toISOString().split("T")[0],
     supplierDocNumber: "",
@@ -88,6 +89,26 @@ export default function Receipts() {
   const utils = trpc.useUtils();
   const { data: receiptsData } = trpc.accounting.receiptList.useQuery({ status: statusFilter === "all" ? undefined : statusFilter, search: search || undefined });
   const { data: suppliersData } = trpc.procurement.supplierList.useQuery();
+  const { data: poListData } = trpc.procurement.poList.useQuery({});
+  const openPos = (poListData ?? []).filter((p: any) => ["draft", "sent", "confirmed", "partial"].includes(p.status));
+  // Приемница по набавна нарачка: добавувач + ставки со количината што уште не е примена и цената од нарачката
+  const loadPo = async (poId: string) => {
+    if (!poId) { setForm(f => ({ ...f, poId: "" })); return; }
+    const po: any = await utils.procurement.poById.fetch({ id: Number(poId) });
+    if (!po) return;
+    const rest = (po.items ?? []).map((it: any) => ({ it, open: Math.max(0, Number(it.quantity) - Number(it.receivedQuantity ?? 0)) })).filter((x: any) => x.open > 0.0005);
+    setForm(f => ({ ...f, poId, supplierId: String(po.supplierId), notes: f.notes || `По нарачка ${po.poNumber}` }));
+    setItems(rest.map(({ it, open }: any) => ({
+      materialId: String(it.materialId), quantity: String(open), unit: it.materialUnit ?? "kg",
+      unitPrice: String(Number(it.unitPrice)), totalPrice: (open * Number(it.unitPrice)).toFixed(2), notes: it.description ?? "",
+    })));
+    toast.success(rest.length ? `Внесени ${rest.length} ставки од ${po.poNumber} — поправи ги количините ако стигнало помалку` : `${po.poNumber} е веќе целосно примена`);
+  };
+  useEffect(() => {
+    const po = params.get("po");
+    if (po) { params.delete("po"); setParams(params, { replace: true }); setDialogOpen(true); loadPo(po); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setItemQty = (idx: number, q: string) => setItems(list => list.map((x, i) => i === idx ? { ...x, quantity: q, totalPrice: ((parseFloat(q) || 0) * (parseFloat(x.unitPrice) || 0)).toFixed(2) } : x));
   const { data: materialsData } = trpc.storage.materialList.useQuery();
   const { data: warehousesData } = trpc.warehouse.warehouseList.useQuery();
   const { data: parsedDocsData } = trpc.ocr.parsedDocumentList.useQuery({ documentType: "receipt" });
@@ -169,6 +190,7 @@ export default function Receipts() {
     setForm({
       receiptNumber: "",
       supplierId: "",
+      poId: "",
       warehouseId: "",
       receiptDate: new Date().toISOString().split("T")[0],
       supplierDocNumber: "",
@@ -251,6 +273,7 @@ export default function Receipts() {
     createMutation.mutate({
       ...form,
       supplierId: form.supplierId ? parseInt(form.supplierId) : undefined,
+      poId: form.poId ? parseInt(form.poId) : undefined,
       warehouseId: parseInt(form.warehouseId),
       items: items.map(i => ({
         materialId: parseInt(i.materialId),
@@ -486,6 +509,23 @@ export default function Receipts() {
               <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нова приемница</DialogTitle></DialogHeader>
                 <div className="space-y-4">
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 space-y-1.5">
+                    <Label className="text-emerald-900">По набавна нарачка <span className="font-normal text-emerald-700/70">(незадолжително)</span></Label>
+                    <Select value={form.poId || "none"} onValueChange={v => { if (v === "none") { setForm({ ...form, poId: "" }); } else loadPo(v); }}>
+                      <SelectTrigger className="bg-white w-full"><SelectValue placeholder="Без нарачка" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none"><span className="text-gray-500">Без нарачка — рачно внесување</span></SelectItem>
+                        {openPos.map((p: any) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            <span className="font-mono text-xs font-semibold">{p.poNumber}</span>
+                            <span className="text-gray-600"> · {p.supplierName}</span>
+                            <span className="text-gray-400"> · {Number(p.totalAmount).toLocaleString("mk-MK")} ден.{p.status === "partial" ? " · делумно примена" : ""}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-emerald-800/80">{form.poId ? "Ставките се од нарачката (преостаната количина). При потврдување, примената количина се запишува на нарачката." : openPos.length ? `${openPos.length} отворени нарачки — избери за ставките да се пополнат сами` : "Нема отворени набавни нарачки"}</p>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1"><Label>Број *</Label><Input value={form.receiptNumber} onChange={e => setForm({ ...form, receiptNumber: e.target.value })} placeholder="ПР-001/2025" /></div>
                     <div className="space-y-1"><Label>Датум *</Label><DateInput value={form.receiptDate} onChange={e => setForm({ ...form, receiptDate: e.target.value })} /></div>
@@ -575,13 +615,13 @@ export default function Receipts() {
                     )}
                     {items.length > 0 && (
                       <div className="space-y-1.5">
-                        <div className="hidden md:grid md:grid-cols-[1fr_6rem_6rem_6.5rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
+                        <div className="hidden md:grid md:grid-cols-[1fr_7rem_6rem_6.5rem_2rem] gap-2 px-2 text-[11px] uppercase tracking-wide text-gray-400">
                           <span>Материјал</span><span>Кол.</span><span>Цена</span><span className="text-right">Вкупно</span><span></span>
                         </div>
                         {items.map((it, idx) => {
                           const m = materialsData?.find(x => x.id.toString() === it.materialId);
                           return (
-                            <div key={idx} className="grid grid-cols-[1fr_6rem_6rem_6.5rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
+                            <div key={idx} className="grid grid-cols-[1fr_7rem_6rem_6.5rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
                               <span className="text-xs truncate">
                                 <span className="font-mono text-[10px] text-gray-400 mr-1">{m?.code}</span>{m?.name}
                                 {it.heatNumber && (
@@ -590,7 +630,7 @@ export default function Receipts() {
                                   </span>
                                 )}
                               </span>
-                              <span className="text-xs">{it.quantity} {it.unit}</span>
+                              <span className="flex items-center gap-1"><Input type="number" step="0.001" min="0" className="h-7 text-xs px-1.5 text-right" value={it.quantity} onChange={e => setItemQty(idx, e.target.value)} /><span className="text-[10px] text-gray-400">{it.unit}</span></span>
                               <span className="text-xs">{Number(it.unitPrice).toLocaleString("mk-MK")}</span>
                               <span className="text-xs font-medium text-right whitespace-nowrap">{Number(it.totalPrice).toLocaleString("mk-MK")}</span>
                               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(idx)}>

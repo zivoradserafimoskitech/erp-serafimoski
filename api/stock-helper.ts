@@ -67,3 +67,29 @@ export async function transferStock(materialId: number, fromWh: number, toWh: nu
   }
   await syncMaterialTotal(materialId);
 }
+
+/**
+ * Примена роба по набавна нарачка: количините се додаваат на ставките на нарачката (по материјал, по ред),
+ * а статусот на нарачката станува „делумно примена“ или „примена“.
+ */
+export async function applyReceiptToPo(poId: number, received: { materialId: number; quantity: number }[]) {
+  const items = await q(`SELECT id, material_id, quantity, received_quantity FROM purchase_order_items WHERE purchase_order_id = $1 ORDER BY id`, [poId]);
+  for (const r of received) {
+    let left = r.quantity;
+    const mine = items.filter(i => Number(i.material_id) === r.materialId);
+    for (let k = 0; k < mine.length && left > 0.0005; k++) {
+      const it = mine[k];
+      const open = Math.max(0, Number(it.quantity) - Number(it.received_quantity ?? 0));
+      // вишокот оди на последниот ред од тој материјал
+      const take = k === mine.length - 1 ? left : Math.min(open, left);
+      if (take <= 0) continue;
+      it.received_quantity = Number(it.received_quantity ?? 0) + take;
+      await q(`UPDATE purchase_order_items SET received_quantity = $1 WHERE id = $2`, [f3(it.received_quantity), it.id]);
+      left -= take;
+    }
+  }
+  const all = items.length > 0 && items.every(i => Number(i.received_quantity ?? 0) >= Number(i.quantity) - 0.0005);
+  const any = items.some(i => Number(i.received_quantity ?? 0) > 0.0005);
+  const status = all ? "received" : any ? "partial" : null;
+  if (status) await q(`UPDATE purchase_orders SET status = $1, updated_at = now() WHERE id = $2 AND status <> 'cancelled'`, [status, poId]);
+}

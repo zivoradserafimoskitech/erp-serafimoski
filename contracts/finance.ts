@@ -23,7 +23,14 @@ export const DEFAULT_ACCOUNTS: { code: string; name: string; type: AccountType }
   { code: "242", name: "Обврски за персонален данок", type: "liability" },
   { code: "310", name: "Суровини и материјали", type: "asset" },
   { code: "019", name: "Исправка на вредноста на опрема (амортизација)", type: "asset" },
-  { code: "400", name: "Трошоци за материјали", type: "expense" },
+  { code: "400", name: "Трошоци за суровини и материјали (потрошени)", type: "expense" },
+  { code: "401", name: "Трошоци за енергија (струја, гориво, гас)", type: "expense" },
+  { code: "402", name: "Резервни делови и материјали за одржување", type: "expense" },
+  { code: "410", name: "Транспортни услуги", type: "expense" },
+  { code: "411", name: "Услуги за одржување и поправки", type: "expense" },
+  { code: "412", name: "Закупнини", type: "expense" },
+  { code: "413", name: "Други услуги (телефон, интернет, сметководство...)", type: "expense" },
+  { code: "469", name: "Кусоци, кало и отпис на залихи", type: "expense" },
   { code: "430", name: "Трошоци за амортизација", type: "expense" },
   { code: "420", name: "Бруто плати", type: "expense" },
   { code: "449", name: "Други трошоци", type: "expense" },
@@ -31,6 +38,7 @@ export const DEFAULT_ACCOUNTS: { code: string; name: string; type: AccountType }
   { code: "740", name: "Приходи од продажба во земјата", type: "revenue" },
   { code: "741", name: "Приходи од продажба во странство", type: "revenue" },
   { code: "770", name: "Позитивни курсни разлики", type: "revenue" },
+  { code: "769", name: "Вишоци на залихи", type: "revenue" },
   { code: "900", name: "Капитал", type: "equity" },
 ];
 
@@ -47,7 +55,10 @@ export const POSTING_RULES: { key: string; label: string; defaultCode: string }[
   { key: "vat_input", label: "ДДВ — претходен данок (влезни фактури)", defaultCode: "130" },
   { key: "revenue_domestic", label: "Приходи — продажба во земјата", defaultCode: "740" },
   { key: "revenue_foreign", label: "Приходи — продажба во странство", defaultCode: "741" },
-  { key: "purchases", label: "Набавки по влезни фактури", defaultCode: "310" },
+  { key: "purchases", label: "Набавки по влезни фактури (кога нема избрано конто)", defaultCode: "310" },
+  { key: "material_expense", label: "Потрошен материјал во производство", defaultCode: "400" },
+  { key: "inventory_shortage", label: "Кусок / отпис на залиха", defaultCode: "469" },
+  { key: "inventory_surplus", label: "Вишок на залиха", defaultCode: "769" },
   { key: "fx_gain", label: "Позитивни курсни разлики", defaultCode: "770" },
   { key: "fx_loss", label: "Негативни курсни разлики", defaultCode: "470" },
   { key: "cash_other", label: "Благајна — друга промена (контра конто)", defaultCode: "449" },
@@ -131,10 +142,12 @@ export function invoiceLines(p: {
 /** Влезна фактура. */
 export function incomingLines(p: {
   subtotalMkd: number; vatMkd: number; foreign: boolean; supplierId: number; number: string; rules: Rules;
+  /** трошочно/залихово конто избрано на фактурата (струја -> 401, закупнина -> 412...); инаку „набавки“ */
+  account?: string | null;
 }): GlLine[] {
   const total = round2(p.subtotalMkd + p.vatMkd);
   return fixRounding(normalizeLines([
-    { account: p.rules.purchases, debit: p.subtotalMkd, credit: 0, description: `Влезна фактура ${p.number}` },
+    { account: p.account || p.rules.purchases, debit: p.subtotalMkd, credit: 0, description: `Влезна фактура ${p.number}` },
     { account: p.rules.vat_input, debit: p.vatMkd, credit: 0, description: `Претходен ДДВ ${p.number}` },
     { account: p.foreign ? p.rules.suppliers_foreign : p.rules.suppliers_domestic, debit: 0, credit: total, partnerType: "supplier", partnerId: p.supplierId, description: `Влезна фактура ${p.number}` },
   ]));
@@ -252,4 +265,53 @@ export function depreciationLines(p: { amount: number; year: number; rules: Rule
     { account: p.rules.depreciation_expense, debit: p.amount, credit: 0, description: `Амортизација ${p.year}` },
     { account: p.rules.depreciation_accumulated, debit: 0, credit: p.amount, description: `Амортизација ${p.year}` },
   ]);
+}
+
+
+// ── Движење на залиха (материјали) ──
+/** consume: издавање во производство · shortage: кусок/отпис · surplus: вишок. Износот е по набавна цена. */
+export function stockMoveLines(p: { kind: "consume" | "shortage" | "surplus"; amount: number; rules: Rules; ref: string }): GlLine[] {
+  const a = round2(Math.abs(p.amount));
+  if (!(a > 0)) return [];
+  const stock = p.rules.purchases || "310";
+  if (p.kind === "surplus") return normalizeLines([
+    { account: stock, debit: a, credit: 0, description: `Вишок ${p.ref}` },
+    { account: p.rules.inventory_surplus, debit: 0, credit: a, description: `Вишок ${p.ref}` },
+  ]);
+  const exp = p.kind === "consume" ? p.rules.material_expense : p.rules.inventory_shortage;
+  const label = p.kind === "consume" ? "Потрошен материјал" : "Кусок/отпис";
+  return normalizeLines([
+    { account: exp, debit: a, credit: 0, description: `${label} ${p.ref}` },
+    { account: stock, debit: 0, credit: a, description: `${label} ${p.ref}` },
+  ]);
+}
+
+// ── Конто за влезна фактура: избор и предлог ──
+export const EXPENSE_CHOICES: { code: string; label: string }[] = [
+  { code: "310", label: "Материјали за залиха (лим, профили, бои...)" },
+  { code: "400", label: "Материјал директно во трошок" },
+  { code: "401", label: "Енергија — струја, гориво, гас" },
+  { code: "402", label: "Резервни делови и одржување на опрема" },
+  { code: "410", label: "Транспорт и шпедиција" },
+  { code: "411", label: "Услуги за одржување и поправки" },
+  { code: "412", label: "Закупнина" },
+  { code: "413", label: "Други услуги (телефон, интернет, сметководство...)" },
+  { code: "449", label: "Други трошоци" },
+];
+
+const EXPENSE_HINTS: [RegExp, string][] = [
+  [/(евн|evn|електр|струја|елем|elem|топлан|мак\s*петрол|makpetrol|окта|okta|лукоил|lukoil|гориво|дизел|бензин|нафта|гас\b|плин)/i, "401"],
+  [/(закуп|кирија|наем|rent)/i, "412"],
+  [/(транспорт|превоз|шпедиц|карго|cargo|курир|dhl|ups|fedex|логистик)/i, "410"],
+  [/(телеком|telekom|a1\b|а1\b|интернет|internet|телефон|мобил|сметковод|ревизи|адвокат|нотар|консалт|софтвер|лиценц|хостинг|банкарска провизија)/i, "413"],
+  [/(сервис|поправк|одржување|ремонт)/i, "411"],
+  [/(резервн|лежишт|ремен|филтер|масло|елект[ро]*д|диск за|сечило)/i, "402"],
+  [/(лим|профил|цевк|шипк|арматур|челик|инокс|алуминиум|бој|прајмер|завртк|навртк|челична)/i, "310"],
+];
+
+/** Предлог конто од името на добавувачот и текстот на фактурата; null = нема јасен предлог. */
+export function suggestExpenseAccount(text: string): string | null {
+  const t = String(text ?? "");
+  for (const [rx, code] of EXPENSE_HINTS) if (rx.test(t)) return code;
+  return null;
 }

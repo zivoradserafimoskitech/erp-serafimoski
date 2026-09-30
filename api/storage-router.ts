@@ -3,14 +3,14 @@ import { eq, desc, and } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
-import { getDb } from "./queries/connection";
+import { getDb, getPool } from "./queries/connection";
 import { recalcWorkOrderCost } from "./wo-cost-helper";
 import {
   materials, materialStock, materialLots,
   inventoryTransactions, warehouses,
 } from "@db/schema";
 import { isLowStock } from "@contracts/stock";
-import { adjustStock, warehouseQty, syncMaterialTotal } from "./stock-helper";
+import { adjustStock, warehouseQty, syncMaterialTotal, applyReceiptToPo } from "./stock-helper";
 import { logAudit } from "./audit-helper";
 
 export const storageRouter = createRouter({
@@ -263,7 +263,26 @@ export const storageRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const { receiptId, warehouseId, items, transportCost, customsCost, otherCost, userId } = input;
+      const { receiptId, userId } = input;
+      // Потврдена приемница не смее да се потврди повторно (залихата би се зголемила двапати)
+      const rcRow = (await getPool().query(`SELECT status, po_id, warehouse_id, supplier_id, transport_cost, customs_cost, other_cost FROM receipts WHERE id = $1`, [receiptId])).rows[0];
+      if (!rcRow) throw new Error("Приемницата не постои");
+      if (rcRow.status === "confirmed") throw new Error("Приемницата е веќе потврдена — залихата е веќе зголемена");
+      if (rcRow.status === "cancelled") throw new Error("Приемницата е откажана");
+      // Ставките и трошоците се од приемницата во базата (листата на екранот не ги носи ставките,
+      // па порано „Потврди“ се повикуваше со празна листа и залихата не се менуваше)
+      const dbItems = (await getPool().query(`SELECT material_id, quantity, unit_price, total_price, landed_cost_alloc, heat_number, cert_number, cert_standard, cert_url
+        FROM receipt_items WHERE receipt_id = $1 ORDER BY id`, [receiptId])).rows;
+      const items = dbItems.length ? dbItems.map((r: any) => ({
+        materialId: Number(r.material_id), quantity: String(r.quantity), unitPrice: String(r.unit_price), totalPrice: String(r.total_price),
+        landedCostAlloc: String(r.landed_cost_alloc ?? "0"), heatNumber: r.heat_number ?? undefined, certNumber: r.cert_number ?? undefined,
+        certStandard: r.cert_standard ?? undefined, certUrl: r.cert_url ?? undefined, supplierId: rcRow.supplier_id ? Number(rcRow.supplier_id) : undefined,
+      })) : input.items;
+      if (!items.length) throw new Error("Приемницата нема ставки — додади материјали пред да ја потврдиш");
+      const warehouseId = Number(rcRow.warehouse_id ?? input.warehouseId);
+      const transportCost = dbItems.length ? String(rcRow.transport_cost ?? "0") : input.transportCost;
+      const customsCost = dbItems.length ? String(rcRow.customs_cost ?? "0") : input.customsCost;
+      const otherCost = dbItems.length ? String(rcRow.other_cost ?? "0") : input.otherCost;
 
       // Total additional costs
       const totalExtra = parseFloat(transportCost) + parseFloat(customsCost) + parseFloat(otherCost);
@@ -359,6 +378,9 @@ export const storageRouter = createRouter({
           createdBy: userId ?? null,
         } as any);
       }
+
+      await getPool().query(`UPDATE receipts SET status = 'confirmed' WHERE id = $1`, [receiptId]);
+      if (rcRow.po_id) await applyReceiptToPo(Number(rcRow.po_id), items.map(i => ({ materialId: i.materialId, quantity: parseFloat(i.quantity) || 0 })));
 
       await logAudit({ action: "CONFIRM", entityType: "receipt", entityId: receiptId, description: `Потврдена приемница со просечна вреднување` });
       return { success: true };
@@ -484,7 +506,10 @@ export const storageRouter = createRouter({
       const delta = input.type === "adjustment" ? qty - cur
         : (input.type === "receipt" || input.type === "return") ? qty : -qty;
       await adjustStock(input.materialId, warehouseId, delta, { unitCost: input.unitPrice ? parseFloat(input.unitPrice) : undefined });
-      await db.insert(inventoryTransactions).values({ ...txData, warehouseId,
+      // вредност по набавна (просечна) цена, со знак -- за книжење на кусок/вишок
+      const matRow: any = (await db.select().from(materials).where(eq(materials.id, input.materialId)))[0];
+      const uc = input.unitPrice ? parseFloat(input.unitPrice) : parseFloat(matRow?.avgCost ?? "0") || 0;
+      await db.insert(inventoryTransactions).values({ ...txData, warehouseId, unitCost: uc.toFixed(2), totalCost: (delta * uc).toFixed(2),
         notes: input.type === "adjustment" ? `${input.notes ? input.notes + " · " : ""}Корекција од ${cur} на ${qty}` : input.notes } as any);
       return { success: true };
     }),

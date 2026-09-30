@@ -522,6 +522,7 @@ export const suppliers = pgTable("suppliers", {
   isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  defaultExpenseAccount: varchar("default_expense_account", { length: 10 }), // последно користено конто кај влезни фактури
 });
 
 export type Supplier = typeof suppliers.$inferSelect;
@@ -835,6 +836,7 @@ export const incomingInvoices = pgTable("incoming_invoices", {
   poId: bigint("po_id", { mode: "number", unsigned: true }),
   receiptId: bigint("receipt_id", { mode: "number", unsigned: true }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
+  expenseAccount: varchar("expense_account", { length: 10 }), // конто: 310 залиха, 401 енергија, 412 закупнина...
   issueDate: date("issue_date"),
   receivedDate: date("received_date").notNull(),
   dueDate: date("due_date"),

@@ -1025,3 +1025,70 @@ export async function htmlToPdfBase64(html: string): Promise<string> {
     frame.remove();
   }
 }
+
+// ══════════════ НАБАВНА НАРАЧКА (до добавувач) ══════════════
+const PO_UNIT: Record<string, { mk: string; en: string }> = {
+  kg: { mk: "кг", en: "kg" }, m: { mk: "м", en: "m" }, m2: { mk: "м²", en: "m²" }, pcs: { mk: "ком", en: "pcs" },
+  l: { mk: "л", en: "l" }, sheet: { mk: "табла", en: "sheet" }, hour: { mk: "ч", en: "h" }, m_cut: { mk: "м", en: "m" }, bend: { mk: "свив.", en: "bend" },
+};
+const PO_T = {
+  mk: { title: "НАБАВНА НАРАЧКА", date: "Датум", expected: "Рок за испорака", buyer: "Нарачател", supplier: "Добавувач", mat: "Материјал / опис",
+    unit: "ЕМ", qty: "Кол.", price: "Цена", total: "Вкупно", net: "Износ без ДДВ", vat: "ДДВ 18%", grand: "ВКУПНО СО ДДВ", notes: "Напомена",
+    terms: "Ве молиме потврдете ја нарачката и рокот за испорака. На фактурата наведете го бројот на нарачката.", sigBuyer: "Нарачал", sigSup: "Потврдил (добавувач)", cur: "ден.", tax: "ЕДБ", tel: "тел" },
+  en: { title: "PURCHASE ORDER", date: "Date", expected: "Delivery by", buyer: "Buyer", supplier: "Supplier", mat: "Material / description",
+    unit: "Unit", qty: "Qty", price: "Price", total: "Amount", net: "Net amount", vat: "VAT 18%", grand: "TOTAL INCL. VAT", notes: "Notes",
+    terms: "Please confirm this order and the delivery date. Quote the order number on your invoice.", sigBuyer: "Ordered by", sigSup: "Confirmed (supplier)", cur: "MKD", tax: "Tax ID", tel: "tel" },
+};
+
+export function purchaseOrderHtml(po: any, settings: any, lang: DocLang = "mk"): string {
+  const s = settings ?? {};
+  const t = PO_T[lang];
+  const sup = po?.supplier ?? {};
+  const items: any[] = po?.items ?? [];
+  const net = items.reduce((a, it) => a + Number(it.totalPrice ?? 0), 0) || Number(po?.totalAmount ?? 0);
+  const rows = items.map((it: any, i: number) => {
+    const u = PO_UNIT[it.materialUnit]?.[lang] ?? esc(it.materialUnit ?? "");
+    const desc = it.description && it.description !== it.materialName ? `<div style="color:#666;font-size:10px">${esc(it.description)}</div>` : "";
+    return `<tr>
+      <td class="c">${i + 1}</td>
+      <td><b>${esc(it.materialName ?? it.description ?? "—")}</b>${it.materialCode ? ` <span style="color:#999;font-size:9.5px">${esc(it.materialCode)}</span>` : ""}${desc}</td>
+      <td class="c">${u}</td><td class="r">${Number(it.quantity ?? 0).toLocaleString("mk-MK", { maximumFractionDigits: 3 })}</td>
+      <td class="r">${den(it.unitPrice)}</td><td class="r"><b>${den(it.totalPrice)}</b></td></tr>`;
+  }).join("");
+  const body = `
+  ${header(s, t.title, po?.poNumber ?? "", `
+    ${t.date}: <b>${dt(po?.createdAt)}</b><br>
+    ${po?.expectedDate ? `${t.expected}: <b>${dt(po.expectedDate)}</b>` : ""}`)}
+  <div class="parties">
+    <div class="party"><h3>${t.buyer}</h3>
+      <div class="n">${esc(s?.name ?? "Serafimoski Tech DOOEL")}</div>
+      <div>${esc(s?.address ?? "")}</div><div>${t.tax}: ${esc(s?.edb ?? "—")}</div>
+      ${s?.phone ? `<div>${t.tel}: ${esc(s.phone)}</div>` : ""}${s?.email ? `<div>${esc(s.email)}</div>` : ""}
+    </div>
+    <div class="party"><h3>${t.supplier}</h3>
+      <div class="n">${esc(sup.name ?? "—")}</div>
+      <div>${esc([sup.address, sup.city, sup.country].filter(Boolean).join(", "))}</div>
+      ${sup.edb ? `<div>${t.tax}: ${esc(sup.edb)}</div>` : ""}
+      ${sup.contactPerson ? `<div>${esc(sup.contactPerson)}</div>` : ""}
+      ${sup.phone ? `<div>${t.tel}: ${esc(sup.phone)}</div>` : ""}${sup.email ? `<div>${esc(sup.email)}</div>` : ""}
+    </div>
+  </div>
+  <table class="t"><thead><tr>
+    <th class="c" style="width:26px">#</th><th>${t.mat}</th><th class="c" style="width:44px">${t.unit}</th>
+    <th class="r" style="width:70px">${t.qty}</th><th class="r" style="width:80px">${t.price}</th><th class="r" style="width:92px">${t.total}</th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="6" class="c" style="padding:12px;color:#999">—</td></tr>`}</tbody></table>
+  <div class="totals">
+    <div class="row"><span>${t.net}</span><span>${den(net)} ${t.cur}</span></div>
+    <div class="row"><span>${t.vat}</span><span>${den(net * 0.18)} ${t.cur}</span></div>
+    <div class="row grand"><span>${t.grand}</span><span>${den(net * 1.18)} ${t.cur}</span></div>
+  </div>
+  ${po?.notes ? `<div class="box"><b>${t.notes}:</b> ${esc(po.notes)}</div>` : ""}
+  <div class="notes">${t.terms}</div>
+  <div class="sigs"><div class="sig"><div class="line">${t.sigBuyer}</div></div><div class="sig"><div class="line">${t.sigSup}</div></div></div>
+  ${footer(s)}`;
+  return shell(`${lang === "en" ? "Purchase order" : "Набавна нарачка"} ${po?.poNumber ?? ""}`, "#3a72b8", body);
+}
+
+export function printPurchaseOrder(po: any, settings: any, lang: DocLang = "mk") {
+  openPrint(purchaseOrderHtml(po, settings, lang));
+}

@@ -4,6 +4,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
 import { openDocs, refreshPaymentStatus, assertNoPayments, type OpenDoc } from "./payment-status";
+import { suggestExpenseAccount } from "@contracts/finance";
 import { getDb, getPool } from "./queries/connection";
 import {
   invoices, incomingInvoices, documentItems,
@@ -235,7 +236,7 @@ export const accountingRouter = createRouter({
           receivedDate: incomingInvoices.receivedDate, dueDate: incomingInvoices.dueDate,
           subtotal: incomingInvoices.subtotal, vatRate: incomingInvoices.vatRate,
           vatAmount: incomingInvoices.vatAmount, totalAmount: incomingInvoices.totalAmount,
-          currency: incomingInvoices.currency, notes: incomingInvoices.notes,
+          currency: incomingInvoices.currency, notes: incomingInvoices.notes, expenseAccount: incomingInvoices.expenseAccount,
           fileUrl: incomingInvoices.fileUrl, createdAt: incomingInvoices.createdAt,
           supplierName: suppliers.name,
         })
@@ -264,6 +265,17 @@ export const accountingRouter = createRouter({
       return { ...inv[0], items, supplier: sup[0] ?? null };
     }),
 
+  // Предлог конто за нова влезна фактура (за формата)
+  incomingAccountSuggest: publicQuery
+    .input(z.object({ supplierId: z.number().optional(), text: z.string().max(2000).optional() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const sup: any = input.supplierId ? (await db.select().from(suppliers).where(eq(suppliers.id, input.supplierId)))[0] : null;
+      if (sup?.defaultExpenseAccount) return { account: sup.defaultExpenseAccount as string, reason: "последно користено кај добавувачот" };
+      const s = suggestExpenseAccount([sup?.name, input.text].filter(Boolean).join(" "));
+      return s ? { account: s, reason: "препознаено од името / текстот" } : { account: "310", reason: "материјали за залиха (стандардно)" };
+    }),
+
   incomingInvoiceCreate: publicQuery
     .input(z.object({
       supplierInvoiceNumber: z.string().min(1),
@@ -281,6 +293,7 @@ export const accountingRouter = createRouter({
       currency: z.string().default("MKD"),
       notes: z.string().optional(),
       fileUrl: z.string().optional(),
+      expenseAccount: z.string().max(10).optional(),
       items: z.array(z.object({
         description: z.string().min(1),
         quantity: z.string(),
@@ -295,6 +308,12 @@ export const accountingRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { items, ...invData } = input;
+      // Конто: избрано -> последно кај добавувачот -> предлог од текстот -> „набавки“ (310)
+      const sup: any = (await db.select().from(suppliers).where(eq(suppliers.id, invData.supplierId)))[0];
+      if (!sup) throw new Error("Добавувачот не постои");
+      invData.expenseAccount = invData.expenseAccount || sup.defaultExpenseAccount
+        || suggestExpenseAccount([sup.name, invData.notes, ...(items ?? []).map(i => i.description)].join(" ")) || undefined;
+      if (input.expenseAccount) await db.update(suppliers).set({ defaultExpenseAccount: input.expenseAccount } as any).where(eq(suppliers.id, sup.id));
       const result = await db.insert(incomingInvoices).values({
         ...invData,
         issueDate: invData.issueDate ? new Date(invData.issueDate) : null,
@@ -313,11 +332,16 @@ export const accountingRouter = createRouter({
       id: z.number(),
       status: z.enum(["received", "verified", "partial", "paid", "disputed", "cancelled"]).optional(),
       notes: z.string().optional(),
+      expenseAccount: z.string().max(10).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...data } = input;
       await db.update(incomingInvoices).set(data).where(eq(incomingInvoices.id, id));
+      if (data.expenseAccount) {
+        const inv: any = (await db.select().from(incomingInvoices).where(eq(incomingInvoices.id, id)))[0];
+        if (inv) await db.update(suppliers).set({ defaultExpenseAccount: data.expenseAccount } as any).where(eq(suppliers.id, inv.supplierId));
+      }
       if (data.status && data.status !== "paid") await refreshPaymentStatus("incoming_invoice", id);
       return { success: true };
     }),
@@ -422,6 +446,12 @@ export const accountingRouter = createRouter({
       }
       const db = getDb();
       const { items, ...data } = input;
+      if (data.poId) {
+        const po: any = (await getPool().query(`SELECT supplier_id, status, po_number FROM purchase_orders WHERE id = $1`, [data.poId])).rows[0];
+        if (!po) throw new Error("Набавната нарачка не постои");
+        if (po.status === "cancelled") throw new Error(`Нарачката ${po.po_number} е откажана`);
+        if (!data.supplierId) data.supplierId = Number(po.supplier_id);
+      }
       const result = await db.insert(receipts).values({
         ...data,
         receiptDate: new Date(data.receiptDate),
@@ -456,6 +486,8 @@ export const accountingRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      const rc: any = (await db.select().from(receipts).where(eq(receipts.id, input.id)))[0];
+      if (rc?.status === "confirmed") throw new Error("Потврдена приемница не може да се брише — залихата е веќе зголемена. Направи корекција на залихата.");
       await db.delete(receiptItems).where(eq(receiptItems.receiptId, input.id));
       await db.delete(receipts).where(eq(receipts.id, input.id));
       return { success: true };

@@ -16,6 +16,8 @@ import ListLimitNote from "@/components/ListLimitNote";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import { printInvoice, printDeliveryNote, printAccountantReport, invoiceHtml } from "@/lib/print-documents";
 import SendEmailDialog from "@/components/SendEmailDialog";
+import { EXPENSE_CHOICES } from "@contracts/finance";
+import IncomingAccountPicker from "@/components/IncomingAccountPicker";
 import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { DnCertificates } from "@/components/DnCertificates";
@@ -101,6 +103,7 @@ export default function Accounting() {
   const [mailOpen, setMailOpen] = useState(false);
   const { data: outDetail } = trpc.accounting.invoiceById.useQuery({ id: selId! }, { enabled: detailType === "out" && !!selId });
   const { data: incDetail } = trpc.accounting.incomingInvoiceById.useQuery({ id: selId! }, { enabled: detailType === "inc" && !!selId });
+  const updIncAccount = trpc.accounting.incomingInvoiceUpdate.useMutation({ onSuccess: () => { utils.accounting.incomingInvoiceById.invalidate(); utils.accounting.incomingInvoiceList.invalidate(); toast.success("Контото е сменето — книжењето ќе се ажурира само"); } });
 
   // Dialogs
   const [outDialog, setOutDialog] = useState(false);
@@ -118,7 +121,7 @@ export default function Accounting() {
     discount: string; totalPrice: string; vatRate: string; notes: string;
     productId?: number; serviceId?: number; itemType: "product" | "service" | "manual";
   }>>([]);
-  const [incForm, setIncForm] = useState({ supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
+  const [incForm, setIncForm] = useState({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
   const [incItems, setIncItems] = useState<Array<{
     description: string; quantity: string; unit: string; unitPrice: string;
     totalPrice: string; vatRate: string; notes: string;
@@ -195,7 +198,7 @@ export default function Accounting() {
     onError: (e) => alert(e.message),
   });
   const createInc = trpc.accounting.incomingInvoiceCreate.useMutation({
-    onSuccess: () => { utils.accounting.incomingInvoiceList.invalidate(); setIncDialog(false); setIncForm({ supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" }); setIncItems([]); },
+    onSuccess: () => { utils.accounting.incomingInvoiceList.invalidate(); setIncDialog(false); setIncForm({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" }); setIncItems([]); },
   });
   const createRec = trpc.accounting.receiptCreate.useMutation({
     onSuccess: () => { utils.accounting.receiptList.invalidate(); setRecDialog(false); setRecForm({ receiptNumber: "", supplierId: "", receiptDate: "", totalAmount: "0", notes: "" }); },
@@ -404,7 +407,7 @@ export default function Accounting() {
               setIncDialog(open);
               if (!open) {
                 setIncItems([]);
-                setIncForm({ supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
+                setIncForm({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
               }
             }}>
               <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нова влезна фактура</Button></DialogTrigger>
@@ -464,8 +467,10 @@ export default function Accounting() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1"><Label>Број од добавувач *</Label><Input value={incForm.supplierInvoiceNumber} onChange={(e) => setIncForm({ ...incForm, supplierInvoiceNumber: e.target.value })} required placeholder="на пр. 1-A-4840" /></div>
-                    <div className="space-y-1"><Label>Добавувач *</Label><Select value={incForm.supplierId} onValueChange={(v) => setIncForm({ ...incForm, supplierId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1"><Label>Добавувач *</Label><Select value={incForm.supplierId} onValueChange={(v) => setIncForm({ ...incForm, supplierId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери добавувач" /></SelectTrigger><SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
+                  <IncomingAccountPicker supplierId={incForm.supplierId ? Number(incForm.supplierId) : undefined} text={[incForm.notes, ...incItems.map((i: any) => i.description)].join(" ")}
+                    value={incForm.expenseAccount} onChange={(v) => setIncForm(f => ({ ...f, expenseAccount: v }))} />
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1"><Label>Датум на прием *</Label><DateInput value={incForm.receivedDate} onChange={(e) => setIncForm({ ...incForm, receivedDate: e.target.value })} required /></div>
                     <div className="space-y-1"><Label>Датум на фактура</Label><DateInput value={incForm.issueDate} onChange={(e) => setIncForm({ ...incForm, issueDate: e.target.value })} /></div>
@@ -1023,6 +1028,12 @@ export default function Accounting() {
                 <div><span className="text-gray-500">Статус:</span> <Badge className={incStatus[incDetail.status]?.cls}>{incStatus[incDetail.status]?.label}</Badge></div>
                 <div><span className="text-gray-500">Износ:</span> <span className="font-semibold">{incDetail.totalAmount} {incDetail.currency}</span></div>
                 <div><span className="text-gray-500">ДДВ:</span> {incDetail.vatAmount}</div>
+                <div className="col-span-2 flex items-center gap-2"><span className="text-gray-500 shrink-0">Конто:</span>
+                  <Select value={(incDetail as any).expenseAccount || "310"} onValueChange={(v) => updIncAccount.mutate({ id: incDetail.id, expenseAccount: v })}>
+                    <SelectTrigger className="h-8 w-full max-w-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>{EXPENSE_CHOICES.map(c => <SelectItem key={c.code} value={c.code}><span className="font-mono text-xs mr-1.5">{c.code}</span>{c.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
                 <div><span className="text-gray-500">Прием:</span> {formatDate(incDetail.receivedDate)}</div>
               </div>
               {/* PDF Preview */}

@@ -38,6 +38,30 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     await caller.storage.processReceipt({ receiptId: rc.id, warehouseId: ids.wh, items: [{ materialId: ids.mat, quantity: "1000", unitPrice: "60", totalPrice: "60000" }] });
     const m = (await caller.storage.materialList()).find((x: any) => x.id === ids.mat);
     expect(Number(m.currentStock)).toBe(1000);
+    // двојно потврдување не смее двапати да ја зголеми залихата
+    await expect(caller.storage.processReceipt({ receiptId: rc.id, warehouseId: ids.wh, items: [{ materialId: ids.mat, quantity: "1000", unitPrice: "60", totalPrice: "60000" }] })).rejects.toThrow(/веќе потврдена/);
+    await expect(caller.accounting.receiptDelete({ id: rc.id })).rejects.toThrow(/не може да се брише/);
+  });
+
+  it("набавна нарачка → приемница по нарачка → делумен и целосен прием", async () => {
+    const po = await caller.procurement.poCreate({ poNumber: "НН-001/2026", supplierId: ids.sup, items: [{ materialId: ids.mat, description: "Лим", quantity: "100", unitPrice: "60", totalPrice: "6000" }] });
+    const r1 = await caller.accounting.receiptCreate({ receiptNumber: "ПР-010/2026", poId: po.id, warehouseId: ids.wh, receiptDate: today,
+      items: [{ materialId: ids.mat, quantity: "40", unit: "kg", unitPrice: "60", totalPrice: "2400" }] });
+    await caller.storage.processReceipt({ receiptId: r1.id, warehouseId: ids.wh, items: [{ materialId: ids.mat, quantity: "40", unitPrice: "60", totalPrice: "2400" }] });
+    let d = await caller.procurement.poById({ id: po.id });
+    expect(d.status).toBe("partial");
+    expect(Number(d.items[0].receivedQuantity)).toBe(40);
+    const rcRow = (await caller.accounting.receiptList({})).find((r: any) => r.id === r1.id);
+    expect(rcRow.status).toBe("confirmed");
+    expect(Number(rcRow.supplierId)).toBe(ids.sup); // добавувачот доаѓа од нарачката
+    const r2 = await caller.accounting.receiptCreate({ receiptNumber: "ПР-011/2026", poId: po.id, warehouseId: ids.wh, receiptDate: today,
+      items: [{ materialId: ids.mat, quantity: "60", unit: "kg", unitPrice: "60", totalPrice: "3600" }] });
+    await caller.storage.processReceipt({ receiptId: r2.id, warehouseId: ids.wh, items: [{ materialId: ids.mat, quantity: "60", unitPrice: "60", totalPrice: "3600" }] });
+    d = await caller.procurement.poById({ id: po.id });
+    expect(d.status).toBe("received");
+    expect(Number(d.items[0].receivedQuantity)).toBe(100);
+    // залихата назад на 1000 за следните тестови
+    await caller.storage.transactionCreate({ materialId: ids.mat, warehouseId: ids.wh, type: "adjustment", quantity: "1000" });
   });
 
   it("понуда → нарачка → налог → издавање (без двојно издавање) → трошок", async () => {
@@ -98,11 +122,14 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(Number(pr.totalPayables)).toBe(70800);
     const s1 = await caller.finance.ledgerSync();
     expect(s1.problems).toEqual([]);
-    expect(s1.created).toBe(3);
+    // фактура + влезна фактура + благајна + потрошен материјал (издавање за налогот) + корекција на залиха (кусок)
+    expect(s1.created).toBe(5);
     const s2 = await caller.finance.ledgerSync();
     expect(s2.created + s2.updated + s2.removed).toBe(0);
     const tb = await caller.finance.trialBalance({ from: "2000-01-01", to: "2100-01-01" });
     expect(tb.totals.debit).toBe(tb.totals.credit);
+    expect(tb.accounts.find((a: any) => a.code === "400")?.closing ?? 0).toBeGreaterThan(0); // потрошен материјал
+    expect(tb.accounts.find((a: any) => a.code === "469")?.closing ?? 0).toBeGreaterThan(0); // кусок
     const vat = await caller.finance.vatBooks({ from: "2000-01-01", to: "2100-01-01" });
     expect(vat.summary.outVat).toBe(1800);
     expect(vat.summary.inVat).toBe(10800);

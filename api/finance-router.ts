@@ -7,7 +7,7 @@ import { getPool } from "./queries/connection";
 import { logAudit } from "./audit-helper";
 import {
   DEFAULT_ACCOUNTS, POSTING_RULES, rulesWithDefaults, invoiceLines, incomingLines, paymentLines,
-  cashOtherLines, payrollLines, depreciationLines, linesSignature, isBalanced, normalizeLines, toMkd, convert, round2,
+  cashOtherLines, payrollLines, depreciationLines, stockMoveLines, linesSignature, isBalanced, normalizeLines, toMkd, convert, round2,
   parseNbrmRates, type GlLine, type Rules, type RateLookup,
 } from "@contracts/finance";
 import { isDomesticCountry } from "@contracts/country";
@@ -92,7 +92,7 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
 
   // 2) Влезни фактури
   const incs = await q(`SELECT ii.id, ii.supplier_invoice_number, ii.issue_date, ii.received_date, ii.subtotal, ii.vat_amount,
-      ii.currency, ii.supplier_id, s.country, s.name AS sname
+      ii.currency, ii.supplier_id, ii.expense_account, s.country, s.name AS sname
     FROM incoming_invoices ii LEFT JOIN suppliers s ON s.id = ii.supplier_id WHERE ii.status <> 'cancelled'`);
   const incInfo = new Map<number, { cur: string; date: string; foreign: boolean; number: string; supplierId: number }>();
   for (const i of incs) {
@@ -104,7 +104,33 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
     const vat = toMkd(Number(i.vat_amount), cur, date, rate);
     if (sub === null || vat === null) { problems.push({ sourceType: "incoming_invoice", sourceId: i.id, ref: i.supplier_invoice_number, reason: `Нема курс ${cur} за ${date}` }); continue; }
     desired.push({ sourceType: "incoming_invoice", sourceId: i.id, date, description: `Влезна фактура ${i.supplier_invoice_number} · ${i.sname ?? ""}`,
-      lines: incomingLines({ subtotalMkd: sub, vatMkd: vat, foreign, supplierId: i.supplier_id, number: i.supplier_invoice_number, rules }) });
+      lines: incomingLines({ subtotalMkd: sub, vatMkd: vat, foreign, supplierId: i.supplier_id, number: i.supplier_invoice_number, rules, account: i.expense_account }) });
+  }
+
+  // 2б) Залиха на материјали: потрошено во производство, кусок/отпис, вишок (по набавна цена)
+  const moves = await q(`SELECT t.id, t.type, t.quantity, t.unit_cost, t.total_cost, t.reference, t.notes, t.created_at, t.source_doc_type,
+      m.code, m.name, m.avg_cost
+    FROM inventory_transactions t LEFT JOIN materials m ON m.id = t.material_id
+    WHERE t.type IN ('issue', 'scrap', 'adjustment') AND COALESCE(t.reference, '') <> 'Почетна залиха'`);
+  for (const t of moves) {
+    const qty = Number(t.quantity) || 0;
+    const unit = Number(t.unit_cost) || Number(t.avg_cost) || 0;
+    const total = Number(t.total_cost);
+    let kind: "consume" | "shortage" | "surplus";
+    if (t.type === "issue") kind = "consume";
+    else if (t.type === "scrap") kind = "shortage";
+    else {
+      const note = String(t.notes ?? "");
+      const m = note.match(/Корекција од (-?[\d.]+) на (-?[\d.]+)/);
+      const sign = /Кусок/i.test(note) ? -1 : /Вишок/i.test(note) ? 1 : m ? Math.sign(Number(m[2]) - Number(m[1])) : Math.sign(total || 0);
+      if (!sign) continue;
+      kind = sign < 0 ? "shortage" : "surplus";
+    }
+    const amount = Number.isFinite(total) && Math.abs(total) > 0.005 ? Math.abs(total) : round2(qty * unit);
+    const lines = stockMoveLines({ kind, amount, rules, ref: `${t.code ?? ""} ${t.reference ?? ""}`.trim() });
+    if (!lines.length) continue;
+    const label = kind === "consume" ? "Потрошен материјал" : kind === "shortage" ? "Кусок/отпис" : "Вишок";
+    desired.push({ sourceType: "stock_move", sourceId: t.id, date: iso(t.created_at), description: `${label} · ${t.name ?? ""} ${qty} ${t.reference ? "· " + t.reference : ""}`.trim(), lines });
   }
 
   // Плаќање по документ (банка или благајна) со курсна разлика

@@ -12,7 +12,7 @@ import { htmlToPdfBase64, type DocLang } from "@/lib/print-documents";
 export interface SendEmailProps {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  docType: "quotation" | "invoice";
+  docType: "quotation" | "invoice" | "purchase_order";
   docId: number;
   docNumber: string;
   defaultTo?: string | null;
@@ -20,19 +20,23 @@ export interface SendEmailProps {
   /** Го гради HTML-от на документот на избраниот јазик */
   buildHtml: (lang: DocLang) => string;
   defaultLang?: DocLang;
+  /** По успешно праќање (на пр. нарачката станува „Испратена“) */
+  onSent?: () => void;
 }
 
 const TEXT = {
   mk: {
     quotation: (n: string, c: string) => ({ subject: `Понуда ${n} — ${c}`, body: `Почитувани,\n\nВо прилог ви ја праќаме понудата ${n}.\nЗа прашања стоиме на располагање.\n\nСо почит,\n${c}` }),
     invoice: (n: string, c: string) => ({ subject: `Фактура ${n} — ${c}`, body: `Почитувани,\n\nВо прилог ви ја праќаме фактурата ${n}.\n\nСо почит,\n${c}` }),
+    purchase_order: (n: string, c: string) => ({ subject: `Набавна нарачка ${n} — ${c}`, body: `Почитувани,\n\nВо прилог ви ја праќаме набавната нарачка ${n}.\nВе молиме потврдете ја нарачката и рокот за испорака, и наведете го бројот на нарачката на фактурата.\n\nСо почит,\n${c}` }),
   },
   en: {
     quotation: (n: string, c: string) => ({ subject: `Quotation ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached our quotation ${n}.\nWe remain at your disposal for any questions.\n\nKind regards,\n${c}` }),
     invoice: (n: string, c: string) => ({ subject: `Invoice ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached invoice ${n}.\n\nKind regards,\n${c}` }),
+    purchase_order: (n: string, c: string) => ({ subject: `Purchase order ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached our purchase order ${n}.\nKindly confirm the order and the delivery date, and quote the order number on your invoice.\n\nKind regards,\n${c}` }),
   },
 };
-const latin = (s: string) => s.replace(/ПФ/g, "PF").replace(/ПО/g, "PO").replace(/КН/g, "CN");
+const latin = (s: string) => s.replace(/ПФ/g, "PF").replace(/ПО/g, "PO").replace(/КН/g, "CN").replace(/НН/g, "PO");
 
 export default function SendEmailDialog(p: SendEmailProps) {
   const { data: status } = trpc.mail.mailStatus.useQuery(undefined, { enabled: p.open });
@@ -63,7 +67,8 @@ export default function SendEmailDialog(p: SendEmailProps) {
   };
   const emails = (s: string) => s.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
   const valid = (s: string) => emails(s).every(e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
-  const filename = `${p.docType === "quotation" ? (lang === "en" ? "Quotation" : "Ponuda") : (lang === "en" ? "Invoice" : "Faktura")}-${latin(p.docNumber).replace(/[^\w-]+/g, "-")}.pdf`;
+  const kind = { quotation: ["Ponuda", "Quotation"], invoice: ["Faktura", "Invoice"], purchase_order: ["Narachka", "PurchaseOrder"] }[p.docType];
+  const filename = `${lang === "en" ? kind[1] : kind[0]}-${latin(p.docNumber).replace(/[^\w-]+/g, "-")}.pdf`;
 
   const onSend = async () => {
     setBusy(true);
@@ -71,6 +76,7 @@ export default function SendEmailDialog(p: SendEmailProps) {
       const pdfBase64 = await htmlToPdfBase64(p.buildHtml(lang));
       await send.mutateAsync({ to: emails(to), cc: cc ? emails(cc) : undefined, subject, body, filename, pdfBase64, docType: p.docType, docId: p.docId });
       toast.success(`Пратено на ${emails(to).join(", ")}`);
+      p.onSent?.();
       p.onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Пораката не е пратена");
@@ -93,7 +99,7 @@ export default function SendEmailDialog(p: SendEmailProps) {
               <Button size="sm" variant={lang === "mk" ? "default" : "outline"} onClick={() => switchLang("mk")}>Македонски</Button>
               <Button size="sm" variant={lang === "en" ? "default" : "outline"} onClick={() => switchLang("en")}>English</Button>
             </div>
-            <div className="space-y-1"><Label className="text-xs">До</Label><Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="klient@firma.com" /></div>
+            <div className="space-y-1"><Label className="text-xs">До</Label><Input value={to} onChange={(e) => setTo(e.target.value)} placeholder={p.docType === "purchase_order" ? "dobavuvac@firma.com" : "klient@firma.com"} /></div>
             <div className="space-y-1"><Label className="text-xs">Копија (CC)</Label><Input value={cc} onChange={(e) => setCc(e.target.value)} /></div>
             <div className="space-y-1"><Label className="text-xs">Наслов</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
             <div className="space-y-1"><Label className="text-xs">Порака</Label><Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} /></div>

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   invoiceLines, incomingLines, paymentLines, cashOtherLines, payrollLines, isBalanced, normalizeLines, fixRounding,
-  toMkd, convert, parseNbrmRates, calcPayroll, rulesWithDefaults, linesSignature, DEFAULT_PAYROLL,
+  toMkd, convert, parseNbrmRates, calcPayroll, rulesWithDefaults, linesSignature, DEFAULT_PAYROLL, stockMoveLines, suggestExpenseAccount,
 } from "./finance";
 
 const rules = rulesWithDefaults({});
@@ -110,5 +110,34 @@ describe("амортизација", () => {
     expect(l.find(x => x.account === "430")?.debit).toBe(24000);
     expect(l.find(x => x.account === "019")?.credit).toBe(24000);
     expect(isBalanced(l)).toBe(true);
+  });
+});
+
+describe("залиха и конто на влезна фактура", () => {
+  const rules = rulesWithDefaults({});
+  it("потрошен материјал: 400 / 310", () => {
+    const l = stockMoveLines({ kind: "consume", amount: 1200, rules, ref: "L3" });
+    expect(l).toEqual([
+      expect.objectContaining({ account: "400", debit: 1200, credit: 0 }),
+      expect.objectContaining({ account: "310", debit: 0, credit: 1200 }),
+    ]);
+  });
+  it("кусок 469 / 310, вишок 310 / 769", () => {
+    expect(stockMoveLines({ kind: "shortage", amount: -300, rules, ref: "" }).map(x => [x.account, x.debit, x.credit])).toEqual([["469", 300, 0], ["310", 0, 300]]);
+    expect(stockMoveLines({ kind: "surplus", amount: 50, rules, ref: "" }).map(x => [x.account, x.debit, x.credit])).toEqual([["310", 50, 0], ["769", 0, 50]]);
+    expect(stockMoveLines({ kind: "consume", amount: 0, rules, ref: "" })).toEqual([]);
+  });
+  it("влезна фактура на трошочно конто", () => {
+    const l = incomingLines({ subtotalMkd: 1000, vatMkd: 180, foreign: false, supplierId: 1, number: "F1", rules, account: "401" });
+    expect(l[0]).toMatchObject({ account: "401", debit: 1000 });
+    expect(incomingLines({ subtotalMkd: 1000, vatMkd: 180, foreign: false, supplierId: 1, number: "F1", rules })[0].account).toBe("310");
+  });
+  it("предлог конто од добавувачот / текстот", () => {
+    expect(suggestExpenseAccount("ЕВН Македонија АД — електрична енергија")).toBe("401");
+    expect(suggestExpenseAccount("Макпетрол АД Скопје")).toBe("401");
+    expect(suggestExpenseAccount("Закупнина за хала септември")).toBe("412");
+    expect(suggestExpenseAccount("Македонски Телеком")).toBe("413");
+    expect(suggestExpenseAccount("Лим 3мм S235")).toBe("310");
+    expect(suggestExpenseAccount("Нешто непознато")).toBe(null);
   });
 });
