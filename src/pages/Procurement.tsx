@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PurchaseOrderCreateDialog from "@/components/PurchaseOrderCreateDialog";
+import PurchaseOrderDetailDialog from "@/components/PurchaseOrderDetailDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ProcurementNeeds from "@/components/ProcurementNeeds";
 import {
@@ -78,10 +79,6 @@ export default function Procurement() {
   });
 
 
-  const { data: poDetail } = trpc.procurement.poById.useQuery(
-    { id: selectedPO! },
-    { enabled: !!selectedPO }
-  );
 
   const supCreate = trpc.procurement.supplierCreate.useMutation({
     onSuccess: () => {
@@ -273,10 +270,10 @@ export default function Procurement() {
                     purchaseOrders?.map((po) => {
                       const st = poStatusConfig[po.status] || poStatusConfig.draft;
                       return (
-                        <TableRow key={po.id}>
+                        <TableRow key={po.id} className="cursor-pointer hover:bg-amber-50/40" onClick={() => { setSelectedPO(po.id); setDetailOpen(true); }}>
                           <TableCell className="font-mono text-sm font-medium">{po.poNumber}</TableCell>
                           <TableCell>{po.supplierName}</TableCell>
-                          <TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <Select value={po.status} onValueChange={(v) => poUpdate.mutate({ id: po.id, status: v as any })}>
                               <SelectTrigger className="h-7 w-32">
                                 <Badge className={st.className + " text-xs"}>{st.label}</Badge>
@@ -288,11 +285,11 @@ export default function Procurement() {
                               </SelectContent>
                             </Select>
                           </TableCell>
-                          <TableCell className="font-medium">{po.totalAmount} ден.</TableCell>
+                          <TableCell className="font-medium tabular-nums">{Number(po.totalAmount).toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ден.</TableCell>
                           <TableCell className="text-gray-500">{formatDate(po.expectedDate)}</TableCell>
-                          <TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <div className="flex gap-1">
-                              <Button size="sm" variant="outline" onClick={() => { setSelectedPO(po.id); setDetailOpen(true); }}>
+                              <Button size="sm" variant="outline" title="Отвори · печати · прати" onClick={() => { setSelectedPO(po.id); setDetailOpen(true); }}>
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
                               <Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) poDelete.mutate({ id: po.id }); }}>
@@ -312,49 +309,7 @@ export default function Procurement() {
       </Tabs>
 
       {/* PO Detail Dialog */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Набавна нарачка {poDetail?.poNumber}</DialogTitle>
-          </DialogHeader>
-          {poDetail && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-500">Добавувач:</span> {poDetail.supplier?.name}</div>
-                <div><span className="text-gray-500">Статус:</span> <Badge className={poStatusConfig[poDetail.status]?.className}>{poStatusConfig[poDetail.status]?.label}</Badge></div>
-                <div><span className="text-gray-500">Вкупно:</span> <span className="font-semibold">{poDetail.totalAmount} ден.</span></div>
-                <div><span className="text-gray-500">Очекувано:</span> {formatDate(poDetail.expectedDate)}</div>
-              </div>
-
-              {poDetail.items && poDetail.items.length > 0 && (
-                <div className="border-t pt-3">
-                  <h4 className="font-semibold mb-2">Ставки</h4>
-                  <div className="space-y-2">
-                    {poDetail.items.map((item) => (
-                      <div key={item.id} className="bg-gray-50 p-2 rounded text-sm">
-                        <div className="font-medium">{item.description}</div>
-                        <div className="text-gray-500 flex flex-wrap gap-2 mt-1">
-                          <span>Мат: {item.materialName}</span>
-                          <span>Кол: {item.quantity} {item.materialUnit}</span>
-                          <span>Цена: {item.unitPrice} ден.</span>
-                          <span>Вкупно: {item.totalPrice} ден.</span>
-                          <span>Примено: {item.receivedQuantity}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {poDetail.notes && (
-                <div className="border-t pt-3">
-                  <span className="text-gray-500 text-sm">Белешки: {poDetail.notes}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <PurchaseOrderDetailDialog poId={selectedPO} open={detailOpen} onOpenChange={setDetailOpen} />
     </div>
   );
 }
