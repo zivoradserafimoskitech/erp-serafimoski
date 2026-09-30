@@ -125,16 +125,8 @@ export default function BankTab() {
         }
 
         if (lower.endsWith(".pdf")) {
-          const pdfjs: any = await import("pdfjs-dist");
-          pdfjs.GlobalWorkerOptions.workerSrc =
-            (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
-          const doc = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
-          let text = "";
-          for (let i = 1; i <= doc.numPages; i++) {
-            const page = await doc.getPage(i);
-            const c = await page.getTextContent();
-            text += c.items.map((it: any) => it.str).join(" ") + "\n";
-          }
+          const { pdfToText } = await import("@/lib/pdf-text");
+          const text = await pdfToText(await f.arrayBuffer());
           payload.push({ name: f.name, text });
           continue;
         }
