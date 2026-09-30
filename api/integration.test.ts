@@ -14,6 +14,7 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     process.env.DATABASE_URL = url;
     process.env.DATABASE_SSL = "false";
     delete process.env.APP_PASSWORD;
+    process.env.DISABLE_AUTO_LEDGER = "true"; // тестот сам ја повикува синхронизацијата и ги брои промените
     const { getPool } = await import("./queries/connection");
     const pool = getPool();
     // празна база: избриши ја шемата и создај ја одново

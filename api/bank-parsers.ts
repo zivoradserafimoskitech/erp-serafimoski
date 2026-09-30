@@ -40,6 +40,23 @@ const num = (s: string): number => {
   const v = parseFloat(cleaned);
   return Number.isFinite(v) ? v : 0;
 };
+/** Износ во кој било запис: 115.000,00 (МК), 115,000.00 (EN), 115000,00, 115000.00. Последниот знак е децимален. */
+export const numAny = (s: string): number => {
+  let t = String(s ?? "").replace(/[^\d.,+-]/g, "");
+  const lastDot = t.lastIndexOf("."), lastComma = t.lastIndexOf(",");
+  if (lastDot >= 0 && lastComma >= 0) {
+    const dec = lastDot > lastComma ? "." : ",";
+    t = t.split(dec === "." ? "," : ".").join("");
+    if (dec === ",") t = t.replace(",", ".");
+  } else if (lastComma >= 0) {
+    // само запирка: децимална ако по неа има 1-2 цифри, инаку илјадарки
+    t = /,\d{1,2}$/.test(t) && t.split(",").length === 2 ? t.replace(",", ".") : t.replace(/,/g, "");
+  } else if (lastDot >= 0 && (t.split(".").length > 2 || /\.\d{3}$/.test(t))) {
+    t = t.replace(/\./g, ""); // 115.000 или 1.234.567 -- илјадарки
+  }
+  const v = parseFloat(t);
+  return Number.isFinite(v) ? v : 0;
+};
 const trimAcc = (s: string): string => String(s ?? "").trim().replace(/^0+(?=\d{10,})/, "");
 const clean = (s: string): string => String(s ?? "").trim().replace(/\s+/g, " ");
 
@@ -235,10 +252,10 @@ export function parsePdfText(text: string): { statements: ParsedStatement[]; war
       accountNumber: acc ? acc[1] : "",
       statementNo: no,
       statementDate: `${yyyy}-${mm}-${dd}`,
-      prevBalance: balRow ? num(balRow[1]) : 0,
-      debitTotal: balRow ? num(balRow[2]) : 0,
-      creditTotal: balRow ? num(balRow[3]) : 0,
-      newBalance: balRow ? num(balRow[4]) : 0,
+      prevBalance: balRow ? numAny(balRow[1]) : 0,
+      debitTotal: balRow ? numAny(balRow[2]) : 0,
+      creditTotal: balRow ? numAny(balRow[3]) : 0,
+      newBalance: balRow ? numAny(balRow[4]) : 0,
       currency: "MKD",
       transactions: [],
     });

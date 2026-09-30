@@ -30,7 +30,26 @@ const enforcePermissions = t.middleware(async ({ ctx, path, type, next }) => {
   return next({ ctx });
 });
 
-export const publicQuery = t.procedure.use(enforcePermissions);
+// ── Главната книга се ажурира сама ──
+// По секое успешно зачувување што може да ги смени документите/плаќањата, во позадина (со мала пауза,
+// за повеќе брзи зачувувања да се спојат во едно) се повикува синхронизацијата. Таа е идемпотентна.
+const LEDGER_ROUTERS = new Set(["accounting", "bank", "finance", "hr", "assets", "production", "quotation", "storage", "ops"]);
+let ledgerTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleLedgerSync() {
+  if (process.env.DISABLE_AUTO_LEDGER === "true") return;
+  if (ledgerTimer) clearTimeout(ledgerTimer);
+  ledgerTimer = setTimeout(() => {
+    ledgerTimer = null;
+    import("./finance-router").then(m => m.syncLedger()).catch(e => console.error("[LEDGER]", e?.message ?? e));
+  }, 1500);
+}
+const autoLedger = t.middleware(async ({ path, type, next }) => {
+  const res = await next();
+  if (type === "mutation" && res.ok && LEDGER_ROUTERS.has(path.split(".")[0]) && path !== "finance.ledgerSync") scheduleLedgerSync();
+  return res;
+});
+
+export const publicQuery = t.procedure.use(enforcePermissions).use(autoLedger);
 
 const requireAuth = t.middleware(async (opts) => {
   const { ctx, next } = opts;

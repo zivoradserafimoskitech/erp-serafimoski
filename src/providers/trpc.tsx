@@ -27,8 +27,19 @@ function humanizeError(err: any): string {
   return msg.slice(0, 300);
 }
 
-const queryClient = new QueryClient({
+const queryClient: QueryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // податоците се освежуваат сами: при враќање во прозорецот и секоја минута додека страницата е отворена
+      refetchOnWindowFocus: true,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: false,
+      staleTime: 5_000,
+    },
+  },
   mutationCache: new MutationCache({
+    // секое зачувување (налог, уплата, фактура...) ги освежува сите модули -- добивка, тек, табла, главна книга
+    onSuccess: () => { queryClient.invalidateQueries(); },
     onError: (error) => {
       toast.error("Зачувувањето не успеа", { description: humanizeError(error) });
       console.error("[mutation error]", error);

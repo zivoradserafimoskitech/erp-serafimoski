@@ -179,7 +179,7 @@ export const opsRouter = createRouter({
     .query(async ({ input }) => {
       const rate = await loadRates();
       const orders = await q(`SELECT o.id, o.order_number, o.status, o.created_at, o.cost_amount, c.name AS customer,
-          COALESCE((SELECT SUM(total_price) FROM order_items oi WHERE oi.order_id = o.id), 0) AS items_net,
+          COALESCE((SELECT SUM(total_price) FROM order_items oi WHERE oi.order_id = o.id), 0) AS items_net, o.total_amount,
           qt.currency AS quote_currency, qt.quote_number, qt.cost_amount AS quote_cost
         FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
         LEFT JOIN quotations qt ON qt.converted_order_id = o.id
@@ -217,7 +217,9 @@ export const opsRouter = createRouter({
           }, 0);
         } else {
           revenueSource = "order";
-          revenue = toMkd(Number(o.items_net), cur, date, rate) ?? toMkd(Number(o.items_net), cur, todayIso(), rate);
+          // нарачка без ставки (рачно внесена) -- вредноста на нарачката
+          const net = Number(o.items_net) || Number(o.total_amount) || 0;
+          revenue = toMkd(net, cur, date, rate) ?? toMkd(net, cur, todayIso(), rate);
         }
         // трошоците во понудата се секогаш во денари (од набавните цени), без разлика на валутата на понудата
         const plannedCost = Number(o.quote_cost ?? o.cost_amount ?? 0);
