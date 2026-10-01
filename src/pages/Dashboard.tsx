@@ -10,12 +10,9 @@ import {
   ClipboardList,
   CheckCircle,
   FileText,
-  ScanLine,
-  ArrowRight,
   RefreshCw,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router";
 
 export default function Dashboard() {
@@ -28,6 +25,11 @@ export default function Dashboard() {
   const money = (v: any) => Number(v ?? 0).toLocaleString("mk-MK", { maximumFractionDigits: 0 });
   const navigate = useNavigate();
   const pendingParsed = parsedDocs?.filter(d => d.status === "parsed").length ?? 0;
+  const now = new Date();
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const monthName = ["јануари", "февруари", "март", "април", "мај", "јуни", "јули", "август", "септември", "октомври", "ноември", "декември"][now.getMonth()];
+  const { data: profit } = trpc.ops.profitabilityReport.useQuery({ from: `${now.getFullYear()}-01-01`, to: ymd(now) }, { refetchInterval: 60_000 });
+  const { data: vat } = trpc.finance.vatBooks.useQuery({ from: ymd(new Date(now.getFullYear(), now.getMonth(), 1)), to: ymd(now) }, { refetchInterval: 60_000 });
 
   const k = stats?.kpi;
   const den = (v: any) => `${money(v)} ден.`;
@@ -90,175 +92,83 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Status breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Order status */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Статус на нарачки
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              { label: "На чекање", value: stats?.orders.pending ?? 0, color: "bg-gray-400" },
-              { label: "Потврдени", value: stats?.orders.confirmed ?? 0, color: "bg-blue-400" },
-              { label: "Во производство", value: stats?.orders.inProduction ?? 0, color: "bg-amber-400" },
-              { label: "Готови за испорака", value: stats?.orders.ready ?? 0, color: "bg-emerald-400" },
-              { label: "Испорачани", value: stats?.orders.delivered ?? 0, color: "bg-teal-500" },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-3">
-                <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                <span className="flex-1 text-sm text-gray-600">{item.label}</span>
-                <span className="text-sm font-semibold text-gray-800">{item.value}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Production status */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Factory className="h-4 w-4" />
-              Статус на производство
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              { label: "На чекање", value: stats?.production.pending ?? 0, color: "bg-gray-400" },
-              { label: "Во тек", value: stats?.production.inProgress ?? 0, color: "bg-blue-400" },
-              { label: "Завршени", value: stats?.production.completed ?? 0, color: "bg-emerald-400" },
-              { label: "Паузирани", value: stats?.production.onHold ?? 0, color: "bg-amber-400" },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-3">
-                <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                <span className="flex-1 text-sm text-gray-600">{item.label}</span>
-                <span className="text-sm font-semibold text-gray-800">{item.value}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Procurement status */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              Статус на набавка
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              { label: "Нацрт", value: stats?.procurement.draft ?? 0, color: "bg-gray-400" },
-              { label: "Испратени", value: stats?.procurement.sent ?? 0, color: "bg-blue-400" },
-              { label: "Делумно", value: stats?.procurement.partial ?? 0, color: "bg-amber-400" },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-3">
-                <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                <span className="flex-1 text-sm text-gray-600">{item.label}</span>
-                <span className="text-sm font-semibold text-gray-800">{item.value}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Parsed Documents */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ScanLine className="h-4 w-4" />
-              OCR - Парсирани документи
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {pendingParsed > 0 ? (
-              <>
-                <p className="text-sm text-gray-600">
-                  Имате <span className="font-semibold text-indigo-600">{pendingParsed}</span> парсирани приемници за ревизија
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full text-indigo-700 border-indigo-300 hover:bg-indigo-50"
-                  onClick={() => navigate("/priemnici")}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Прегледај приемници
-                  <ArrowRight className="h-4 w-4 ml-auto" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-gray-500">Нема парсирани документи за ревизија</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate("/priemnici")}
-                >
-                  <ScanLine className="h-4 w-4 mr-2" />
-                  Учитај приемница (OCR)
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Quick info */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Финансиски преглед
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Вкупен промет</span>
-              <span className="text-lg font-bold text-emerald-600">
-                {stats?.financial.totalRevenue ?? "0"} ден.
-              </span>
-            </div>
-            <div className="h-px bg-gray-100" />
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Вкупна маржа</span>
-              <span className="text-lg font-bold text-amber-600">
-                {stats?.financial.totalMargin ?? "0"} ден.
-              </span>
-            </div>
-            <div className="h-px bg-gray-100" />
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Ненаплатени побарувања</span>
-              <span className="text-lg font-bold text-emerald-700">
-                {stats?.financial.totalReceivables ?? "0"} ден.
-              </span>
-            </div>
-            <div className="h-px bg-gray-100" />
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Неплатени обврски</span>
-              <span className="text-lg font-bold text-red-600">
-                {stats?.financial.totalPayables ?? "0"} ден.
-              </span>
-            </div>
-            <div className="h-px bg-gray-100" />
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">ДДВ салдо</span>
-              <span className="text-lg font-bold text-blue-600">
-                {stats?.financial.vatBalance ?? "0"} ден.
-              </span>
-            </div>
-            <div className="h-px bg-gray-100" />
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Вкупно материјали</span>
-              <span className="text-lg font-bold text-blue-600">
-                {stats?.storage.totalMaterials ?? 0}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Состојба по оддели: секој ред води до листата */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <StatusCard title="Нарачки по статус" icon={Package} rows={[
+          { label: "На чекање", value: stats?.orders.pending ?? 0, color: "bg-gray-400", href: "/tek" },
+          { label: "Потврдени", value: stats?.orders.confirmed ?? 0, color: "bg-blue-400", href: "/tek" },
+          { label: "Во производство", value: stats?.orders.inProduction ?? 0, color: "bg-amber-400", href: "/tek" },
+          { label: "Готови за испорака", value: stats?.orders.ready ?? 0, color: "bg-emerald-400", href: "/tek" },
+          { label: "Испорачани", value: stats?.orders.delivered ?? 0, color: "bg-teal-500", href: "/tek" },
+        ]} note={(stats?.orders.inProductionNoWo ?? 0) > 0 ? `${stats?.orders.inProductionNoWo} нарачки се „во производство“, а немаат отворен работен налог` : undefined}
+          footer={`статус на секоја нарачка · ${stats?.orders.cancelled ?? 0} откажани не се прикажани`} />
+        <StatusCard title="Работни налози" icon={Factory} rows={[
+          { label: "Чекаат почеток", value: stats?.production.pending ?? 0, color: "bg-gray-400", href: "/proizvodstvo" },
+          { label: "Во тек", value: stats?.production.inProgress ?? 0, color: "bg-blue-400", href: "/proizvodstvo" },
+          { label: "Паузирани", value: stats?.production.onHold ?? 0, color: "bg-amber-400", href: "/proizvodstvo" },
+          { label: "Завршени (вкупно)", value: stats?.production.completed ?? 0, color: "bg-emerald-400", href: "/proizvodstvo" },
+        ]} footer="статус на секој работен налог" />
+        <StatusCard title="Набавка" icon={ShoppingCart} rows={[
+          { label: "Нарачки неиспратени до добавувач", value: stats?.procurement.draft ?? 0, color: "bg-gray-400", href: "/nabavka" },
+          { label: "Испратени, чекаме стока", value: stats?.procurement.sent ?? 0, color: "bg-blue-400", href: "/nabavka" },
+          { label: "Делумно примени", value: stats?.procurement.partial ?? 0, color: "bg-amber-400", href: "/nabavka" },
+          { label: "Приемници во нацрт (непотврдени)", value: stats?.procurement.receiptsDraft ?? 0, color: "bg-violet-400", href: "/priemnici" },
+          ...(pendingParsed > 0 ? [{ label: "Скенирани приемници за преглед", value: pendingParsed, color: "bg-indigo-400", href: "/priemnici" }] : []),
+        ]} footer="нарачки кон добавувачи и приемници" />
       </div>
+
+      {/* Пари: секоја бројка со извор */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="h-4 w-4" />Финансиски преглед</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[
+            { label: `Добивка по нарачки ${k?.year ?? ""}`, value: profit?.totals.counted ? den(profit.totals.profit) : "—",
+              cls: (profit?.totals.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600", href: "/finansii?tab=profit",
+              hint: profit?.totals.counted
+                ? `приход ${den(profit.totals.revenue)} − трошок ${den(profit.totals.actualCost)}${profit.totals.revenue ? ` · маржа ${Math.round(profit.totals.profit / profit.totals.revenue * 100)}%` : ""} · ${profit.totals.counted} нарачки${profit.totals.skipped ? `; ${profit.totals.skipped} без познат трошок не се бројат` : ""}`
+                : "нема нарачка со познат приход и трошок" },
+            { label: `ДДВ за ${monthName}`, value: vat ? den(Math.abs(vat.summary.payable)) : "—",
+              cls: (vat?.summary.payable ?? 0) > 0 ? "text-red-600" : "text-emerald-700", href: "/finansii?tab=vat",
+              hint: vat ? `${vat.summary.payable > 0 ? "за плаќање" : vat.summary.payable < 0 ? "за поврат" : "нула"} · излезен ${den(vat.summary.outVat)} − влезен ${den(vat.summary.inVat)}` : "" },
+            { label: "Вредност на залихата", value: den(stats?.storage.inventoryValue), cls: "text-gray-800", href: "/sklad",
+              hint: `количина × просечна набавна цена · ${stats?.storage.totalMaterials ?? 0} материјали` },
+            { label: "Понуди што чекаат одговор", value: String(stats?.quotes.pending ?? 0), cls: "text-gray-800", href: "/ponudi",
+              hint: `во нацрт или испратени · вкупно ${stats?.quotes.total ?? 0} понуди` },
+          ].map(f => (
+            <button key={f.label} onClick={() => navigate(f.href)} className="text-left rounded-lg border p-3 hover:border-amber-300 hover:bg-amber-50/40 transition">
+              <p className="text-xs text-gray-500">{f.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${f.cls}`}>{f.value}</p>
+              <p className="text-[11px] text-gray-500 leading-snug mt-0.5">{f.hint}</p>
+            </button>
+          ))}
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+function StatusCard({ title, icon: Icon, rows, note, footer }: {
+  title: string; icon: any; rows: { label: string; value: number; color: string; href: string }[]; note?: string; footer?: string;
+}) {
+  const navigate = useNavigate();
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2"><Icon className="h-4 w-4" />{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-1">
+        {rows.map(r => (
+          <button key={r.label} onClick={() => navigate(r.href)} className="w-full flex items-center gap-3 rounded-md px-2 py-1.5 -mx-2 hover:bg-gray-50 text-left">
+            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${r.color}`} />
+            <span className="flex-1 text-sm text-gray-600">{r.label}</span>
+            <span className={`text-sm font-semibold ${r.value ? "text-gray-900" : "text-gray-300"}`}>{r.value}</span>
+          </button>
+        ))}
+        {note && <p className="flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800"><AlertTriangle className="h-3.5 w-3.5 mt-px shrink-0" />{note}</p>}
+        {footer && <p className="text-[11px] text-gray-400 pt-1">{footer}</p>}
+      </CardContent>
+    </Card>
   );
 }

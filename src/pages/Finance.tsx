@@ -635,9 +635,16 @@ function ProfitTab() {
           <Card key={k.l}><CardContent className="p-4">
             <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">{k.l}</p>
             <p className={`text-2xl font-bold tabular-nums ${k.c}`}>{k.v}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">од {t?.counted ?? 0} нарачки со познат трошок</p>
           </CardContent></Card>
         ))}
       </div>
+      {(t?.skipped ?? 0) > 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          {t!.skipped} {t!.skipped === 1 ? "нарачка не е вклучена" : "нарачки не се вклучени"} во збирот (приход {fmt(t!.skippedRevenue)} ден) — без работен налог и без пресметка во понудата трошокот не се знае (или нарачката нема вредност), па добивката би била лажна. Отвори налог или внеси трошок во понудата.
+        </p>
+      )}
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
@@ -663,11 +670,12 @@ function ProfitTab() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-gray-500">{fmt(r.plannedCost)}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {fmt(r.actualCost)}
-                      <div className="text-[10px] text-gray-400">мат. {fmt(r.materialCost)} · опер. {fmt(r.operationCost)}</div>
+                      {r.costSource === "unknown" ? <span className="text-xs text-amber-700">не се знае</span> : fmt(r.actualCost)}
+                      <div className="text-[10px] text-gray-400">{r.costSource === "workorders" ? `од налог: мат. ${fmt(r.materialCost)} · опер. ${fmt(r.operationCost)}`
+                        : r.costSource === "estimate" ? "проценка од понудата (нема налог)" : "нема налог ни понуда"}</div>
                     </TableCell>
-                    <TableCell className={`text-right tabular-nums text-sm ${r.variance > 0 ? "text-red-600" : "text-emerald-700"}`}>{r.variance > 0 ? "+" : ""}{fmt(r.variance)}</TableCell>
-                    <TableCell className={`text-right tabular-nums font-semibold ${(r.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>{r.profit === null ? "—" : fmt(r.profit)}</TableCell>
+                    <TableCell className={`text-right tabular-nums text-sm ${(r.variance ?? 0) > 0 ? "text-red-600" : "text-emerald-700"}`}>{r.variance === null ? <span className="text-gray-300">—</span> : `${r.variance > 0 ? "+" : ""}${fmt(r.variance)}`}</TableCell>
+                    <TableCell className={`text-right tabular-nums font-semibold ${(r.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>{r.profit === null ? <span className="text-gray-300 font-normal">—</span> : fmt(r.profit)}</TableCell>
                     <TableCell>
                       {m === null ? <span className="text-xs text-gray-400">—</span> : (
                         <div className="flex items-center gap-2">
@@ -684,7 +692,12 @@ function ProfitTab() {
           </TableBody>
         </Table>
       </CardContent></Card>
-      <p className="text-xs text-gray-400">Реален трошок = материјал на налозите (издаден, или планиран ако уште не е издаден) + операции (реално време × цена/час, или проценето). Приход = фактурирано без ДДВ, или вредноста на нарачката.</p>
+      <div className="text-xs text-gray-500 space-y-0.5">
+        <p><b>Приход</b> = издадени фактури за нарачката, без ДДВ, во денари (минус книжни одобренија). Ако уште не е фактурирана — вредноста на нарачката без ДДВ.</p>
+        <p><b>План</b> = трошокот пресметан во понудата (или во налогот ако нема понуда).</p>
+        <p><b>Реално</b> = материјал на налозите (издаден, или планиран ако уште не е издаден) + операции (реално време × цена/час, или проценето). Без налог се зема проценката од понудата.</p>
+        <p><b>Добивка</b> = приход − реално. Нарачките без познат трошок не влегуваат во збирот.</p>
+      </div>
     </div>
   );
 }
