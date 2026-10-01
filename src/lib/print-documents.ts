@@ -26,6 +26,7 @@ function shell(title: string, accent: string, body: string) {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root { --accent: ${accent}; --dark: #16112b; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 13mm 12mm; }
   @page { size: A4; margin: 0; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid var(--accent); padding-bottom: 11px; }
@@ -70,8 +71,13 @@ function shell(title: string, accent: string, body: string) {
 </body></html>`;
 }
 
-function header(s: any, docTitle: string, docNum: string, metaHtml: string) {
+function header(s: any, docTitle: string, docNum: string, metaHtml: string, opts: { logoOnly?: boolean } = {}) {
   const logo = "/logo-black.png?v=1";
+  // logoOnly: податоците за фирмата се веќе во полето „Нарачател/Од“ -- до логото не се повторуваат
+  if (opts.logoOnly) return `<div class="head">
+    <div class="co"><img src="${esc(logo)}" alt="${esc(s?.name ?? "")}" onerror="this.outerHTML='<h1>${esc(s?.name ?? "")}</h1>'"></div>
+    <div class="doc"><h2>${docTitle}</h2><div class="num">${esc(docNum)}</div><div class="meta">${metaHtml}</div></div>
+  </div>`;
   return `<div class="head">
     <div class="co">
       <img src="${esc(logo)}" alt="" onerror="this.style.display='none'">
@@ -1058,7 +1064,7 @@ export function purchaseOrderHtml(po: any, settings: any, lang: DocLang = "mk"):
   const body = `
   ${header(s, t.title, po?.poNumber ?? "", `
     ${t.date}: <b>${dt(po?.createdAt)}</b><br>
-    ${po?.expectedDate ? `${t.expected}: <b>${dt(po.expectedDate)}</b>` : ""}`)}
+    ${po?.expectedDate ? `${t.expected}: <b>${dt(po.expectedDate)}</b>` : ""}`, { logoOnly: true })}
   <div class="parties">
     <div class="party"><h3>${t.buyer}</h3>
       <div class="n">${esc(s?.name ?? "Serafimoski Tech DOOEL")}</div>
@@ -1092,3 +1098,33 @@ export function purchaseOrderHtml(po: any, settings: any, lang: DocLang = "mk"):
 export function printPurchaseOrder(po: any, settings: any, lang: DocLang = "mk") {
   openPrint(purchaseOrderHtml(po, settings, lang));
 }
+
+// ══════════════ НЕУСОГЛАСЕНОСТ: рекламација до добавувач / извештај до клиент ══════════════
+export function qualityIssueHtml(qi: any, settings: any): string {
+  const s = settings ?? {};
+  const toSupplier = qi?.kind === "supplier";
+  const title = toSupplier ? "РЕКЛАМАЦИЈА" : qi?.kind === "complaint" ? "ОДГОВОР НА РЕКЛАМАЦИЈА" : "ИЗВЕШТАЈ ЗА НЕУСОГЛАСЕНОСТ";
+  const partner = toSupplier ? qi?.supplier : qi?.customer;
+  const row = (k: string, v: any) => v ? `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>` : "";
+  const block = (h: string, v: any) => v ? `<div class="stitle">${h}</div><div style="white-space:pre-wrap;line-height:1.6">${esc(v)}</div>` : "";
+  const body = `
+  ${header(s, title, qi?.number ?? "", `Датум: <b>${dt(qi?.date)}</b>`, { logoOnly: true })}
+  <div class="parties">
+    <div class="party"><h3>Од</h3><div class="n">${esc(s?.name ?? "")}</div><div>${esc(s?.address ?? "")}</div>${s?.phone ? `<div>тел: ${esc(s.phone)}</div>` : ""}${s?.email ? `<div>${esc(s.email)}</div>` : ""}</div>
+    <div class="party"><h3>${toSupplier ? "До добавувач" : "До"}</h3><div class="n">${esc(partner ?? "—")}</div></div>
+  </div>
+  <div class="stitle">Предмет</div>
+  <div style="font-size:13px;font-weight:700">${esc(qi?.title ?? "")}</div>
+  <div class="grid2" style="margin-top:8px">
+    ${row("Работен налог", qi?.woNumber)}${row("Материјал", qi?.material)}${row("Трошок", qi?.cost ? den(qi.cost) + " ден." : "")}${row("Одговорен", qi?.responsible)}
+  </div>
+  ${block("Опис", qi?.description)}
+  ${block("Причина", qi?.rootCause)}
+  ${block("Преземена мерка", qi?.action)}
+  ${toSupplier ? `<div class="box"><b>Барање:</b> Ве молиме за замена на неусогласениот материјал или одобрување (книжно одобрување), како и писмен одговор со причина и мерка за да не се повтори.</div>` : ""}
+  <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">${toSupplier ? "Примил (добавувач)" : "Одобрил"}</div></div></div>
+  ${footer(s)}`;
+  return shell(`${title} ${qi?.number ?? ""}`, "#c2410c", body);
+}
+
+export function printQualityIssue(qi: any, settings: any) { openPrint(qualityIssueHtml(qi, settings)); }

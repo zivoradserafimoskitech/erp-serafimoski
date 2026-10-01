@@ -1,6 +1,7 @@
 // Оперативни извештаи и модули: добивка по нарачка, распоред на производство,
 // контрола на квалитет (неусогласености/рекламации) и одржување на машини.
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "./middleware";
 import { getPool } from "./queries/connection";
 import { loadRates, iso } from "./rates-helper";
@@ -343,17 +344,61 @@ export const opsRouter = createRouter({
       let where = "1=1";
       if (input?.status) { params.push(input.status); where += ` AND qi.status = $${params.length}`; }
       if (input?.kind) { params.push(input.kind); where += ` AND qi.kind = $${params.length}`; }
-      const rows = await q(`SELECT qi.*, w.wo_number, c.name AS customer, s.name AS supplier, m.name AS material
+      const rows = await q(`SELECT qi.*, w.wo_number, c.name AS customer, s.name AS supplier, m.name AS material,
+          rw.wo_number AS rework_wo_number, rw.status AS rework_status, rw.cost_amount AS rework_cost, s.email AS supplier_email, c.email AS customer_email
         FROM quality_issues qi
-        LEFT JOIN work_orders w ON w.id = qi.work_order_id LEFT JOIN customers c ON c.id = qi.customer_id
+        LEFT JOIN work_orders w ON w.id = qi.work_order_id LEFT JOIN work_orders rw ON rw.id = qi.rework_wo_id LEFT JOIN customers c ON c.id = qi.customer_id
         LEFT JOIN suppliers s ON s.id = qi.supplier_id LEFT JOIN materials m ON m.id = qi.material_id
         WHERE ${where} ORDER BY qi.issue_date DESC, qi.id DESC LIMIT 500`, params);
       return rows.map(r => ({
-        id: r.id, number: r.issue_number, date: iso(r.issue_date), kind: r.kind, status: r.status, title: r.title, description: r.description,
+        id: Number(r.id), number: r.issue_number, date: iso(r.issue_date), kind: r.kind, status: r.status, title: r.title, description: r.description,
         rootCause: r.root_cause, action: r.action, cost: Number(r.cost), responsible: r.responsible, closedAt: r.closed_at ? iso(r.closed_at) : null,
-        workOrderId: r.work_order_id, woNumber: r.wo_number, customerId: r.customer_id, customer: r.customer, supplierId: r.supplier_id, supplier: r.supplier,
-        materialId: r.material_id, material: r.material,
+        // bigint од базата доаѓа како текст -- во броеви, за да се совпаѓаат со изборите на екранот
+        workOrderId: r.work_order_id ? Number(r.work_order_id) : null, woNumber: r.wo_number, customerId: r.customer_id ? Number(r.customer_id) : null, customer: r.customer,
+        supplierId: r.supplier_id ? Number(r.supplier_id) : null, supplier: r.supplier,
+        materialId: r.material_id ? Number(r.material_id) : null, material: r.material,
+        reworkWoId: r.rework_wo_id ? Number(r.rework_wo_id) : null, reworkWoNumber: r.rework_wo_number, reworkStatus: r.rework_status, reworkCost: Number(r.rework_cost ?? 0),
+        supplierEmail: r.supplier_email, customerEmail: r.customer_email,
       }));
+    }),
+
+  // Се што може да се поврзе со неусогласеност, со врските меѓу нив (налог -> клиент, материјал -> добавувач)
+  qualityLinkOptions: publicQuery.query(async () => {
+    const wos = await q(`SELECT w.id, w.wo_number, w.description, w.status, o.customer_id, c.name AS customer
+      FROM work_orders w LEFT JOIN orders o ON o.id = w.order_id LEFT JOIN customers c ON c.id = o.customer_id
+      ORDER BY w.id DESC LIMIT 500`);
+    const customers = await q(`SELECT id, name, company FROM customers ORDER BY name LIMIT 1000`);
+    const suppliers = await q(`SELECT id, name FROM suppliers ORDER BY name LIMIT 1000`);
+    const materials = await q(`SELECT m.id, m.code, m.name, m.unit, COALESCE(m.default_supplier_id,
+        (SELECT l.supplier_id FROM material_lots l WHERE l.material_id = m.id AND l.supplier_id IS NOT NULL ORDER BY l.id DESC LIMIT 1)) AS supplier_id
+      FROM materials m WHERE m.is_active = 'active' ORDER BY m.name LIMIT 2000`);
+    return {
+      wos: wos.map(w => ({ id: Number(w.id), number: w.wo_number, description: w.description, status: w.status, customerId: w.customer_id ? Number(w.customer_id) : null, customer: w.customer })),
+      customers: customers.map(c => ({ id: Number(c.id), name: c.company || c.name })),
+      suppliers: suppliers.map(x => ({ id: Number(x.id), name: x.name })),
+      materials: materials.map(m => ({ id: Number(m.id), code: m.code, name: m.name, unit: m.unit, supplierId: m.supplier_id ? Number(m.supplier_id) : null })),
+    };
+  }),
+
+  // Корекција: налог за доработка поврзан со неусогласеноста (иста нарачка, висок приоритет)
+  qualityRework: publicQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const qi = (await q(`SELECT qi.*, w.order_id, w.quotation_id FROM quality_issues qi LEFT JOIN work_orders w ON w.id = qi.work_order_id WHERE qi.id = $1`, [input.id]))[0];
+      if (!qi) throw new TRPCError({ code: "NOT_FOUND", message: "Неусогласеноста не постои" });
+      if (qi.rework_wo_id) {
+        const ex = (await q(`SELECT wo_number FROM work_orders WHERE id = $1`, [qi.rework_wo_id]))[0];
+        if (ex) throw new TRPCError({ code: "BAD_REQUEST", message: `Веќе постои налог за доработка ${ex.wo_number}` });
+      }
+      const { getNextDocNumber } = await import("./counters-helper");
+      const woNumber = await getNextDocNumber("workOrder");
+      const r = await q(`INSERT INTO work_orders (wo_number, order_id, quotation_id, description, status, priority, notes)
+        VALUES ($1,$2,$3,$4,'pending','high',$5) RETURNING id`,
+        [woNumber, qi.order_id ?? null, qi.quotation_id ?? null, `Доработка за ${qi.issue_number}: ${qi.title}`.slice(0, 500),
+         [`Корективна мерка за неусогласеност ${qi.issue_number}.`, qi.description].filter(Boolean).join("\n")]);
+      await q(`UPDATE quality_issues SET rework_wo_id = $1, status = CASE WHEN status = 'open' THEN 'in_progress' ELSE status END WHERE id = $2`, [r[0].id, input.id]);
+      await logAudit({ action: "CREATE", entityType: "work_order", entityId: r[0].id, description: `Налог за доработка ${woNumber} за ${qi.issue_number}` }).catch(() => {});
+      return { success: true, woId: Number(r[0].id), woNumber };
     }),
 
   qualityStats: publicQuery.query(async () => {
@@ -372,6 +417,16 @@ export const opsRouter = createRouter({
       cost: z.number().min(0).default(0), responsible: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      // Врски сами: налог -> клиент (од нарачката), материјал -> добавувач (последна партија / стандарден)
+      if (input.workOrderId && !input.customerId) {
+        const w = (await q(`SELECT o.customer_id FROM work_orders w LEFT JOIN orders o ON o.id = w.order_id WHERE w.id = $1`, [input.workOrderId]))[0];
+        if (w?.customer_id) input.customerId = Number(w.customer_id);
+      }
+      if (input.materialId && !input.supplierId) {
+        const m = (await q(`SELECT COALESCE(m.default_supplier_id, (SELECT l.supplier_id FROM material_lots l WHERE l.material_id = m.id AND l.supplier_id IS NOT NULL ORDER BY l.id DESC LIMIT 1)) s
+          FROM materials m WHERE m.id = $1`, [input.materialId]))[0];
+        if (m?.s) input.supplierId = Number(m.s);
+      }
       const num = await nextNumber("quality_issues", "issue_number", "НУ", input.date);
       const r = await q(`INSERT INTO quality_issues (issue_number, issue_date, kind, title, description, work_order_id, customer_id, supplier_id, material_id, cost, responsible)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
@@ -384,6 +439,8 @@ export const opsRouter = createRouter({
     .input(z.object({
       id: z.number(), status: z.enum(["open", "in_progress", "closed"]).optional(), rootCause: z.string().optional(),
       action: z.string().optional(), cost: z.number().min(0).optional(), responsible: z.string().optional(),
+      workOrderId: z.number().nullable().optional(), customerId: z.number().nullable().optional(),
+      supplierId: z.number().nullable().optional(), materialId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const sets: string[] = []; const params: any[] = [input.id];
@@ -393,6 +450,10 @@ export const opsRouter = createRouter({
       if (input.action !== undefined) add("action", input.action);
       if (input.cost !== undefined) add("cost", input.cost);
       if (input.responsible !== undefined) add("responsible", input.responsible);
+      if (input.workOrderId !== undefined) add("work_order_id", input.workOrderId);
+      if (input.customerId !== undefined) add("customer_id", input.customerId);
+      if (input.supplierId !== undefined) add("supplier_id", input.supplierId);
+      if (input.materialId !== undefined) add("material_id", input.materialId);
       if (sets.length) await q(`UPDATE quality_issues SET ${sets.join(", ")} WHERE id = $1`, params);
       return { success: true };
     }),

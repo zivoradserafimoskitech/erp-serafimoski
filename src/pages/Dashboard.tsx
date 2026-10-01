@@ -29,66 +29,26 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const pendingParsed = parsedDocs?.filter(d => d.status === "parsed").length ?? 0;
 
+  const k = stats?.kpi;
+  const den = (v: any) => `${money(v)} ден.`;
+  // Секоја картичка: бројка + од каде доаѓа (hint) + каде води
   const cards = [
-    {
-      title: "Вкупно нарачки",
-      value: stats?.orders.total ?? 0,
-      href: "/tek",
-      icon: ClipboardList,
-      color: "text-blue-600",
-      bg: "bg-blue-50",
-    },
-    {
-      title: "Налози во тек",
-      value: stats?.production.inProgress ?? 0,
-      href: "/proizvodstvo",
-      icon: Factory,
-      color: "text-amber-600",
-      bg: "bg-amber-50",
-    },
-    {
-      title: "Ниски залихи",
-      value: stats?.storage.lowStock ?? 0,
-      href: "/sklad",
-      icon: AlertTriangle,
-      color: "text-red-600",
-      bg: "bg-red-50",
-      hint: (stats?.storage.noMinStock ?? 0) > 0
-        ? `${stats?.storage.noMinStock} материјали немаат поставен минимум`
-        : undefined,
-    },
-    {
-      title: "Активни клиенти",
-      value: stats?.customers.active ?? 0,
-      href: "/klienti",
-      icon: Users,
-      color: "text-emerald-600",
-      bg: "bg-emerald-50",
-    },
-    {
-      title: "Вкупен промет (нарачки)",
-      value: `${money(stats?.financial.totalRevenue)} ден.`,
-      href: "/finansii",
-      icon: TrendingUp,
-      color: "text-violet-600",
-      bg: "bg-violet-50",
-    },
-    {
-      title: "Завршени работни налози",
-      value: stats?.production.completed ?? 0,
-      href: "/proizvodstvo",
-      icon: CheckCircle,
-      color: "text-teal-600",
-      bg: "bg-teal-50",
-    },
-    {
-      title: "Парсирани приемници",
-      value: pendingParsed,
-      href: "/priemnici",
-      icon: ScanLine,
-      color: "text-indigo-600",
-      bg: "bg-indigo-50",
-    },
+    { title: "Нарачки во тек", value: k?.ordersOpen ?? 0, icon: ClipboardList, color: "text-blue-600", bg: "bg-blue-50", href: "/tek",
+      hint: `неиспорачани и неоткажани · вкупно ${k?.ordersTotal ?? 0} нарачки` },
+    { title: "Налози во производство", value: k?.woActive ?? 0, icon: Factory, color: "text-amber-600", bg: "bg-amber-50", href: "/proizvodstvo",
+      hint: `${k?.woInProgress ?? 0} во тек · ${k?.woPending ?? 0} чекаат` },
+    { title: `Фактурирано ${k?.year ?? ""}`, value: den(k?.invoicedYear), icon: TrendingUp, color: "text-violet-600", bg: "bg-violet-50", href: "/smetkovodstvo",
+      hint: `без ДДВ, од ${k?.invoicedYearCount ?? 0} издадени фактури (минус книжни одобренија)${k?.invoicedNoRate ? ` · ${k.invoicedNoRate} без курс не се бројат` : ""}` },
+    { title: "Ненаплатено од купувачи", value: den(k?.receivables), icon: FileText, color: "text-emerald-600", bg: "bg-emerald-50", href: "/smetkovodstvo",
+      hint: `${k?.receivablesCount ?? 0} отворени излезни фактури, по уплатите (банка + благајна)` },
+    { title: "Неплатено кон добавувачи", value: den(k?.payables), icon: ShoppingCart, color: "text-red-600", bg: "bg-red-50", href: "/smetkovodstvo",
+      hint: `${k?.payablesCount ?? 0} отворени влезни фактури, по плаќањата` },
+    { title: "Ниски залихи", value: stats?.storage.lowStock ?? 0, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", href: "/sklad",
+      hint: (stats?.storage.noMinStock ?? 0) > 0 ? `материјали под поставениот минимум · ${stats?.storage.noMinStock} немаат поставен минимум` : "материјали под поставениот минимум" },
+    { title: "Отворени неусогласености", value: k?.qualityOpen ?? 0, icon: CheckCircle, color: "text-orange-600", bg: "bg-orange-50", href: "/kvalitet",
+      hint: "грешки, рекламации и проблеми со добавувачи што не се затворени" },
+    { title: "Активни клиенти", value: stats?.customers.active ?? 0, icon: Users, color: "text-teal-600", bg: "bg-teal-50", href: "/klienti",
+      hint: `од вкупно ${stats?.customers.total ?? 0} внесени клиенти` },
   ];
 
   return (
@@ -105,7 +65,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
@@ -117,7 +77,7 @@ export default function Dashboard() {
                     <p className="text-sm text-gray-500">{card.title}</p>
                     <p className="text-2xl font-bold text-gray-800">{card.value}</p>
                     {(card as any).hint && (
-                      <p className="text-[11px] text-gray-400 mt-0.5">{(card as any).hint}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{(card as any).hint}</p>
                     )}
                   </div>
                   <div className={`${card.bg} p-2.5 rounded-lg`}>

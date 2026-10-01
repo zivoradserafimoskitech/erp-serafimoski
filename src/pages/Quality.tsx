@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
+import QualityIssueCreateDialog, { type QualityPreset } from "@/components/QualityIssueCreateDialog";
+import QualityIssueDetailDialog from "@/components/QualityIssueDetailDialog";
 import { DateInput } from "@/components/ui/date-input";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,9 +20,9 @@ const fmtDate = (d?: string | null) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.
 const fmt = (n: number) => n.toLocaleString("mk-MK", { maximumFractionDigits: 2 });
 
 const KIND: Record<string, { label: string; cls: string }> = {
-  internal: { label: "Интерна", cls: "bg-gray-100 text-gray-700" },
+  internal: { label: "Грешка во производство", cls: "bg-gray-100 text-gray-700" },
   complaint: { label: "Рекламација од клиент", cls: "bg-red-100 text-red-700" },
-  supplier: { label: "Кон добавувач", cls: "bg-purple-100 text-purple-700" },
+  supplier: { label: "Проблем со добавувач", cls: "bg-purple-100 text-purple-700" },
 };
 const STATUS: Record<string, { label: string; cls: string }> = {
   open: { label: "Отворена", cls: "bg-amber-100 text-amber-800" },
@@ -30,21 +32,26 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 const LOGKIND: Record<string, string> = { planned: "Редовен сервис", breakdown: "Дефект", repair: "Поправка" };
 
 function QualityTab() {
-  const utils = trpc.useUtils();
   const [statusF, setStatusF] = useState("open_all");
   const { data: rows } = trpc.ops.qualityList.useQuery(statusF === "open_all" ? undefined : { status: statusF });
   const { data: stats } = trpc.ops.qualityStats.useQuery();
-  const { data: wos } = trpc.production.workOrderList.useQuery({});
-  const { data: customers } = trpc.customers.customerList.useQuery({});
-  const { data: suppliers } = trpc.procurement.supplierList.useQuery();
+  const { data: allRows } = trpc.ops.qualityList.useQuery(undefined);
   const [newOpen, setNewOpen] = useState(false);
-  const [sel, setSel] = useState<any>(null);
-  const empty = { date: today(), kind: "internal", title: "", description: "", workOrderId: "", customerId: "", supplierId: "", cost: "", responsible: "" };
-  const [f, setF] = useState(empty);
-  const inv = () => { utils.ops.qualityList.invalidate(); utils.ops.qualityStats.invalidate(); };
-  const create = trpc.ops.qualityCreate.useMutation({ onSuccess: (r) => { toast.success(`Внесена ${r.number}`); setNewOpen(false); setF(empty); inv(); }, onError: (e) => toast.error(e.message) });
-  const update = trpc.ops.qualityUpdate.useMutation({ onSuccess: () => { toast.success("Зачувано"); inv(); }, onError: (e) => toast.error(e.message) });
-  const del = trpc.ops.qualityDelete.useMutation({ onSuccess: () => { setSel(null); inv(); } });
+  const [selId, setSelId] = useState<number | null>(null);
+  const sel = selId ? (allRows ?? rows ?? []).find((r: any) => r.id === selId) ?? null : null; // секогаш свежо од листата
+  const [preset, setPreset] = useState<QualityPreset | null>(null);
+  // Отворање однадвор: /kvalitet?new=1&wo=5 | &kind=supplier&supplier=3&material=7 | &customer=2
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (!params.get("new") && !params.get("open")) return;
+    const n = (k: string) => (params.get(k) ? Number(params.get(k)) : undefined);
+    if (params.get("open")) setSelId(Number(params.get("open")));
+    else {
+      setPreset({ kind: (params.get("kind") as any) || undefined, workOrderId: n("wo"), customerId: n("customer"), supplierId: n("supplier"), materialId: n("material"), title: params.get("title") ?? undefined });
+      setNewOpen(true);
+    }
+    setParams({}, { replace: true });
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = statusF === "open_all" ? rows?.filter(r => r.status !== "closed") : rows;
 
   return (
@@ -62,7 +69,7 @@ function QualityTab() {
             {Object.entries(STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => setNewOpen(true)}><Plus className="h-4 w-4 mr-1.5" />Нова неусогласеност</Button>
+        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => { setPreset(null); setNewOpen(true); }}><Plus className="h-4 w-4 mr-1.5" />Нова неусогласеност</Button>
       </div>
 
       <Card><CardContent className="p-0">
@@ -70,82 +77,22 @@ function QualityTab() {
           <div className="py-10 text-center"><ShieldAlert className="h-8 w-8 text-gray-300 mx-auto mb-2" /><p className="text-sm text-gray-500">Нема записи</p>
             <p className="text-xs text-gray-400 mt-1">Бележи тука грешки во производство, рекламации од клиенти и проблеми со материјал од добавувач.</p></div>
         ) : list.map(r => (
-          <button key={r.id} className="w-full text-left border-b last:border-b-0 px-4 py-3 hover:bg-gray-50 flex flex-wrap items-center gap-3" onClick={() => setSel(r)}>
+          <button key={r.id} className="w-full text-left border-b last:border-b-0 px-4 py-3 hover:bg-gray-50 flex flex-wrap items-center gap-3" onClick={() => setSelId(r.id)}>
             <span className="font-mono text-xs font-semibold w-24">{r.number}</span>
             <span className="text-xs text-gray-400 w-20">{fmtDate(r.date)}</span>
             <Badge className={KIND[r.kind]?.cls}>{KIND[r.kind]?.label}</Badge>
             <span className="flex-1 min-w-[200px] text-sm font-medium text-gray-800">{r.title}
               <span className="text-xs text-gray-400 font-normal">{[r.woNumber, r.customer, r.supplier].filter(Boolean).map(x => ` · ${x}`).join("")}</span></span>
+            {r.reworkWoNumber && <span className="text-xs rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5">доработка {r.reworkWoNumber}</span>}
             {r.cost > 0 && <span className="text-sm tabular-nums text-red-600">{fmt(r.cost)} ден</span>}
             <Badge className={STATUS[r.status]?.cls}>{STATUS[r.status]?.label}</Badge>
           </button>
         ))}
       </CardContent></Card>
 
-      <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>Нова неусогласеност</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-xs">Датум</Label><DateInput value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
-              <div className="space-y-1"><Label className="text-xs">Вид</Label>
-                <Select value={f.kind} onValueChange={(v) => setF({ ...f, kind: v })}><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{Object.entries(KIND).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select></div>
-            </div>
-            <div className="space-y-1"><Label className="text-xs">Наслов</Label><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="на пр. Погрешна мера на отвори, 12 парчиња" /></div>
-            <div className="space-y-1"><Label className="text-xs">Опис</Label><Textarea rows={3} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-xs">Работен налог</Label>
-                <Select value={f.workOrderId || "none"} onValueChange={(v) => setF({ ...f, workOrderId: v === "none" ? "" : v })}><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">—</SelectItem>{wos?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.woNumber}</SelectItem>)}</SelectContent></Select></div>
-              {f.kind === "supplier" ? (
-                <div className="space-y-1"><Label className="text-xs">Добавувач</Label>
-                  <Select value={f.supplierId || "none"} onValueChange={(v) => setF({ ...f, supplierId: v === "none" ? "" : v })}><SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="none">—</SelectItem>{suppliers?.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select></div>
-              ) : (
-                <div className="space-y-1"><Label className="text-xs">Клиент</Label>
-                  <Select value={f.customerId || "none"} onValueChange={(v) => setF({ ...f, customerId: v === "none" ? "" : v })}><SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="none">—</SelectItem>{customers?.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.company || c.name}</SelectItem>)}</SelectContent></Select></div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-xs">Трошок (ден)</Label><Input type="number" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} placeholder="доработка, отпад..." /></div>
-              <div className="space-y-1"><Label className="text-xs">Одговорен</Label><Input value={f.responsible} onChange={(e) => setF({ ...f, responsible: e.target.value })} /></div>
-            </div>
-            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={f.title.length < 3 || create.isPending}
-              onClick={() => create.mutate({ date: f.date, kind: f.kind as any, title: f.title, description: f.description || undefined,
-                workOrderId: f.workOrderId ? Number(f.workOrderId) : undefined, customerId: f.customerId ? Number(f.customerId) : undefined,
-                supplierId: f.supplierId ? Number(f.supplierId) : undefined, cost: parseFloat(f.cost) || 0, responsible: f.responsible || undefined })}>Внеси</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <QualityIssueCreateDialog open={newOpen} onOpenChange={setNewOpen} preset={preset} onCreated={(id) => setSelId(id)} />
 
-      <Dialog open={!!sel} onOpenChange={(o) => !o && setSel(null)}>
-        <DialogContent className="sm:max-w-lg">
-          {sel && (<>
-            <DialogHeader><DialogTitle><span className="font-mono text-amber-600">{sel.number}</span> · {sel.title}</DialogTitle></DialogHeader>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge className={KIND[sel.kind]?.cls}>{KIND[sel.kind]?.label}</Badge>
-              <span className="text-gray-500">{fmtDate(sel.date)}{[sel.woNumber, sel.customer, sel.supplier].filter(Boolean).map((x: string) => ` · ${x}`).join("")}</span>
-            </div>
-            {sel.description && <p className="text-sm text-gray-600 whitespace-pre-wrap">{sel.description}</p>}
-            <div className="space-y-3">
-              <div className="space-y-1"><Label className="text-xs">Причина (зошто се случи)</Label><Textarea rows={2} defaultValue={sel.rootCause ?? ""} onBlur={(e) => e.target.value !== (sel.rootCause ?? "") && update.mutate({ id: sel.id, rootCause: e.target.value })} /></div>
-              <div className="space-y-1"><Label className="text-xs">Мерка (што направивме да не се повтори)</Label><Textarea rows={2} defaultValue={sel.action ?? ""} onBlur={(e) => e.target.value !== (sel.action ?? "") && update.mutate({ id: sel.id, action: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label className="text-xs">Трошок (ден)</Label><Input type="number" defaultValue={sel.cost} onBlur={(e) => parseFloat(e.target.value) !== sel.cost && update.mutate({ id: sel.id, cost: parseFloat(e.target.value) || 0 })} /></div>
-                <div className="space-y-1"><Label className="text-xs">Статус</Label>
-                  <Select value={sel.status} onValueChange={(v) => { update.mutate({ id: sel.id, status: v as any }); setSel({ ...sel, status: v }); }}><SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{Object.entries(STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select></div>
-              </div>
-              <div className="flex justify-between pt-1">
-                <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { if (confirm("Да се избрише записот?")) del.mutate({ id: sel.id }); }}><Trash2 className="h-3.5 w-3.5 mr-1" />Избриши</Button>
-                {sel.status !== "closed" && <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { update.mutate({ id: sel.id, status: "closed" }); setSel(null); }}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Затвори</Button>}
-              </div>
-            </div>
-          </>)}
-        </DialogContent>
-      </Dialog>
+      <QualityIssueDetailDialog issue={sel} onClose={() => setSelId(null)} />
     </div>
   );
 }
