@@ -109,7 +109,7 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
 
   // 2б) Залиха на материјали: потрошено во производство, кусок/отпис, вишок (по набавна цена)
   const moves = await q(`SELECT t.id, t.type, t.quantity, t.unit_cost, t.total_cost, t.reference, t.notes, t.created_at, t.source_doc_type,
-      m.code, m.name, m.avg_cost
+      m.code, m.name, m.unit, m.avg_cost
     FROM inventory_transactions t LEFT JOIN materials m ON m.id = t.material_id
     WHERE t.type IN ('issue', 'scrap', 'adjustment') AND COALESCE(t.reference, '') <> 'Почетна залиха'`);
   for (const t of moves) {
@@ -130,7 +130,11 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
     const lines = stockMoveLines({ kind, amount, rules, ref: `${t.code ?? ""} ${t.reference ?? ""}`.trim() });
     if (!lines.length) continue;
     const label = kind === "consume" ? "Потрошен материјал" : kind === "shortage" ? "Кусок/отпис" : "Вишок";
-    desired.push({ sourceType: "stock_move", sourceId: t.id, date: iso(t.created_at), description: `${label} · ${t.name ?? ""} ${qty} ${t.reference ? "· " + t.reference : ""}`.trim(), lines });
+    // „Потрошен материјал: Лим 2мм — 50 kg · РН-001“ (количината секогаш позитивна, насоката е во зборот)
+    const what = t.name || t.code || "материјал";
+    const q3 = Math.abs(qty).toLocaleString("mk-MK", { maximumFractionDigits: 3 });
+    desired.push({ sourceType: "stock_move", sourceId: t.id, date: iso(t.created_at),
+      description: `${label}: ${what} — ${q3}${t.unit ? " " + t.unit : ""}${t.reference ? " · " + t.reference : ""}`, lines });
   }
 
   // Плаќање по документ (банка или благајна) со курсна разлика
@@ -269,7 +273,7 @@ export async function syncLedger() {
       }
       const key = `${d.sourceType}:${d.sourceId}`;
       keep.add(key);
-      const sig = linesSignature(d.date, d.lines);
+      const sig = linesSignature(d.date, d.lines) + "|" + d.description; // и описот: подобрен опис се пренесува и на старите налози
       const ex = byKey.get(key);
       if (ex && ex.signature === sig) continue;
       if (ex) {
