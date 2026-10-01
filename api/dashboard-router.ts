@@ -1,5 +1,5 @@
 import { createRouter, publicQuery } from "./middleware";
-import { getDb } from "./queries/connection";
+import { getDb, getPool } from "./queries/connection";
 import {
   orders, workOrders, materials, purchaseOrders, customers,
   invoices, incomingInvoices, warehouses, materialStock,
@@ -55,10 +55,10 @@ export const dashboardRouter = createRouter({
     // Revenue & Profit
     // Сè во денари: нарачката е во валутата на понудата, фактурите во својата валута
     const rate = await loadRates();
-    const quoteCur = new Map(allQuotes.map((q: any) => [q.id, String(q.currency || "MKD").toUpperCase()]));
+    const quoteCur = new Map<number, string>(allQuotes.map((q: any) => [Number(q.id), String(q.currency || "MKD").toUpperCase()]));
     const mkd = (v: any, cur: string, d: any) => { const n = parseFloat(v) || 0; return cur === "MKD" ? n : (toMkd(n, cur, iso(d), rate) ?? n); };
     const liveOrders = allOrders.filter((o: any) => o.status !== "cancelled");
-    const oMkd = (o: any, f: string) => mkd(o[f], o.quoteId ? quoteCur.get(o.quoteId) ?? "MKD" : "MKD", o.createdAt);
+    const oMkd = (o: any, f: string) => mkd(o[f], o.quoteId ? quoteCur.get(Number(o.quoteId)) ?? "MKD" : "MKD", o.createdAt);
     const totalRevenue = liveOrders.reduce((sum: number, o: any) => sum + oMkd(o, "totalAmount"), 0);
     const totalCost = liveOrders.reduce((sum: number, o: any) => sum + oMkd(o, "costAmount"), 0);
     const totalMargin = liveOrders.reduce((sum: number, o: any) => sum + oMkd(o, "marginAmount"), 0);
@@ -86,7 +86,35 @@ export const dashboardRouter = createRouter({
     const incomingVat = allIncoming.filter((i: any) => i.status !== "cancelled")
       .reduce((sum: number, i: any) => sum + mkd(i.vatAmount, String(i.currency || "MKD").toUpperCase(), i.receivedDate), 0);
 
+    // ── Показатели со јасен извор ──
+    const year = new Date().getFullYear();
+    // курс: на денот (до 10 дена назад), инаку последниот познат; без курс -> не се брои, туку се пријавува
+    const lastRate = new Map<string, number>();
+    for (const r of (await getPool().query(`SELECT DISTINCT ON (currency) currency, rate FROM exchange_rates ORDER BY currency, rate_date DESC`)).rows as any[]) lastRate.set(r.currency, Number(r.rate));
+    let invoicedYear = 0, invoicedYearCount = 0, invoicedNoRate = 0;
+    for (const i of booked as any[]) {
+      if (new Date(i.issueDate).getFullYear() !== year) continue;
+      const cur = String(i.currency || "MKD").toUpperCase();
+      const net = Math.abs(parseFloat(i.subtotal) || 0);
+      const v = cur === "MKD" ? net : (toMkd(net, cur, iso(i.issueDate), rate) ?? (lastRate.get(cur) ? net * lastRate.get(cur)! : null));
+      if (v === null) { invoicedNoRate++; continue; }
+      invoicedYear += iSign(i) * v;
+      if (i.invoiceType === "standard") invoicedYearCount++;
+    }
+    const ordersOpen = allOrders.filter((o: any) => !["delivered", "cancelled"].includes(o.status)).length;
+    const qualityOpen = Number((await getPool().query(`SELECT COUNT(*)::int n FROM quality_issues WHERE status <> 'closed'`)).rows[0]?.n ?? 0);
+    const receivablesCount = open.filter(d => d.docType === "invoice").length;
+    const payablesCount = open.filter(d => d.docType === "incoming_invoice").length;
+
     return {
+      kpi: {
+        year, ordersOpen, ordersTotal: allOrders.length,
+        woActive: pendingWO + inProgressWO + onHoldWO, woInProgress: inProgressWO, woPending: pendingWO,
+        invoicedYear: Math.round(invoicedYear * 100) / 100, invoicedYearCount, invoicedNoRate,
+        receivables: Math.round(totalReceivables * 100) / 100, receivablesCount,
+        payables: Math.round(totalPayables * 100) / 100, payablesCount,
+        qualityOpen,
+      },
       orders: {
         total: allOrders.length,
         pending: pendingOrders,

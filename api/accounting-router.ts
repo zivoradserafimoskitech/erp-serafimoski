@@ -416,7 +416,8 @@ export const accountingRouter = createRouter({
           unit: receiptItems.unit, unitPrice: receiptItems.unitPrice,
           totalPrice: receiptItems.totalPrice, landedCostAlloc: receiptItems.landedCostAlloc,
           vatRate: receiptItems.vatRate, notes: receiptItems.notes,
-          materialName: materials.name, materialCode: materials.code,
+          heatNumber: receiptItems.heatNumber, certNumber: receiptItems.certNumber, certStandard: receiptItems.certStandard, certUrl: receiptItems.certUrl,
+          materialName: materials.name, materialCode: materials.code, unitLabel: materials.unit,
         })
         .from(receiptItems)
         .leftJoin(materials, eq(receiptItems.materialId, materials.id))
@@ -484,6 +485,43 @@ export const accountingRouter = createRouter({
         await db.insert(receiptItems).values(items.map(i => ({ ...i, receiptId: insertId })));
       }
       return { success: true, id: insertId };
+    }),
+
+  // Измена на приемница во нацрт (заглавје + ставки); потврдената не се менува -- залихата е веќе зголемена
+  receiptEdit: publicQuery
+    .input(z.object({
+      id: z.number(),
+      receiptNumber: z.string().min(1),
+      supplierId: z.number().nullable().optional(),
+      poId: z.number().nullable().optional(),
+      warehouseId: z.number(),
+      receiptDate: z.string(),
+      supplierDocNumber: z.string().optional(),
+      transportCost: z.string().default("0"),
+      customsCost: z.string().default("0"),
+      otherCost: z.string().default("0"),
+      notes: z.string().optional(),
+      items: z.array(z.object({
+        materialId: z.number(), quantity: z.string(), unit: z.string(), unitPrice: z.string(), totalPrice: z.string(),
+        landedCostAlloc: z.string().default("0"), vatRate: z.string().default("18"),
+        heatNumber: z.string().optional(), certNumber: z.string().optional(), certStandard: z.string().optional(), certUrl: z.string().optional(), notes: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const cur: any = (await db.select().from(receipts).where(eq(receipts.id, input.id)))[0];
+      if (!cur) throw new Error("Приемницата не постои");
+      if (cur.status !== "draft") throw new Error("Само приемница во нацрт може да се менува — потврдената веќе ја зголемила залихата");
+      const dup: any = (await db.select().from(receipts).where(eq(receipts.receiptNumber, input.receiptNumber)))[0];
+      if (dup && dup.id !== input.id) throw new Error(`Бројот ${input.receiptNumber} веќе постои`);
+      const { id, items, ...data } = input;
+      const total = items.reduce((a, i) => a + (parseFloat(i.totalPrice) || 0), 0);
+      await db.update(receipts).set({ ...data, receiptDate: new Date(data.receiptDate), supplierId: data.supplierId ?? null, poId: data.poId ?? null,
+        totalAmount: total.toFixed(2) } as any).where(eq(receipts.id, id));
+      await db.delete(receiptItems).where(eq(receiptItems.receiptId, id));
+      if (items.length) await db.insert(receiptItems).values(items.map(i => ({ ...i, receiptId: id })) as any);
+      await logAudit({ action: "UPDATE", entityType: "receipt", entityId: id, description: `Изменета приемница ${input.receiptNumber}` }).catch(() => {});
+      return { success: true };
     }),
 
   receiptUpdate: publicQuery

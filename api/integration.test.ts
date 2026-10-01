@@ -43,6 +43,19 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     await expect(caller.accounting.receiptDelete({ id: rc.id })).rejects.toThrow(/не може да се брише/);
   });
 
+  it("приемница во нацрт се менува, потврдена не", async () => {
+    const r = await caller.accounting.receiptCreate({ receiptNumber: "ПР-050/2026", warehouseId: ids.wh, receiptDate: today });
+    await expect(caller.storage.processReceipt({ receiptId: r.id, warehouseId: ids.wh, items: [] })).rejects.toThrow(/нема ставки/);
+    await caller.accounting.receiptEdit({ id: r.id, receiptNumber: "ПР-050/2026", supplierId: ids.sup, warehouseId: ids.wh, receiptDate: today,
+      items: [{ materialId: ids.mat, quantity: "5", unit: "kg", unitPrice: "60", totalPrice: "300" }] });
+    const full = await caller.accounting.receiptById({ id: r.id });
+    expect(full.items).toHaveLength(1);
+    expect(Number(full.totalAmount)).toBe(300);
+    await caller.storage.processReceipt({ receiptId: r.id, warehouseId: ids.wh, items: [] });
+    await expect(caller.accounting.receiptEdit({ id: r.id, receiptNumber: "ПР-050/2026", warehouseId: ids.wh, receiptDate: today, items: [] })).rejects.toThrow(/Само приемница во нацрт/);
+    await caller.storage.transactionCreate({ materialId: ids.mat, warehouseId: ids.wh, type: "adjustment", quantity: "1000" });
+  });
+
   it("набавна нарачка → приемница по нарачка → делумен и целосен прием", async () => {
     const po = await caller.procurement.poCreate({ poNumber: "НН-001/2026", supplierId: ids.sup, items: [{ materialId: ids.mat, description: "Лим", quantity: "100", unitPrice: "60", totalPrice: "6000" }] });
     const r1 = await caller.accounting.receiptCreate({ receiptNumber: "ПР-010/2026", poId: po.id, warehouseId: ids.wh, receiptDate: today,
@@ -122,8 +135,8 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(Number(pr.totalPayables)).toBe(70800);
     const s1 = await caller.finance.ledgerSync();
     expect(s1.problems).toEqual([]);
-    // фактура + влезна фактура + благајна + потрошен материјал (издавање за налогот) + корекција на залиха (кусок)
-    expect(s1.created).toBe(5);
+    // фактура + влезна фактура + благајна + потрошен материјал (издавање за налогот) + 2 корекции на залиха (кусок)
+    expect(s1.created).toBe(6);
     const s2 = await caller.finance.ledgerSync();
     expect(s2.created + s2.updated + s2.removed).toBe(0);
     const tb = await caller.finance.trialBalance({ from: "2000-01-01", to: "2100-01-01" });

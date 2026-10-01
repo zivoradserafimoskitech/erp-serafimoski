@@ -3,6 +3,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { useSearchParams, useNavigate } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
+import { printReceipt } from "@/lib/print-documents";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Search, CheckCircle, ClipboardCheck, Upload, FileText, X, Eye, Trash2, AlertCircle, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Plus, Search, CheckCircle, ClipboardCheck, Upload, FileText, X, Eye, Trash2, AlertCircle, AlertTriangle, ShieldAlert, Pencil, Printer } from "lucide-react";
 
 const statuses: Record<string, string> = { draft: "Нацрт", confirmed: "Потврдена", cancelled: "Откажана" };
 const statusColors: Record<string, string> = { draft: "bg-gray-100 text-gray-800", confirmed: "bg-emerald-100 text-emerald-800", cancelled: "bg-red-100 text-red-800" };
@@ -286,8 +287,51 @@ export default function Receipts() {
     setItems(items.filter((_, i) => i !== idx));
   };
 
+  // ── Измена на приемница во нацрт ──
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const { data: companySettings } = trpc.settings.settingsGet.useQuery();
+  const editMutation = trpc.accounting.receiptEdit.useMutation({
+    onSuccess: () => { toast.success("Приемницата е изменета"); utils.accounting.receiptList.invalidate(); setDialogOpen(false); setEditingId(null); resetForm(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteReceipt = trpc.accounting.receiptDelete.useMutation({
+    onSuccess: () => { toast.success("Приемницата е избришана"); utils.accounting.receiptList.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const openEdit = async (r: any) => {
+    const full: any = await utils.accounting.receiptById.fetch({ id: r.id });
+    if (!full) return;
+    setForm({
+      receiptNumber: full.receiptNumber ?? "", supplierId: full.supplierId ? String(full.supplierId) : "", poId: full.poId ? String(full.poId) : "",
+      warehouseId: full.warehouseId ? String(full.warehouseId) : "", receiptDate: String(full.receiptDate ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+      supplierDocNumber: full.supplierDocNumber ?? "", transportCost: String(full.transportCost ?? "0"), customsCost: String(full.customsCost ?? "0"),
+      otherCost: String(full.otherCost ?? "0"), notes: full.notes ?? "",
+    });
+    setItems((full.items ?? []).map((i: any) => ({
+      materialId: String(i.materialId), quantity: String(Number(i.quantity)), unit: i.unit ?? i.unitLabel ?? "kg", unitPrice: String(Number(i.unitPrice)),
+      totalPrice: String(Number(i.totalPrice)), notes: i.notes ?? "", heatNumber: i.heatNumber ?? undefined, certNumber: i.certNumber ?? undefined,
+      certStandard: i.certStandard ?? undefined, certUrl: i.certUrl ?? undefined,
+    })));
+    setEditingId(r.id);
+    setDialogOpen(true);
+  };
+  const openPrint = async (r: any) => {
+    const full: any = await utils.accounting.receiptById.fetch({ id: r.id });
+    if (full) printReceipt({ ...full, items: (full.items ?? []).map((i: any) => ({ ...i, materialName: i.materialName })) }, companySettings);
+  };
+
   const handleCreate = () => {
     if (!form.receiptNumber || !form.warehouseId) { toast.error("Пополнете ги задолжителните полиња"); return; }
+    if (editingId) {
+      editMutation.mutate({
+        id: editingId, receiptNumber: form.receiptNumber, supplierId: form.supplierId ? parseInt(form.supplierId) : null, poId: form.poId ? parseInt(form.poId) : null,
+        warehouseId: parseInt(form.warehouseId), receiptDate: form.receiptDate, supplierDocNumber: form.supplierDocNumber || undefined,
+        transportCost: form.transportCost || "0", customsCost: form.customsCost || "0", otherCost: form.otherCost || "0", notes: form.notes || undefined,
+        items: items.map(i => ({ materialId: parseInt(i.materialId), quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, totalPrice: i.totalPrice,
+          notes: i.notes || undefined, heatNumber: i.heatNumber, certNumber: i.certNumber, certStandard: i.certStandard, certUrl: i.certUrl })),
+      });
+      return;
+    }
     createMutation.mutate({
       ...form,
       supplierId: form.supplierId ? parseInt(form.supplierId) : undefined,
@@ -308,7 +352,9 @@ export default function Receipts() {
     });
   };
 
-  const handleConfirm = (receipt: any) => {
+  const handleConfirm = async (receipt: any) => {
+    const full: any = await utils.accounting.receiptById.fetch({ id: receipt.id });
+    if (!full?.items?.length) { toast.error("Приемницата нема ставки — додади материјали, па потврди"); openEdit(receipt); return; }
     if (!receipt.warehouseId) { toast.error("Нема избран магацин"); return; }
     const itemsToProcess = receipt.items?.map((i: any) => ({
       materialId: i.materialId,
@@ -384,7 +430,7 @@ export default function Receipts() {
   };
 
   useEffect(() => {
-    if (dialogOpen && nextReceiptNum && !form.receiptNumber) {
+    if (dialogOpen && !editingId && nextReceiptNum && !form.receiptNumber) {
       setForm(prev => ({ ...prev, receiptNumber: nextReceiptNum }));
     }
   }, [dialogOpen, nextReceiptNum]);
@@ -520,12 +566,12 @@ export default function Receipts() {
         {/* MANUAL TAB - Receipts List */}
         <TabsContent value="manual" className="space-y-4">
           <div className="flex items-center justify-between">
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o && editingId) { setEditingId(null); resetForm(); } }}>
               <DialogTrigger asChild>
-                <Button className="bg-emerald-700 hover:bg-emerald-800"><Plus className="h-4 w-4 mr-1" /> Нова приемница</Button>
+                <Button className="bg-emerald-700 hover:bg-emerald-800" onClick={() => { if (editingId) { setEditingId(null); resetForm(); } }}><Plus className="h-4 w-4 mr-1" /> Нова приемница</Button>
               </DialogTrigger>
               <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Нова приемница</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingId ? `Измени приемница ${form.receiptNumber}` : "Нова приемница"}</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 space-y-1.5">
                     <Label className="text-emerald-900">По набавна нарачка <span className="font-normal text-emerald-700/70">(незадолжително)</span></Label>
@@ -661,8 +707,8 @@ export default function Receipts() {
                     )}
                   </div>
                   <div className="space-y-1"><Label>Белешки</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-                  <Button onClick={handleCreate} disabled={createMutation.isPending} className="w-full bg-emerald-700 hover:bg-emerald-800">
-                    {createMutation.isPending ? "Зачувување..." : "Креирај приемница"}
+                  <Button onClick={handleCreate} disabled={createMutation.isPending || editMutation.isPending} className="w-full bg-emerald-700 hover:bg-emerald-800">
+                    {createMutation.isPending || editMutation.isPending ? "Зачувување..." : editingId ? "Зачувај измени" : "Креирај приемница"}
                   </Button>
                 </div>
               </DialogContent>
@@ -701,7 +747,7 @@ export default function Receipts() {
                 <TableBody>
                   {receiptsData?.map(r => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-medium">{r.receiptNumber}</TableCell>
+                      <TableCell className="font-medium"><button className="hover:underline text-left" onClick={() => r.status === "draft" ? openEdit(r) : openPrint(r)}>{r.receiptNumber}</button></TableCell>
                       <TableCell>{r.supplierName ?? "-"}</TableCell>
                       <TableCell>
                         {warehousesData?.find(w => w.id === r.warehouseId)?.name ?? "—"}
@@ -719,6 +765,13 @@ export default function Receipts() {
                             onClick={() => navigate(`/kvalitet?new=1&kind=supplier&supplier=${r.supplierId}&title=${encodeURIComponent(`Приемница ${r.receiptNumber}: `)}`)}>
                             <ShieldAlert className="h-3.5 w-3.5" />
                           </Button>
+                        )}
+                        {r.status === "draft" && (<>
+                          <Button size="sm" variant="ghost" className="mr-1" title="Измени" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button size="sm" variant="ghost" className="text-red-500 mr-1" title="Избриши" onClick={() => { if (confirm(`Да се избрише приемницата ${r.receiptNumber}?`)) deleteReceipt.mutate({ id: r.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </>)}
+                        {r.status !== "draft" && (
+                          <Button size="sm" variant="ghost" className="mr-1" title="Печати" onClick={() => openPrint(r)}><Printer className="h-3.5 w-3.5" /></Button>
                         )}
                         {r.status === "draft" && (
                           <Button size="sm" variant="outline" className="text-emerald-700" onClick={() => handleConfirm(r)} disabled={processMutation.isPending}>
