@@ -23,7 +23,8 @@ const fmt = (n: number | null | undefined) =>
 const fmtDate = (d: string) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : "—");
 
 const SOURCE_LBL: Record<string, string> = {
-  invoice: "Фактура", incoming_invoice: "Влезна ф.", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", depreciation: "Амортизација", advance_settle: "Аванс", manual: "Рачен",
+  invoice: "Излезна фактура", incoming_invoice: "Влезна фактура", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", depreciation: "Амортизација",
+  advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха",
 };
 
 function PeriodPicker({ from, to, onChange }: { from: string; to: string; onChange: (f: string, t: string) => void }) {
@@ -120,7 +121,11 @@ function JournalTab() {
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" onClick={() => { if (confirm("Да се избрише рачниот налог?")) del.mutate({ id: e.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 )}
               </div>
-              <div className="grid grid-cols-[4.5rem_1fr_7rem_7rem] gap-x-3 text-xs">
+              <div className="grid grid-cols-[4rem_minmax(0,1fr)_6.5rem_6.5rem] sm:grid-cols-[4.5rem_minmax(0,24rem)_8rem_8rem] gap-x-3 gap-y-0.5 text-xs">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400">Конто</span>
+                <span className="text-[10px] uppercase tracking-wider text-gray-400">Назив</span>
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 text-right">Должи</span>
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 text-right">Побарува</span>
                 {e.lines.map((l, i) => (
                   <div key={i} className="contents">
                     <span className="font-mono text-gray-600">{l.account}</span>
@@ -639,12 +644,6 @@ function ProfitTab() {
           </CardContent></Card>
         ))}
       </div>
-      {(t?.skipped ?? 0) > 0 && (
-        <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-          {t!.skipped} {t!.skipped === 1 ? "нарачка не е вклучена" : "нарачки не се вклучени"} во збирот (приход {fmt(t!.skippedRevenue)} ден) — без работен налог и без пресметка во понудата трошокот не се знае (или нарачката нема вредност), па добивката би била лажна. Отвори налог или внеси трошок во понудата.
-        </p>
-      )}
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
@@ -670,9 +669,9 @@ function ProfitTab() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-gray-500">{fmt(r.plannedCost)}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {r.costSource === "unknown" ? <span className="text-xs text-amber-700">не се знае</span> : fmt(r.actualCost)}
+                      {fmt(r.actualCost)}
                       <div className="text-[10px] text-gray-400">{r.costSource === "workorders" ? `од налог: мат. ${fmt(r.materialCost)} · опер. ${fmt(r.operationCost)}`
-                        : r.costSource === "estimate" ? "проценка од понудата (нема налог)" : "нема налог ни понуда"}</div>
+                        : "проценка од понудата (нема налог)"}</div>
                     </TableCell>
                     <TableCell className={`text-right tabular-nums text-sm ${(r.variance ?? 0) > 0 ? "text-red-600" : "text-emerald-700"}`}>{r.variance === null ? <span className="text-gray-300">—</span> : `${r.variance > 0 ? "+" : ""}${fmt(r.variance)}`}</TableCell>
                     <TableCell className={`text-right tabular-nums font-semibold ${(r.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>{r.profit === null ? <span className="text-gray-300 font-normal">—</span> : fmt(r.profit)}</TableCell>
@@ -696,7 +695,7 @@ function ProfitTab() {
         <p><b>Приход</b> = издадени фактури за нарачката, без ДДВ, во денари (минус книжни одобренија). Ако уште не е фактурирана — вредноста на нарачката без ДДВ.</p>
         <p><b>План</b> = трошокот пресметан во понудата (или во налогот ако нема понуда).</p>
         <p><b>Реално</b> = материјал на налозите (издаден, или планиран ако уште не е издаден) + операции (реално време × цена/час, или проценето). Без налог се зема проценката од понудата.</p>
-        <p><b>Добивка</b> = приход − реално. Нарачките без познат трошок не влегуваат во збирот.</p>
+        <p><b>Добивка</b> = приход − реално. Се прикажуваат само нарачки со работен налог или со пресметан трошок во понудата.</p>
       </div>
     </div>
   );

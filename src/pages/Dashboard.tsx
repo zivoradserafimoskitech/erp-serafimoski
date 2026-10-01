@@ -127,7 +127,7 @@ export default function Dashboard() {
             { label: `Добивка по нарачки ${k?.year ?? ""}`, value: profit?.totals.counted ? den(profit.totals.profit) : "—",
               cls: (profit?.totals.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600", href: "/finansii?tab=profit",
               hint: profit?.totals.counted
-                ? `приход ${den(profit.totals.revenue)} − трошок ${den(profit.totals.actualCost)}${profit.totals.revenue ? ` · маржа ${Math.round(profit.totals.profit / profit.totals.revenue * 100)}%` : ""} · ${profit.totals.counted} нарачки${profit.totals.skipped ? `; ${profit.totals.skipped} без познат трошок не се бројат` : ""}`
+                ? `приход ${den(profit.totals.revenue)} − трошок ${den(profit.totals.actualCost)}${profit.totals.revenue ? ` · маржа ${Math.round(profit.totals.profit / profit.totals.revenue * 100)}%` : ""} · ${profit.totals.counted} нарачки`
                 : "нема нарачка со познат приход и трошок" },
             { label: `ДДВ за ${monthName}`, value: vat ? den(Math.abs(vat.summary.payable)) : "—",
               cls: (vat?.summary.payable ?? 0) > 0 ? "text-red-600" : "text-emerald-700", href: "/finansii?tab=vat",

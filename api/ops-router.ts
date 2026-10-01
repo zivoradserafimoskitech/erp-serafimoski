@@ -186,7 +186,7 @@ export const opsRouter = createRouter({
         LEFT JOIN quotations qt ON qt.converted_order_id = o.id
         WHERE o.created_at::date BETWEEN $1 AND $2 AND o.status <> 'cancelled'
         ORDER BY o.created_at DESC LIMIT 500`, [input.from, input.to]);
-      if (!orders.length) return { rows: [], totals: { revenue: 0, plannedCost: 0, actualCost: 0, profit: 0, counted: 0, skipped: 0, skippedRevenue: 0 } };
+      if (!orders.length) return { rows: [], totals: { revenue: 0, plannedCost: 0, actualCost: 0, profit: 0, counted: 0 } };
       const ids = orders.map(o => o.id);
       const wos = await q(`SELECT w.id, w.order_id, w.wo_number, w.status, w.cost_amount FROM work_orders w WHERE w.order_id = ANY($1)`, [ids]);
       const woIds = wos.map(w => w.id);
@@ -247,8 +247,8 @@ export const opsRouter = createRouter({
         revenue: round2(t.revenue + (r.revenue ?? 0)), plannedCost: round2(t.plannedCost + r.plannedCost),
         actualCost: round2(t.actualCost + r.actualCost), profit: round2(t.profit + (r.profit ?? 0)),
       }), { revenue: 0, plannedCost: 0, actualCost: 0, profit: 0 });
-      const skipped = rows.filter(r => r.profit === null);
-      return { rows, totals: { ...totals, counted: known.length, skipped: skipped.length, skippedRevenue: round2(skipped.reduce((a, r) => a + (r.revenue ?? 0), 0)) } };
+      // нарачките без познат трошок или без вредност не се прикажуваат -- добивката би била лажна
+      return { rows: known, totals: { ...totals, counted: known.length } };
     }),
 
   // ===================== РАСПОРЕД =====================
