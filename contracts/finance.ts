@@ -315,3 +315,26 @@ export function suggestExpenseAccount(text: string): string | null {
   for (const [rx, code] of EXPENSE_HINTS) if (rx.test(t)) return code;
   return null;
 }
+
+/**
+ * Конто за влезна фактура и дали е сигурно: запаметено кај добавувачот или јасно од текстот = сигурно;
+ * инаку треба да се праша човекот (во меѓувреме се книжи на „набавки“ 310).
+ */
+export function guessExpenseAccount(supplierDefault: string | null | undefined, text: string): { account: string | null; sure: boolean; reason: string } {
+  if (supplierDefault) return { account: supplierDefault, sure: true, reason: "запаметено кај добавувачот" };
+  const s = suggestExpenseAccount(text);
+  if (s) return { account: s, sure: true, reason: "препознаено од името / текстот" };
+  return { account: null, sure: false, reason: "не е јасно што е купено" };
+}
+
+/** Избор со обични зборови за операторот (без шифри). */
+export const PURCHASE_KINDS: { code: string; title: string; examples: string }[] = [
+  { code: "310", title: "Материјал за производство", examples: "лим, профили, цевки, шипки, бои, завртки — оди на залиха" },
+  { code: "402", title: "Резервни делови и алат", examples: "лежишта, дискови, сечила, електроди, масло за машини" },
+  { code: "401", title: "Струја, гориво, гас", examples: "ЕВН, бензинска пумпа, плин за заварување" },
+  { code: "412", title: "Закупнина", examples: "кирија за хала, канцеларија, изнајмена опрема" },
+  { code: "410", title: "Транспорт", examples: "превоз, шпедиција, курир, царинско посредување" },
+  { code: "411", title: "Поправка / сервис", examples: "сервис на машина, возило, поправки на објект" },
+  { code: "413", title: "Услуги", examples: "телефон, интернет, сметководител, софтвер, адвокат" },
+  { code: "449", title: "Нешто друго / не сум сигурен", examples: "сметководителот подоцна ќе го прегледа" },
+];

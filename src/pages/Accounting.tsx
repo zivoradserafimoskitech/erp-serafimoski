@@ -18,6 +18,7 @@ import { printInvoice, printDeliveryNote, printAccountantReport, invoiceHtml } f
 import SendEmailDialog from "@/components/SendEmailDialog";
 import { EXPENSE_CHOICES } from "@contracts/finance";
 import IncomingAccountPicker from "@/components/IncomingAccountPicker";
+import IncomingAccountReview from "@/components/IncomingAccountReview";
 import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { DnCertificates } from "@/components/DnCertificates";
@@ -121,6 +122,7 @@ export default function Accounting() {
     discount: string; totalPrice: string; vatRate: string; notes: string;
     productId?: number; serviceId?: number; itemType: "product" | "service" | "manual";
   }>>([]);
+  const [incNeedsKind, setIncNeedsKind] = useState(false);
   const [incForm, setIncForm] = useState({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
   const [incItems, setIncItems] = useState<Array<{
     description: string; quantity: string; unit: string; unitPrice: string;
@@ -415,6 +417,7 @@ export default function Accounting() {
                 <DialogHeader><DialogTitle>Нова влезна фактура</DialogTitle></DialogHeader>
                 <form onSubmit={(e) => {
                   e.preventDefault();
+                  if (incNeedsKind) { toast.error("Избери што е купено со оваа фактура"); return; }
                   const subtotal = incItems.reduce((s, i) => s + parseFloat(i.totalPrice || "0"), 0);
                   const vatAmount = incItems.reduce((s, i) => s + (parseFloat(i.totalPrice || "0") * parseFloat(i.vatRate) / 100), 0);
                   createInc.mutate({
@@ -470,7 +473,7 @@ export default function Accounting() {
                     <div className="space-y-1"><Label>Добавувач *</Label><Select value={incForm.supplierId} onValueChange={(v) => setIncForm({ ...incForm, supplierId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери добавувач" /></SelectTrigger><SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <IncomingAccountPicker supplierId={incForm.supplierId ? Number(incForm.supplierId) : undefined} text={[incForm.notes, ...incItems.map((i: any) => i.description)].join(" ")}
-                    value={incForm.expenseAccount} onChange={(v) => setIncForm(f => ({ ...f, expenseAccount: v }))} />
+                    value={incForm.expenseAccount} onChange={(v) => setIncForm(f => ({ ...f, expenseAccount: v }))} onNeedsAnswer={setIncNeedsKind} />
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1"><Label>Датум на прием *</Label><DateInput value={incForm.receivedDate} onChange={(e) => setIncForm({ ...incForm, receivedDate: e.target.value })} required /></div>
                     <div className="space-y-1"><Label>Датум на фактура</Label><DateInput value={incForm.issueDate} onChange={(e) => setIncForm({ ...incForm, issueDate: e.target.value })} /></div>
@@ -800,6 +803,7 @@ export default function Accounting() {
       )}
 
       {/* ===== INCOMING INVOICES ===== */}
+      {tab === "incoming" && <IncomingAccountReview />}
       {tab === "incoming" && (
         <Card>
           <CardContent className="p-0">

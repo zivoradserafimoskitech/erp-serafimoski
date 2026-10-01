@@ -197,6 +197,20 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect((await caller.ops.dealList({})).some((d: any) => d.quotationId === q.id)).toBe(false); // завршена -> не е во тек
   });
 
+  it("влезна фактура: несигурно конто се прашува, одговорот се памети", async () => {
+    const supId = (await caller.procurement.supplierCreate({ name: "Непознат Партнер ДОО" })).id;
+    const inv = await caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "NP-1", supplierId: supId, receivedDate: today, subtotal: "100", vatAmount: "18", totalAmount: "118" });
+    expect((await caller.accounting.incomingAccountReview()).some((r: any) => r.id === inv.id)).toBe(true);
+    await caller.accounting.incomingInvoiceUpdate({ id: inv.id, expenseAccount: "413" });
+    expect((await caller.accounting.incomingAccountReview()).some((r: any) => r.id === inv.id)).toBe(false);
+    // следната фактура од истиот добавувач не прашува
+    expect(await caller.accounting.incomingAccountSuggest({ supplierId: supId })).toMatchObject({ account: "413", sure: true });
+    const evn = (await caller.procurement.supplierCreate({ name: "ЕВН Македонија" })).id;
+    const e = await caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "E-1", supplierId: evn, receivedDate: today, subtotal: "100", vatAmount: "18", totalAmount: "118" });
+    expect((await caller.accounting.incomingInvoiceById({ id: e.id }))?.expenseAccount).toBe("401");
+    expect((await caller.accounting.incomingAccountReview()).some((r: any) => r.id === e.id)).toBe(false);
+  });
+
   it("брзо пребарување", async () => {
     const hits = await caller.search.globalSearch({ q: "ПО-050" });
     expect(hits[0]).toMatchObject({ type: "Понуда", title: "ПО-050/2026" });

@@ -6,6 +6,9 @@ import { TRPCProvider } from "@/providers/trpc"
 import App from './App.tsx'
 import { Toaster } from 'sonner'
 import { PasswordGate } from '@/components/PasswordGate'
+import { installStaleChunkGuard } from '@/lib/stale-chunk'
+
+installStaleChunkGuard()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

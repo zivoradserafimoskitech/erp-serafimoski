@@ -4,7 +4,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
 import { openDocs, refreshPaymentStatus, assertNoPayments, type OpenDoc } from "./payment-status";
-import { suggestExpenseAccount } from "@contracts/finance";
+import { guessExpenseAccount } from "@contracts/finance";
 import { getDb, getPool } from "./queries/connection";
 import {
   invoices, incomingInvoices, documentItems,
@@ -271,10 +271,22 @@ export const accountingRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       const sup: any = input.supplierId ? (await db.select().from(suppliers).where(eq(suppliers.id, input.supplierId)))[0] : null;
-      if (sup?.defaultExpenseAccount) return { account: sup.defaultExpenseAccount as string, reason: "последно користено кај добавувачот" };
-      const s = suggestExpenseAccount([sup?.name, input.text].filter(Boolean).join(" "));
-      return s ? { account: s, reason: "препознаено од името / текстот" } : { account: "310", reason: "материјали за залиха (стандардно)" };
+      return guessExpenseAccount(sup?.defaultExpenseAccount, [sup?.name, input.text].filter(Boolean).join(" "));
     }),
+
+  // Влезни фактури каде програмата не знае што е купено -- операторот одговара со обични зборови
+  incomingAccountReview: publicQuery.query(async () => {
+    const rows = (await getPool().query(`SELECT ii.id, ii.supplier_invoice_number, ii.total_amount, ii.currency, ii.received_date, ii.expense_account, ii.notes,
+        s.id AS supplier_id, s.name AS supplier, s.default_expense_account,
+        (SELECT string_agg(d.description, ' · ') FROM document_items d WHERE d.document_type = 'incoming_invoice' AND d.document_id = ii.id) AS items
+      FROM incoming_invoices ii LEFT JOIN suppliers s ON s.id = ii.supplier_id
+      WHERE COALESCE(ii.account_confirmed, false) = false AND ii.status <> 'cancelled'
+      ORDER BY ii.received_date DESC, ii.id DESC LIMIT 200`)).rows as any[];
+    return rows
+      .filter(r => !guessExpenseAccount(r.default_expense_account, [r.supplier, r.notes, r.items].filter(Boolean).join(" ")).sure)
+      .map(r => ({ id: Number(r.id), number: r.supplier_invoice_number, supplierId: r.supplier_id ? Number(r.supplier_id) : null, supplier: r.supplier,
+        total: Number(r.total_amount), currency: r.currency, date: r.received_date, items: r.items ?? "", notes: r.notes ?? "" }));
+  }),
 
   incomingInvoiceCreate: publicQuery
     .input(z.object({
@@ -311,9 +323,13 @@ export const accountingRouter = createRouter({
       // Конто: избрано -> последно кај добавувачот -> предлог од текстот -> „набавки“ (310)
       const sup: any = (await db.select().from(suppliers).where(eq(suppliers.id, invData.supplierId)))[0];
       if (!sup) throw new Error("Добавувачот не постои");
-      invData.expenseAccount = invData.expenseAccount || sup.defaultExpenseAccount
-        || suggestExpenseAccount([sup.name, invData.notes, ...(items ?? []).map(i => i.description)].join(" ")) || undefined;
-      if (input.expenseAccount) await db.update(suppliers).set({ defaultExpenseAccount: input.expenseAccount } as any).where(eq(suppliers.id, sup.id));
+      const chosen = !!invData.expenseAccount;
+      if (!chosen) {
+        const g = guessExpenseAccount(sup.defaultExpenseAccount, [sup.name, invData.notes, ...(items ?? []).map(i => i.description)].join(" "));
+        invData.expenseAccount = g.account ?? undefined; // несигурно -> празно, чека одговор (во меѓувреме 310)
+      }
+      (invData as any).accountConfirmed = chosen;
+      if (chosen) await db.update(suppliers).set({ defaultExpenseAccount: input.expenseAccount } as any).where(eq(suppliers.id, sup.id));
       const result = await db.insert(incomingInvoices).values({
         ...invData,
         issueDate: invData.issueDate ? new Date(invData.issueDate) : null,
@@ -333,12 +349,14 @@ export const accountingRouter = createRouter({
       status: z.enum(["received", "verified", "partial", "paid", "disputed", "cancelled"]).optional(),
       notes: z.string().optional(),
       expenseAccount: z.string().max(10).optional(),
+      /** да се запамети изборот кај добавувачот (следниот пат не прашува) */
+      rememberForSupplier: z.boolean().default(true),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const { id, ...data } = input;
-      await db.update(incomingInvoices).set(data).where(eq(incomingInvoices.id, id));
-      if (data.expenseAccount) {
+      const { id, rememberForSupplier, ...data } = input;
+      await db.update(incomingInvoices).set({ ...data, ...(data.expenseAccount ? { accountConfirmed: true } : {}) } as any).where(eq(incomingInvoices.id, id));
+      if (data.expenseAccount && rememberForSupplier) {
         const inv: any = (await db.select().from(incomingInvoices).where(eq(incomingInvoices.id, id)))[0];
         if (inv) await db.update(suppliers).set({ defaultExpenseAccount: data.expenseAccount } as any).where(eq(suppliers.id, inv.supplierId));
       }
