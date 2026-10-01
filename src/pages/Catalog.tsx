@@ -100,7 +100,7 @@ export default function CatalogPage() {
                 </Select>
                 <Input placeholder="Цена/час" value={machForm.costPerHour} onChange={e => setMachForm({ ...machForm, costPerHour: e.target.value })} />
                 <Input placeholder="Цена/метар" value={machForm.costPerMeter} onChange={e => setMachForm({ ...machForm, costPerMeter: e.target.value })} />
-                <Button variant="outline" onClick={() => machCreate.mutate(machForm as any)}>Додади</Button>
+                <Button variant="outline" disabled={!machForm.name.trim() || !machForm.code.trim() || machCreate.isPending} title={!machForm.name.trim() || !machForm.code.trim() ? "Внеси назив и шифра" : undefined} onClick={() => machCreate.mutate(machForm as any)}>Додади</Button>
               </div>
               <Table>
                 <TableHeader><TableRow><TableHead>Код</TableHead><TableHead>Назив</TableHead><TableHead>Тип</TableHead><TableHead>Цена/час</TableHead><TableHead>Амортизација</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
@@ -221,7 +221,7 @@ export default function CatalogPage() {
                 <Input placeholder="Код" value={laborForm.roleCode} onChange={e => setLaborForm({ ...laborForm, roleCode: e.target.value })} />
                 <Input placeholder="Цена/час" value={laborForm.costPerHour} onChange={e => setLaborForm({ ...laborForm, costPerHour: e.target.value })} />
                 <Input placeholder="Бруто плата" value={laborForm.grossSalary} onChange={e => setLaborForm({ ...laborForm, grossSalary: e.target.value })} />
-                <Button variant="outline" onClick={() => laborCreate.mutate(laborForm as any)}>Додади</Button>
+                <Button variant="outline" disabled={!laborForm.role.trim() || !laborForm.roleCode.trim() || !laborForm.costPerHour || laborCreate.isPending} title="Внеси улога, шифра и цена по час" onClick={() => laborCreate.mutate(laborForm as any)}>Додади</Button>
               </div>
               <Table>
                 <TableHeader><TableRow><TableHead>Улога</TableHead><TableHead>Код</TableHead><TableHead>Цена/час</TableHead><TableHead>Бруто плата</TableHead><TableHead>Придонеси %</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
@@ -250,7 +250,7 @@ export default function CatalogPage() {
                 </Select>
                 <Input placeholder="Вредност" value={ohForm.rateValue} onChange={e => setOhForm({ ...ohForm, rateValue: e.target.value })} />
                 <Input placeholder="Годишен износ" value={ohForm.annualAmount} onChange={e => setOhForm({ ...ohForm, annualAmount: e.target.value })} />
-                <Button variant="outline" onClick={() => ohCreate.mutate(ohForm as any)}>Додади</Button>
+                <Button variant="outline" disabled={!ohForm.name.trim() || !ohForm.rateValue || ohCreate.isPending} title="Внеси назив и вредност" onClick={() => ohCreate.mutate(ohForm as any)}>Додади</Button>
               </div>
               <Table>
                 <TableHeader><TableRow><TableHead>Назив</TableHead><TableHead>Тип</TableHead><TableHead>Вредност</TableHead><TableHead>Годишно</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>

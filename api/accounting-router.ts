@@ -452,6 +452,9 @@ export const accountingRouter = createRouter({
         if (po.status === "cancelled") throw new Error(`Нарачката ${po.po_number} е откажана`);
         if (!data.supplierId) data.supplierId = Number(po.supplier_id);
       }
+      // Износ = збир на ставките (порано остануваше 0)
+      const itemsTotal = (items ?? []).reduce((a, i) => a + (parseFloat(i.totalPrice) || 0), 0);
+      if (!(parseFloat(data.totalAmount) > 0) && itemsTotal > 0) data.totalAmount = itemsTotal.toFixed(2);
       const result = await db.insert(receipts).values({
         ...data,
         receiptDate: new Date(data.receiptDate),
