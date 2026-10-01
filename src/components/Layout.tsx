@@ -14,7 +14,6 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight,
   ShieldCheck,
   Calculator,
   FileText,
@@ -140,8 +139,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 `}
               >
                 <Icon className="h-5 w-5" />
-                <span className="flex-1">{item.label}</span>
-                {isActive && <ChevronRight className="h-4 w-4" />}
+                <span className="flex-1 whitespace-nowrap">{item.label}</span>
               </Link>
             );
           })}

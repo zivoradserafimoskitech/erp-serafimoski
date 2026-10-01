@@ -1092,3 +1092,33 @@ export function purchaseOrderHtml(po: any, settings: any, lang: DocLang = "mk"):
 export function printPurchaseOrder(po: any, settings: any, lang: DocLang = "mk") {
   openPrint(purchaseOrderHtml(po, settings, lang));
 }
+
+// ══════════════ НЕУСОГЛАСЕНОСТ: рекламација до добавувач / извештај до клиент ══════════════
+export function qualityIssueHtml(qi: any, settings: any): string {
+  const s = settings ?? {};
+  const toSupplier = qi?.kind === "supplier";
+  const title = toSupplier ? "РЕКЛАМАЦИЈА" : qi?.kind === "complaint" ? "ОДГОВОР НА РЕКЛАМАЦИЈА" : "ИЗВЕШТАЈ ЗА НЕУСОГЛАСЕНОСТ";
+  const partner = toSupplier ? qi?.supplier : qi?.customer;
+  const row = (k: string, v: any) => v ? `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>` : "";
+  const block = (h: string, v: any) => v ? `<div class="stitle">${h}</div><div style="white-space:pre-wrap;line-height:1.6">${esc(v)}</div>` : "";
+  const body = `
+  ${header(s, title, qi?.number ?? "", `Датум: <b>${dt(qi?.date)}</b>`)}
+  <div class="parties">
+    <div class="party"><h3>Од</h3><div class="n">${esc(s?.name ?? "")}</div><div>${esc(s?.address ?? "")}</div>${s?.phone ? `<div>тел: ${esc(s.phone)}</div>` : ""}${s?.email ? `<div>${esc(s.email)}</div>` : ""}</div>
+    <div class="party"><h3>${toSupplier ? "До добавувач" : "До"}</h3><div class="n">${esc(partner ?? "—")}</div></div>
+  </div>
+  <div class="stitle">Предмет</div>
+  <div style="font-size:13px;font-weight:700">${esc(qi?.title ?? "")}</div>
+  <div class="grid2" style="margin-top:8px">
+    ${row("Работен налог", qi?.woNumber)}${row("Материјал", qi?.material)}${row("Трошок", qi?.cost ? den(qi.cost) + " ден." : "")}${row("Одговорен", qi?.responsible)}
+  </div>
+  ${block("Опис", qi?.description)}
+  ${block("Причина", qi?.rootCause)}
+  ${block("Преземена мерка", qi?.action)}
+  ${toSupplier ? `<div class="box"><b>Барање:</b> Ве молиме за замена на неусогласениот материјал или одобрување (книжно одобрување), како и писмен одговор со причина и мерка за да не се повтори.</div>` : ""}
+  <div class="sigs"><div class="sig"><div class="line">Изготвил</div></div><div class="sig"><div class="line">${toSupplier ? "Примил (добавувач)" : "Одобрил"}</div></div></div>
+  ${footer(s)}`;
+  return shell(`${title} ${qi?.number ?? ""}`, "#c2410c", body);
+}
+
+export function printQualityIssue(qi: any, settings: any) { openPrint(qualityIssueHtml(qi, settings)); }

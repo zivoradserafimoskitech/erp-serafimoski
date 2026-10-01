@@ -13,11 +13,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import ListLimitNote from "@/components/ListLimitNote";
 import { printWorkOrder, printRequisition } from "@/lib/print-documents";
-import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck, Clock } from "lucide-react";
+import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck, Clock, ShieldAlert } from "lucide-react";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import ScheduleBoard from "@/components/ScheduleBoard";
 import WorkOrderCreateDialog from "@/components/WorkOrderCreateDialog";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
   pending: { label: "На чекање", cls: "bg-gray-100 text-gray-700" },
@@ -60,6 +60,7 @@ export default function Production() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [view, setView] = useState<"list" | "schedule">("list");
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   useEffect(() => {
     const id = Number(params.get("open"));
     if (id) { setSelWO(id); setDetailOpen(true); params.delete("open"); setParams(params, { replace: true }); }
@@ -300,6 +301,7 @@ export default function Production() {
                 <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50" onClick={() => woDetail && chainDN.mutate({ workOrderId: woDetail.id })} disabled={chainDN.isPending}><Truck className="h-3.5 w-3.5 mr-1.5" />Кон испратница</Button>
               )}
               <Button size="sm" variant="outline" onClick={() => woDetail && printRequisition(woDetail, companySettings)}><ClipboardList className="h-3.5 w-3.5 mr-1.5" />Требовање</Button>
+              <Button size="sm" variant="outline" className="text-red-700 border-red-200 hover:bg-red-50" onClick={() => { if (!woDetail) return; setDetailOpen(false); navigate(`/kvalitet?new=1&wo=${woDetail.id}`); }}><ShieldAlert className="h-3.5 w-3.5 mr-1.5" />Пријави неусогласеност</Button>
               <Button size="sm" variant="outline" onClick={() => { if (woDetail) void printWorkOrder(woDetail, companySettings); }}><Printer className="h-3.5 w-3.5 mr-1.5" />Печати / PDF</Button>
             </div>
           </div>

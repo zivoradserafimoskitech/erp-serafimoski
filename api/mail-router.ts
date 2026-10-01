@@ -45,7 +45,7 @@ export const mailRouter = createRouter({
       body: z.string().max(20000),
       filename: z.string().min(1).max(120),
       pdfBase64: z.string().min(100).max(15_000_000),
-      docType: z.enum(["quotation", "invoice", "purchase_order"]),
+      docType: z.enum(["quotation", "invoice", "purchase_order", "quality"]),
       docId: z.number(),
     }))
     .mutation(async ({ input }) => {

@@ -211,6 +211,23 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect((await caller.accounting.incomingAccountReview()).some((r: any) => r.id === e.id)).toBe(false);
   });
 
+  it("неусогласеност: налог -> клиент само, налог за доработка", async () => {
+    const qi = await caller.ops.qualityCreate({ date: today, kind: "internal", title: "Погрешна мера на отвори", workOrderId: ids.wo });
+    let row = (await caller.ops.qualityList()).find((r: any) => r.id === qi.id);
+    expect(row.customerId).toBe(ids.cust); // клиентот од нарачката на налогот
+    const rw = await caller.ops.qualityRework({ id: qi.id });
+    row = (await caller.ops.qualityList()).find((r: any) => r.id === qi.id);
+    expect(row).toMatchObject({ reworkWoId: rw.woId, reworkWoNumber: rw.woNumber, status: "in_progress" });
+    const w = await caller.production.workOrderById({ id: rw.woId });
+    expect(w.priority).toBe("high");
+    await expect(caller.ops.qualityRework({ id: qi.id })).rejects.toThrow(/Веќе постои/);
+    // врските може да се сменат
+    await caller.ops.qualityUpdate({ id: qi.id, customerId: null });
+    expect((await caller.ops.qualityList()).find((r: any) => r.id === qi.id).customerId).toBe(null);
+    const opt = await caller.ops.qualityLinkOptions();
+    expect(opt.wos.find((x: any) => x.id === ids.wo)?.customerId).toBe(ids.cust);
+  });
+
   it("брзо пребарување", async () => {
     const hits = await caller.search.globalSearch({ q: "ПО-050" });
     expect(hits[0]).toMatchObject({ type: "Понуда", title: "ПО-050/2026" });

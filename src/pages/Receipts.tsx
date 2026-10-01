@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { DateInput } from "@/components/ui/date-input";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Search, CheckCircle, ClipboardCheck, Upload, FileText, X, Eye, Trash2, AlertCircle, AlertTriangle } from "lucide-react";
+import { Plus, Search, CheckCircle, ClipboardCheck, Upload, FileText, X, Eye, Trash2, AlertCircle, AlertTriangle, ShieldAlert } from "lucide-react";
 
 const statuses: Record<string, string> = { draft: "Нацрт", confirmed: "Потврдена", cancelled: "Откажана" };
 const statusColors: Record<string, string> = { draft: "bg-gray-100 text-gray-800", confirmed: "bg-emerald-100 text-emerald-800", cancelled: "bg-red-100 text-red-800" };
@@ -40,6 +40,7 @@ interface ParsedItem {
 export default function Receipts() {
   const [search, setSearch] = useState("");
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   useEffect(() => {
     const qq = params.get("q");
     if (qq) { setSearch(qq); params.delete("q"); setParams(params, { replace: true }); }
@@ -713,6 +714,12 @@ export default function Receipts() {
                       </TableCell>
                       <TableCell><Badge className={statusColors[r.status]}>{statuses[r.status]}</Badge></TableCell>
                       <TableCell className="text-right">
+                        {r.supplierId && (
+                          <Button size="sm" variant="ghost" className="text-red-600 mr-1" title="Рекламација до добавувачот (неусогласеност)"
+                            onClick={() => navigate(`/kvalitet?new=1&kind=supplier&supplier=${r.supplierId}&title=${encodeURIComponent(`Приемница ${r.receiptNumber}: `)}`)}>
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         {r.status === "draft" && (
                           <Button size="sm" variant="outline" className="text-emerald-700" onClick={() => handleConfirm(r)} disabled={processMutation.isPending}>
                             <CheckCircle className="h-3 w-3 mr-1" /> Потврди
