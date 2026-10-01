@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Search, CheckCircle, ClipboardCheck, Upload, FileText, X, Eye, Trash2, AlertCircle } from "lucide-react";
+import { Plus, Search, CheckCircle, ClipboardCheck, Upload, FileText, X, Eye, Trash2, AlertCircle, AlertTriangle } from "lucide-react";
 
 const statuses: Record<string, string> = { draft: "Нацрт", confirmed: "Потврдена", cancelled: "Откажана" };
 const statusColors: Record<string, string> = { draft: "bg-gray-100 text-gray-800", confirmed: "bg-emerald-100 text-emerald-800", cancelled: "bg-red-100 text-red-800" };
@@ -126,6 +126,23 @@ export default function Receipts() {
     },
   });
 
+  // Приемници во нацрт: залихата уште не е зголемена (порано „Потврди“ не ја зголемуваше)
+  const { data: draftReceipts } = trpc.accounting.receiptList.useQuery({ status: "draft" });
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const confirmAllDrafts = async () => {
+    const list = draftReceipts ?? [];
+    if (!list.length || !confirm(`Да се потврдат сите ${list.length} приемници во нацрт? Залихата ќе се зголеми за нивните ставки.`)) return;
+    setBulkBusy(true);
+    let ok = 0; const failed: string[] = [];
+    for (const r of list as any[]) {
+      try { await processMutation.mutateAsync({ receiptId: r.id, warehouseId: r.warehouseId, items: [] } as any); ok++; }
+      catch (e: any) { failed.push(`${r.receiptNumber}: ${e?.message ?? e}`); }
+    }
+    setBulkBusy(false);
+    utils.accounting.receiptList.invalidate();
+    if (ok) toast.success(`Потврдени ${ok} приемници — залихата е зголемена`);
+    if (failed.length) toast.error(`Не се потврдени ${failed.length}`, { description: failed.join(" · ").slice(0, 400) });
+  };
   const processMutation = trpc.storage.processReceipt.useMutation({
     onSuccess: () => {
       utils.accounting.receiptList.invalidate();
@@ -651,6 +668,18 @@ export default function Receipts() {
             </Dialog>
           </div>
 
+          {(draftReceipts?.length ?? 0) > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+              <div className="flex-1 min-w-[220px] text-sm text-amber-900">
+                <b>{draftReceipts!.length} {draftReceipts!.length === 1 ? "приемница е" : "приемници се"} во нацрт</b> — залихата за нив уште не е зголемена:{" "}
+                <span className="font-mono text-xs">{draftReceipts!.slice(0, 6).map((r: any) => r.receiptNumber).join(", ")}{draftReceipts!.length > 6 ? "…" : ""}</span>
+              </div>
+              <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800" disabled={bulkBusy} onClick={confirmAllDrafts}>
+                {bulkBusy ? "Се потврдува..." : "Потврди ги сите"}
+              </Button>
+            </div>
+          )}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
@@ -667,14 +696,18 @@ export default function Receipts() {
             </CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>Број</TableHead><TableHead>Добавувач</TableHead><TableHead>Магацин</TableHead><TableHead>Датум</TableHead><TableHead>Трошоци</TableHead><TableHead>Статус</TableHead><TableHead className="text-right">Акции</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Број</TableHead><TableHead>Добавувач</TableHead><TableHead>Магацин</TableHead><TableHead>Датум</TableHead><TableHead className="text-right">Износ</TableHead><TableHead>Трошоци</TableHead><TableHead>Статус</TableHead><TableHead className="text-right">Акции</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {receiptsData?.map(r => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.receiptNumber}</TableCell>
                       <TableCell>{r.supplierName ?? "-"}</TableCell>
-                      <TableCell>{r.warehouseId}</TableCell>
+                      <TableCell>
+                        {warehousesData?.find(w => w.id === r.warehouseId)?.name ?? "—"}
+                        {r.poId && <div className="text-[11px] text-emerald-700">по {poListData?.find((p: any) => p.id === r.poId)?.poNumber ?? "нарачка"}</div>}
+                      </TableCell>
                       <TableCell>{formatDate(r.receiptDate)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">{Number(r.totalAmount ?? 0).toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ден.</TableCell>
                       <TableCell className="text-xs">
                         {(parseFloat(r.transportCost ?? "0") + parseFloat(r.customsCost ?? "0") + parseFloat(r.otherCost ?? "0")).toFixed(2)} ден.
                       </TableCell>

@@ -196,7 +196,7 @@ export default function SettingsPage() {
                     <SelectItem value="other">Друго</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" onClick={() => unitCreate.mutate(unitForm)}>Додади</Button>
+                <Button variant="outline" disabled={!unitForm.code.trim() || !unitForm.name.trim() || unitCreate.isPending} title="Внеси шифра и назив" onClick={() => unitCreate.mutate(unitForm)}>Додади</Button>
               </div>
               <Table>
                 <TableHeader><TableRow><TableHead>Код</TableHead><TableHead>Назив</TableHead><TableHead>Категорија</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
@@ -227,7 +227,7 @@ export default function SettingsPage() {
                 </Select>
                 <Input placeholder="Фактор" value={convForm.factor} onChange={e => setConvForm({ ...convForm, factor: e.target.value })} />
                 <Input placeholder="Тип материјал" value={convForm.materialType} onChange={e => setConvForm({ ...convForm, materialType: e.target.value })} />
-                <Button variant="outline" onClick={() => convCreate.mutate({ ...convForm, fromUnitId: parseInt(convForm.fromUnitId), toUnitId: parseInt(convForm.toUnitId), factor: convForm.factor })}>Додади</Button>
+                <Button variant="outline" disabled={!convForm.fromUnitId || !convForm.toUnitId || !(parseFloat(convForm.factor) > 0) || convCreate.isPending} title="Избери единици и фактор" onClick={() => convCreate.mutate({ ...convForm, fromUnitId: parseInt(convForm.fromUnitId), toUnitId: parseInt(convForm.toUnitId), factor: convForm.factor })}>Додади</Button>
               </div>
               <Table>
                 <TableHeader><TableRow><TableHead>Од</TableHead><TableHead>Во</TableHead><TableHead>Фактор</TableHead><TableHead>Материјал</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
