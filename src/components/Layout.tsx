@@ -36,7 +36,7 @@ const navItems = [
   { path: "/kvalitet", label: "Квалитет и одржување", icon: ShieldCheck },
   { path: "/klienti", label: "Клиенти и нарачки", icon: Users },
   { path: "/nabavka", label: "Набавка", icon: ShoppingCart },
-  { path: "/smetkovodstvo", label: "Сметководство", icon: Calculator },
+  { path: "/smetkovodstvo", label: "Фактури", icon: Calculator },
   { path: "/finansii", label: "Финансии", icon: Landmark },
   { path: "/ponudi", label: "Понуди", icon: FileText },
   { path: "/priemnici", label: "Приемници", icon: ClipboardCheck },

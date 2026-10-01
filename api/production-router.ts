@@ -658,7 +658,7 @@ export const productionRouter = createRouter({
       const wo = woRes[0];
       if (!wo) throw new Error("Налогот не постои");
       if (wo.status !== "completed") throw new Error("Испратница се креира само од ЗАВРШЕН налог — прво заврши го");
-      if (!wo.orderId) throw new Error("Налогот нема поврзана нарачка — не знам кој е клиентот. Креирај ја испратницата рачно од Сметководство → Испратници");
+      if (!wo.orderId) throw new Error("Налогот нема поврзана нарачка — не знам кој е клиентот. Креирај ја испратницата рачно од Фактури и документи → Испратници");
 
       const ordRes = await db.select().from(orders).where(eq(orders.id, wo.orderId));
       if (!ordRes[0]) throw new Error("Нарачката на налогот не постои");

@@ -1,4 +1,3 @@
-import BankTab from "@/components/BankTab";
 import { DateInput } from "@/components/ui/date-input";
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
@@ -19,7 +18,7 @@ import SendEmailDialog from "@/components/SendEmailDialog";
 import { EXPENSE_CHOICES } from "@contracts/finance";
 import IncomingAccountPicker from "@/components/IncomingAccountPicker";
 import IncomingAccountReview from "@/components/IncomingAccountReview";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { DnCertificates } from "@/components/DnCertificates";
 import {
@@ -70,6 +69,7 @@ function exportCSV(filename: string, headers: string[], rows: string[][]) {
 }
 
 export default function Accounting() {
+  const navigate = useNavigate();
   const utils = trpc.useUtils();
   const [tab, setTab] = useState("outgoing");
   const [search, setSearch] = useState("");
@@ -292,8 +292,8 @@ export default function Accounting() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Сметководство</h2>
-          <p className="text-gray-500 mt-1">Фактури, приемници, испратници и извештаи</p>
+          <h2 className="text-2xl font-bold text-gray-800">Фактури и документи</h2>
+          <p className="text-gray-500 mt-1">Излезни и влезни фактури, испратници и е-фактури · банка, благајна, ДДВ и главна книга се во <button className="text-amber-700 hover:underline" onClick={() => navigate("/finansii")}>Финансии</button></p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {tab === "outgoing" && (
@@ -748,12 +748,10 @@ export default function Accounting() {
         {[
           { key: "outgoing", label: "Излезни фактури", icon: ArrowUpRight },
           { key: "incoming", label: "Влезни фактури", icon: ArrowDownLeft },
-          
           { key: "delivery", label: "Испратници", icon: Truck },
-          { key: "bank", label: "Банка", icon: Landmark },
           { key: "einvoice", label: "УЈП е-фактури", icon: FileText },
-          { key: "email", label: "Е-маил фактури", icon: Upload },
-          { key: "parsed", label: "PDF Парсирање", icon: FileUp },
+          { key: "parsed", label: "Влезни од PDF", icon: FileUp },
+          { key: "email", label: "Влезни од е-пошта", icon: Upload },
         ].map(t => {
           const Icon = t.icon;
           return (
@@ -782,9 +780,9 @@ export default function Accounting() {
                       <TableCell className="font-mono text-sm font-medium">{inv.invoiceNumber}</TableCell>
                       <TableCell>{inv.customerName} {inv.customerCompany ? `(${inv.customerCompany})` : ""}</TableCell>
                       <TableCell><Badge className={invStatus[inv.status]?.cls}>{invStatus[inv.status]?.label}</Badge></TableCell>
-                      <TableCell>{inv.invoiceType === "standard" ? "Стандардна" : inv.invoiceType === "proforma" ? "Проформа" : "Кредитна"}</TableCell>
-                      <TableCell className="font-medium">{inv.totalAmount} {inv.currency}</TableCell>
-                      <TableCell>{inv.vatAmount}</TableCell>
+                      <TableCell>{inv.invoiceType === "standard" ? "Фактура" : inv.invoiceType === "proforma" ? "Про-фактура" : "Книжно одобрување"}</TableCell>
+                      <TableCell className="font-medium tabular-nums whitespace-nowrap">{Number(inv.totalAmount).toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {inv.currency === "MKD" ? "ден." : inv.currency}</TableCell>
+                      <TableCell className="tabular-nums">{Number(inv.vatAmount).toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-gray-500">{formatDate(inv.issueDate)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -906,7 +904,12 @@ export default function Accounting() {
       )}
 
       {/* ===== UJP E-INVOICES ===== */}
-      {tab === "bank" && <BankTab />}
+      {tab === "bank" && (
+        <Card><CardContent className="py-10 text-center space-y-3">
+          <p className="text-gray-600">Банката е преместена во <b>Финансии</b>, заедно со благајната, ДДВ и главната книга.</p>
+          <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => navigate("/finansii?tab=bank")}>Отвори Финансии → Банка</Button>
+        </CardContent></Card>
+      )}
 
       {tab === "einvoice" && <UJPEFakturaTab />}
 

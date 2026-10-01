@@ -12,13 +12,20 @@ import {
   FileText,
   ScanLine,
   ArrowRight,
+  RefreshCw,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router";
 
 export default function Dashboard() {
-  const { data: stats } = trpc.dashboard.stats.useQuery();
-  const { data: parsedDocs } = trpc.ocr.parsedDocumentList.useQuery({ documentType: "receipt" });
+  // Таблата се освежува сама на 30 секунди (и веднаш по секое зачувување во апликацијата)
+  const { data: stats, dataUpdatedAt, isFetching, refetch } = trpc.dashboard.stats.useQuery(undefined, { refetchInterval: 30_000 });
+  const { data: parsedDocs, refetch: refetchParsed } = trpc.ocr.parsedDocumentList.useQuery({ documentType: "receipt" }, { refetchInterval: 30_000 });
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick(x => x + 1), 5000); return () => clearInterval(t); }, []);
+  const ago = dataUpdatedAt ? Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000)) : null;
+  const money = (v: any) => Number(v ?? 0).toLocaleString("mk-MK", { maximumFractionDigits: 0 });
   const navigate = useNavigate();
   const pendingParsed = parsedDocs?.filter(d => d.status === "parsed").length ?? 0;
 
@@ -26,13 +33,15 @@ export default function Dashboard() {
     {
       title: "Вкупно нарачки",
       value: stats?.orders.total ?? 0,
+      href: "/tek",
       icon: ClipboardList,
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
     {
-      title: "Во производство",
+      title: "Налози во тек",
       value: stats?.production.inProgress ?? 0,
+      href: "/proizvodstvo",
       icon: Factory,
       color: "text-amber-600",
       bg: "bg-amber-50",
@@ -40,6 +49,7 @@ export default function Dashboard() {
     {
       title: "Ниски залихи",
       value: stats?.storage.lowStock ?? 0,
+      href: "/sklad",
       icon: AlertTriangle,
       color: "text-red-600",
       bg: "bg-red-50",
@@ -50,13 +60,15 @@ export default function Dashboard() {
     {
       title: "Активни клиенти",
       value: stats?.customers.active ?? 0,
+      href: "/klienti",
       icon: Users,
       color: "text-emerald-600",
       bg: "bg-emerald-50",
     },
     {
-      title: "Вкупен промет",
-      value: `${stats?.financial.totalRevenue ?? "0"} ден.`,
+      title: "Вкупен промет (нарачки)",
+      value: `${money(stats?.financial.totalRevenue)} ден.`,
+      href: "/finansii",
       icon: TrendingUp,
       color: "text-violet-600",
       bg: "bg-violet-50",
@@ -64,6 +76,7 @@ export default function Dashboard() {
     {
       title: "Завршени работни налози",
       value: stats?.production.completed ?? 0,
+      href: "/proizvodstvo",
       icon: CheckCircle,
       color: "text-teal-600",
       bg: "bg-teal-50",
@@ -71,6 +84,7 @@ export default function Dashboard() {
     {
       title: "Парсирани приемници",
       value: pendingParsed,
+      href: "/priemnici",
       icon: ScanLine,
       color: "text-indigo-600",
       bg: "bg-indigo-50",
@@ -79,9 +93,15 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800">Контролна табла</h2>
-        <p className="text-gray-500 mt-1">Преглед на клучни показатели за вашиот бизнис</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">Контролна табла</h2>
+          <p className="text-gray-500 mt-1">Преглед на клучни показатели за вашиот бизнис — кликни на картичка за детали</p>
+        </div>
+        <button onClick={() => { refetch(); refetchParsed(); }} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 rounded-md border bg-white px-2.5 py-1.5" title="Освежи сега">
+          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-amber-600" : ""}`} />
+          {isFetching ? "Се освежува..." : ago === null ? "Освежи" : ago < 5 ? "Освежено сега" : `Освежено пред ${ago < 60 ? ago + " сек" : Math.round(ago / 60) + " мин"}`}
+        </button>
       </div>
 
       {/* Stats cards */}
@@ -89,7 +109,8 @@ export default function Dashboard() {
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.title} className="border-l-4 border-l-transparent hover:shadow-md transition-shadow">
+            <Card key={card.title} onClick={() => (card as any).href && navigate((card as any).href)}
+              className={`border-l-4 border-l-transparent hover:shadow-md transition-shadow ${(card as any).href ? "cursor-pointer hover:border-l-amber-400" : ""}`}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">
                   <div className="space-y-2">
