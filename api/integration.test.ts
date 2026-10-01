@@ -155,6 +155,9 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     const r = await caller.ops.profitabilityReport({ from: "2000-01-01", to: "2100-01-01" });
     expect(r.rows).toHaveLength(1);
     expect(r.rows[0].actualCost).toBeGreaterThan(0);
+    expect(r.rows[0].costSource).toBe("workorders");
+    expect(r.totals.counted).toBe(1);
+    expect(r.totals.profit).toBe(r.rows[0].profit);
   });
 
   it("плати: пресметка и книжење", async () => {

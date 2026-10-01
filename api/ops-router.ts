@@ -186,7 +186,7 @@ export const opsRouter = createRouter({
         LEFT JOIN quotations qt ON qt.converted_order_id = o.id
         WHERE o.created_at::date BETWEEN $1 AND $2 AND o.status <> 'cancelled'
         ORDER BY o.created_at DESC LIMIT 500`, [input.from, input.to]);
-      if (!orders.length) return { rows: [], totals: { revenue: 0, plannedCost: 0, actualCost: 0, profit: 0 } };
+      if (!orders.length) return { rows: [], totals: { revenue: 0, plannedCost: 0, actualCost: 0, profit: 0, counted: 0, skipped: 0, skippedRevenue: 0 } };
       const ids = orders.map(o => o.id);
       const wos = await q(`SELECT w.id, w.order_id, w.wo_number, w.status, w.cost_amount FROM work_orders w WHERE w.order_id = ANY($1)`, [ids]);
       const woIds = wos.map(w => w.id);
@@ -222,25 +222,33 @@ export const opsRouter = createRouter({
           const net = Number(o.items_net) || Number(o.total_amount) || 0;
           revenue = toMkd(net, cur, date, rate) ?? toMkd(net, cur, todayIso(), rate);
         }
-        // трошоците во понудата се секогаш во денари (од набавните цени), без разлика на валутата на понудата
-        const plannedCost = Number(o.quote_cost ?? o.cost_amount ?? 0);
-        const actualCost = round2(matActual + matPlanned + opCost);
+        // трошоците во понудата се секогаш во денари (од набавните цени), без разлика на валутата на понудата;
+        // ако нема понуда, планот е збир од пресметките на налозите
+        const woPlanned = myWos.reduce((a, w) => a + Number(w.cost_amount || 0), 0);
+        const plannedCost = Number(o.quote_cost || 0) || Number(o.cost_amount || 0) || woPlanned;
+        // Трошок: од налозите; без налог -- проценка од понудата; без ниедно -- непознат (добивката не се смета)
+        const costSource: "workorders" | "estimate" | "unknown" = myWos.length && (matActual + matPlanned + opCost) > 0 ? "workorders"
+          : plannedCost > 0 ? "estimate" : "unknown";
+        const actualCost = costSource === "workorders" ? round2(matActual + matPlanned + opCost) : costSource === "estimate" ? round2(plannedCost) : 0;
         const done = myWos.length > 0 && myWos.every(w => w.status === "completed");
-        const profit = revenue === null ? null : round2(revenue - actualCost);
+        const profit = revenue === null || costSource === "unknown" || !revenue ? null : round2(revenue - actualCost);
         return {
           orderId: o.id, orderNumber: o.order_number, customer: o.customer, status: o.status, date, quoteNumber: o.quote_number,
           currency: cur, revenue: revenue === null ? null : round2(revenue), revenueSource,
           plannedCost: round2(plannedCost), actualCost, materialCost: round2(matActual + matPlanned), materialPlannedOnly: round2(matPlanned),
           operationCost: round2(opCost), hours: round2(hours), workOrders: myWos.map(w => w.wo_number),
           profit, marginPct: revenue && profit !== null && revenue !== 0 ? round2(profit / revenue * 100) : null,
-          variance: round2(actualCost - plannedCost), finished: done,
+          variance: costSource === "workorders" && plannedCost > 0 ? round2(actualCost - plannedCost) : null, finished: done, costSource,
         };
       });
-      const totals = rows.reduce((t, r) => ({
+      // Збирот е само од нарачките каде се знаат и приходот и трошокот, за маржата да не лаже
+      const known = rows.filter(r => r.profit !== null);
+      const totals = known.reduce((t, r) => ({
         revenue: round2(t.revenue + (r.revenue ?? 0)), plannedCost: round2(t.plannedCost + r.plannedCost),
         actualCost: round2(t.actualCost + r.actualCost), profit: round2(t.profit + (r.profit ?? 0)),
       }), { revenue: 0, plannedCost: 0, actualCost: 0, profit: 0 });
-      return { rows, totals };
+      const skipped = rows.filter(r => r.profit === null);
+      return { rows, totals: { ...totals, counted: known.length, skipped: skipped.length, skippedRevenue: round2(skipped.reduce((a, r) => a + (r.revenue ?? 0), 0)) } };
     }),
 
   // ===================== РАСПОРЕД =====================

@@ -104,6 +104,10 @@ export const dashboardRouter = createRouter({
     const ordersOpen = allOrders.filter((o: any) => !["delivered", "cancelled"].includes(o.status)).length;
     const qualityOpen = Number((await getPool().query(`SELECT COUNT(*)::int n FROM quality_issues WHERE status <> 'closed'`)).rows[0]?.n ?? 0);
     const receivablesCount = open.filter(d => d.docType === "invoice").length;
+    // нарачки означени „во производство“ а без ниеден отворен налог -- вреди да се провери
+    const activeWoOrders = new Set(allWorkOrders.filter((w: any) => ["pending", "in_progress", "on_hold"].includes(w.status)).map((w: any) => Number(w.orderId)));
+    const inProductionNoWo = allOrders.filter((o: any) => o.status === "in_production" && !activeWoOrders.has(Number(o.id))).length;
+    const receiptsDraft = Number((await getPool().query(`SELECT COUNT(*)::int n FROM receipts WHERE status = 'draft'`)).rows[0]?.n ?? 0);
     const payablesCount = open.filter(d => d.docType === "incoming_invoice").length;
 
     return {
@@ -122,6 +126,8 @@ export const dashboardRouter = createRouter({
         inProduction: inProductionOrders,
         ready: readyOrders,
         delivered: deliveredOrders,
+        cancelled: allOrders.filter((o) => o.status === "cancelled").length,
+        inProductionNoWo,
       },
       production: {
         total: allWorkOrders.length,
@@ -142,6 +148,7 @@ export const dashboardRouter = createRouter({
         draft: draftPO,
         sent: sentPO,
         partial: partialPO,
+        receiptsDraft,
       },
       financial: {
         totalRevenue: totalRevenue.toFixed(2),
