@@ -180,6 +180,7 @@ export function getExtraSql(): string[] {
     // ===== Конто на влезна фактура (трошок / залиха) =====
     `ALTER TABLE "incoming_invoices" ADD COLUMN IF NOT EXISTS "expense_account" varchar(10)`,
     `ALTER TABLE "suppliers" ADD COLUMN IF NOT EXISTS "default_expense_account" varchar(10)`,
+    `ALTER TABLE "incoming_invoices" ADD COLUMN IF NOT EXISTS "account_confirmed" boolean DEFAULT false`,
 
     // ===== Индекси за побрзи листи =====
     `CREATE INDEX IF NOT EXISTS "invoices_created_idx" ON "invoices" ("created_at")`,

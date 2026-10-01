@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { trpc } from "@/providers/trpc";
+import { isStaleChunkError, reloadForNewVersion } from "@/lib/stale-chunk";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,6 +80,7 @@ export default function SendEmailDialog(p: SendEmailProps) {
       p.onSent?.();
       p.onOpenChange(false);
     } catch (e: any) {
+      if (isStaleChunkError(e) && reloadForNewVersion()) { toast.info("Има нова верзија — страницата се освежува, потоа прати повторно"); return; }
       toast.error(e?.message ?? "Пораката не е пратена");
     } finally {
       setBusy(false);

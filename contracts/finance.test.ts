@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   invoiceLines, incomingLines, paymentLines, cashOtherLines, payrollLines, isBalanced, normalizeLines, fixRounding,
-  toMkd, convert, parseNbrmRates, calcPayroll, rulesWithDefaults, linesSignature, DEFAULT_PAYROLL, stockMoveLines, suggestExpenseAccount,
+  toMkd, convert, parseNbrmRates, calcPayroll, rulesWithDefaults, linesSignature, DEFAULT_PAYROLL, stockMoveLines, suggestExpenseAccount, guessExpenseAccount,
 } from "./finance";
 
 const rules = rulesWithDefaults({});
@@ -139,5 +139,13 @@ describe("залиха и конто на влезна фактура", () => {
     expect(suggestExpenseAccount("Македонски Телеком")).toBe("413");
     expect(suggestExpenseAccount("Лим 3мм S235")).toBe("310");
     expect(suggestExpenseAccount("Нешто непознато")).toBe(null);
+  });
+});
+
+describe("конто: сигурно или прашај", () => {
+  it("запаметено кај добавувачот или јасен текст = сигурно; инаку прашај", () => {
+    expect(guessExpenseAccount("412", "било што")).toMatchObject({ account: "412", sure: true });
+    expect(guessExpenseAccount(null, "ЕВН Македонија")).toMatchObject({ account: "401", sure: true });
+    expect(guessExpenseAccount(null, "Метал Нет ДООЕЛ разно")).toMatchObject({ account: null, sure: false });
   });
 });

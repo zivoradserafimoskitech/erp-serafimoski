@@ -1,4 +1,3 @@
-import BankTab from "@/components/BankTab";
 import { DateInput } from "@/components/ui/date-input";
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
@@ -18,7 +17,8 @@ import { printInvoice, printDeliveryNote, printAccountantReport, invoiceHtml } f
 import SendEmailDialog from "@/components/SendEmailDialog";
 import { EXPENSE_CHOICES } from "@contracts/finance";
 import IncomingAccountPicker from "@/components/IncomingAccountPicker";
-import { useSearchParams } from "react-router";
+import IncomingAccountReview from "@/components/IncomingAccountReview";
+import { useSearchParams, useNavigate } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { DnCertificates } from "@/components/DnCertificates";
 import {
@@ -69,6 +69,7 @@ function exportCSV(filename: string, headers: string[], rows: string[][]) {
 }
 
 export default function Accounting() {
+  const navigate = useNavigate();
   const utils = trpc.useUtils();
   const [tab, setTab] = useState("outgoing");
   const [search, setSearch] = useState("");
@@ -121,6 +122,7 @@ export default function Accounting() {
     discount: string; totalPrice: string; vatRate: string; notes: string;
     productId?: number; serviceId?: number; itemType: "product" | "service" | "manual";
   }>>([]);
+  const [incNeedsKind, setIncNeedsKind] = useState(false);
   const [incForm, setIncForm] = useState({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
   const [incItems, setIncItems] = useState<Array<{
     description: string; quantity: string; unit: string; unitPrice: string;
@@ -290,8 +292,8 @@ export default function Accounting() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Сметководство</h2>
-          <p className="text-gray-500 mt-1">Фактури, приемници, испратници и извештаи</p>
+          <h2 className="text-2xl font-bold text-gray-800">Фактури и документи</h2>
+          <p className="text-gray-500 mt-1">Излезни и влезни фактури, испратници и е-фактури · банка, благајна, ДДВ и главна книга се во <button className="text-amber-700 hover:underline" onClick={() => navigate("/finansii")}>Финансии</button></p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {tab === "outgoing" && (
@@ -415,6 +417,7 @@ export default function Accounting() {
                 <DialogHeader><DialogTitle>Нова влезна фактура</DialogTitle></DialogHeader>
                 <form onSubmit={(e) => {
                   e.preventDefault();
+                  if (incNeedsKind) { toast.error("Избери што е купено со оваа фактура"); return; }
                   const subtotal = incItems.reduce((s, i) => s + parseFloat(i.totalPrice || "0"), 0);
                   const vatAmount = incItems.reduce((s, i) => s + (parseFloat(i.totalPrice || "0") * parseFloat(i.vatRate) / 100), 0);
                   createInc.mutate({
@@ -470,7 +473,7 @@ export default function Accounting() {
                     <div className="space-y-1"><Label>Добавувач *</Label><Select value={incForm.supplierId} onValueChange={(v) => setIncForm({ ...incForm, supplierId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери добавувач" /></SelectTrigger><SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <IncomingAccountPicker supplierId={incForm.supplierId ? Number(incForm.supplierId) : undefined} text={[incForm.notes, ...incItems.map((i: any) => i.description)].join(" ")}
-                    value={incForm.expenseAccount} onChange={(v) => setIncForm(f => ({ ...f, expenseAccount: v }))} />
+                    value={incForm.expenseAccount} onChange={(v) => setIncForm(f => ({ ...f, expenseAccount: v }))} onNeedsAnswer={setIncNeedsKind} />
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1"><Label>Датум на прием *</Label><DateInput value={incForm.receivedDate} onChange={(e) => setIncForm({ ...incForm, receivedDate: e.target.value })} required /></div>
                     <div className="space-y-1"><Label>Датум на фактура</Label><DateInput value={incForm.issueDate} onChange={(e) => setIncForm({ ...incForm, issueDate: e.target.value })} /></div>
@@ -745,12 +748,10 @@ export default function Accounting() {
         {[
           { key: "outgoing", label: "Излезни фактури", icon: ArrowUpRight },
           { key: "incoming", label: "Влезни фактури", icon: ArrowDownLeft },
-          
           { key: "delivery", label: "Испратници", icon: Truck },
-          { key: "bank", label: "Банка", icon: Landmark },
           { key: "einvoice", label: "УЈП е-фактури", icon: FileText },
-          { key: "email", label: "Е-маил фактури", icon: Upload },
-          { key: "parsed", label: "PDF Парсирање", icon: FileUp },
+          { key: "parsed", label: "Влезни од PDF", icon: FileUp },
+          { key: "email", label: "Влезни од е-пошта", icon: Upload },
         ].map(t => {
           const Icon = t.icon;
           return (
@@ -779,9 +780,9 @@ export default function Accounting() {
                       <TableCell className="font-mono text-sm font-medium">{inv.invoiceNumber}</TableCell>
                       <TableCell>{inv.customerName} {inv.customerCompany ? `(${inv.customerCompany})` : ""}</TableCell>
                       <TableCell><Badge className={invStatus[inv.status]?.cls}>{invStatus[inv.status]?.label}</Badge></TableCell>
-                      <TableCell>{inv.invoiceType === "standard" ? "Стандардна" : inv.invoiceType === "proforma" ? "Проформа" : "Кредитна"}</TableCell>
-                      <TableCell className="font-medium">{inv.totalAmount} {inv.currency}</TableCell>
-                      <TableCell>{inv.vatAmount}</TableCell>
+                      <TableCell>{inv.invoiceType === "standard" ? "Фактура" : inv.invoiceType === "proforma" ? "Про-фактура" : "Книжно одобрување"}</TableCell>
+                      <TableCell className="font-medium tabular-nums whitespace-nowrap">{Number(inv.totalAmount).toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {inv.currency === "MKD" ? "ден." : inv.currency}</TableCell>
+                      <TableCell className="tabular-nums">{Number(inv.vatAmount).toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-gray-500">{formatDate(inv.issueDate)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -800,6 +801,7 @@ export default function Accounting() {
       )}
 
       {/* ===== INCOMING INVOICES ===== */}
+      {tab === "incoming" && <IncomingAccountReview />}
       {tab === "incoming" && (
         <Card>
           <CardContent className="p-0">
@@ -902,7 +904,12 @@ export default function Accounting() {
       )}
 
       {/* ===== UJP E-INVOICES ===== */}
-      {tab === "bank" && <BankTab />}
+      {tab === "bank" && (
+        <Card><CardContent className="py-10 text-center space-y-3">
+          <p className="text-gray-600">Банката е преместена во <b>Финансии</b>, заедно со благајната, ДДВ и главната книга.</p>
+          <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => navigate("/finansii?tab=bank")}>Отвори Финансии → Банка</Button>
+        </CardContent></Card>
+      )}
 
       {tab === "einvoice" && <UJPEFakturaTab />}
 

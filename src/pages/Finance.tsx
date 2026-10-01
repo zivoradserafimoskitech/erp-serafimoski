@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import BankTab from "@/components/BankTab";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp } from "lucide-react";
+import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -688,9 +689,16 @@ function ProfitTab() {
   );
 }
 
+const FIN_GROUPS = [
+  { label: "Пари", tabs: [{ key: "bank", label: "Банка", icon: Landmark }, { key: "cash", label: "Благајна", icon: Wallet }] },
+  { label: "Извештаи", tabs: [{ key: "vat", label: "ДДВ", icon: Receipt }, { key: "profit", label: "Добивка по нарачка", icon: TrendingUp }] },
+  { label: "Главна книга", tabs: [{ key: "journal", label: "Налози", icon: BookOpen }, { key: "trial", label: "Бруто биланс", icon: Scale }, { key: "card", label: "Картица", icon: FileSpreadsheet }] },
+  { label: "Поставки", tabs: [{ key: "rates", label: "Курсна листа", icon: Coins }, { key: "chart", label: "Контен план", icon: ListTree }] },
+];
+
 export default function Finance() {
   const [params, setParams] = useSearchParams();
-  const [tab, setTab] = useState(params.get("tab") || "journal");
+  const [tab, setTab] = useState(params.get("tab") || "bank");
   const [cashInvoice] = useState<number | null>(Number(params.get("invoice")) || null);
   useEffect(() => { if (params.get("tab") || params.get("invoice")) setParams({}, { replace: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [cardCode, setCardCode] = useState("");
@@ -698,19 +706,21 @@ export default function Finance() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-800">Финансии</h2>
-        <p className="text-gray-500 mt-1">Главна книга, ДДВ, благајна и курсна листа — фактурите и уплатите се книжат автоматски</p>
+        <p className="text-gray-500 mt-1">Пари и книговодство — банка, благајна, ДДВ, добивка и главна книга. Фактурите и уплатите се книжат автоматски.</p>
       </div>
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-amber-50 flex-wrap h-auto">
-          <TabsTrigger value="profit"><TrendingUp className="h-4 w-4 mr-1.5" />Добивка по нарачка</TabsTrigger>
-          <TabsTrigger value="journal"><BookOpen className="h-4 w-4 mr-1.5" />Налози</TabsTrigger>
-          <TabsTrigger value="trial"><Scale className="h-4 w-4 mr-1.5" />Бруто биланс</TabsTrigger>
-          <TabsTrigger value="card"><FileSpreadsheet className="h-4 w-4 mr-1.5" />Картица</TabsTrigger>
-          <TabsTrigger value="vat"><Receipt className="h-4 w-4 mr-1.5" />ДДВ</TabsTrigger>
-          <TabsTrigger value="cash"><Wallet className="h-4 w-4 mr-1.5" />Благајна</TabsTrigger>
-          <TabsTrigger value="rates"><Coins className="h-4 w-4 mr-1.5" />Курсна листа</TabsTrigger>
-          <TabsTrigger value="chart"><ListTree className="h-4 w-4 mr-1.5" />Контен план</TabsTrigger>
-        </TabsList>
+        {/* Групирано по тоа што бара корисникот: пари -> извештаи -> главна книга -> поставки */}
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {FIN_GROUPS.map(g => (
+            <div key={g.label} className="space-y-1">
+              <div className="text-[10px] uppercase tracking-wider text-gray-400 pl-1">{g.label}</div>
+              <TabsList className="bg-amber-50 h-auto">
+                {g.tabs.map(t => { const I = t.icon; return <TabsTrigger key={t.key} value={t.key}><I className="h-4 w-4 mr-1.5" />{t.label}</TabsTrigger>; })}
+              </TabsList>
+            </div>
+          ))}
+        </div>
+        <TabsContent value="bank" className="mt-4"><BankTab /></TabsContent>
         <TabsContent value="profit" className="mt-4"><ProfitTab /></TabsContent>
         <TabsContent value="journal" className="mt-4"><JournalTab /></TabsContent>
         <TabsContent value="trial" className="mt-4"><TrialBalanceTab onOpenCard={(c) => { setCardCode(c); setTab("card"); }} /></TabsContent>

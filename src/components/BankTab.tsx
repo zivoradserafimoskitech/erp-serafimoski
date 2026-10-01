@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
+import { isStaleChunkError, reloadForNewVersion } from "@/lib/stale-chunk";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -145,6 +146,8 @@ export default function BankTab() {
       if (payload.length === 0) { setBusy(false); return; }
       importMut.mutate({ files: payload });
     } catch (e: any) {
+      // страницата е од пред последното објавување -> освежи и земи ја новата верзија
+      if (isStaleChunkError(e) && reloadForNewVersion()) { setMsg("Има нова верзија на апликацијата — страницата се освежува, потоа внеси го изводот повторно."); return; }
       setMsg(`Не можам да ја прочитам датотеката: ${e?.message ?? e}`);
       setBusy(false);
     } finally {

@@ -2,7 +2,7 @@
 // (вкупна залиха = збир по магацини, партии <= залиха, статус на фактура = уплати). Безопасно за повторување.
 import { getPool } from "./queries/connection";
 import { refreshAllPaymentStatuses } from "./payment-status";
-import { suggestExpenseAccount } from "@contracts/finance";
+import { guessExpenseAccount } from "@contracts/finance";
 
 const q = async (sql: string, params: any[] = []) => (await getPool().query(sql, params)).rows as any[];
 
@@ -36,17 +36,18 @@ export async function reconcileData() {
     WHERE x.receipt_id = r.id AND COALESCE(r.total_amount, 0) = 0 AND x.s > 0`);
   fixed += r3b.rowCount ?? 0;
 
-  // 4) Влезни фактури внесени пред полето „конто“: предлог по добавувач/ставки/белешка (ЕВН -> 401...), инаку 310
-  const noAcc = await q(`SELECT ii.id, ii.supplier_id, ii.notes, s.name, s.default_expense_account,
+  // 4) Влезни фактури без потврдено конто: се менуваат само кога е сигурно (добавувач / јасен текст, ЕВН -> 401);
+  //    несигурните остануваат и се прашува операторот во „Влезни фактури -> Чекаат одговор“
+  const noAcc = await q(`SELECT ii.id, ii.expense_account, ii.notes, s.name, s.default_expense_account,
       (SELECT string_agg(d.description, ' ') FROM document_items d WHERE d.document_type = 'incoming_invoice' AND d.document_id = ii.id) AS items
-    FROM incoming_invoices ii LEFT JOIN suppliers s ON s.id = ii.supplier_id WHERE ii.expense_account IS NULL`);
+    FROM incoming_invoices ii LEFT JOIN suppliers s ON s.id = ii.supplier_id WHERE COALESCE(ii.account_confirmed, false) = false`);
+  let changedAcc = 0;
   for (const r of noAcc) {
-    const acc = r.default_expense_account || suggestExpenseAccount([r.name, r.notes, r.items].filter(Boolean).join(" ")) || "310";
-    await q(`UPDATE incoming_invoices SET expense_account = $1 WHERE id = $2`, [acc, r.id]);
-    if (acc !== "310" && !r.default_expense_account && r.supplier_id) await q(`UPDATE suppliers SET default_expense_account = $1 WHERE id = $2 AND default_expense_account IS NULL`, [acc, r.supplier_id]);
-    fixed++;
+    const g = guessExpenseAccount(r.default_expense_account, [r.name, r.notes, r.items].filter(Boolean).join(" "));
+    if (g.sure && g.account && g.account !== r.expense_account) { await q(`UPDATE incoming_invoices SET expense_account = $1 WHERE id = $2`, [g.account, r.id]); changedAcc++; }
   }
-  if (noAcc.length) import("./finance-router").then(m => m.syncLedger()).catch(() => {});
+  fixed += changedAcc;
+  if (changedAcc) import("./finance-router").then(m => m.syncLedger()).catch(() => {});
 
   // 5) Статус платена/делумно според уплатите (банка, благајна, книжни одобренија)
   fixed += await refreshAllPaymentStatuses();
