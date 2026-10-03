@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,18 @@ const fmtDate = (d: string) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slic
 const SOURCE_LBL: Record<string, string> = {
   invoice: "Излезна фактура", incoming_invoice: "Влезна фактура", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", depreciation: "Амортизација",
   advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха",
+};
+
+// Каде е документот од кој е направен налогот
+const SOURCE_HREF: Record<string, ((id: number, src?: any) => string) | undefined> = {
+  invoice: (id) => `/smetkovodstvo?open=${id}`,
+  incoming_invoice: (id) => `/smetkovodstvo?openIn=${id}`,
+  bank_alloc: () => `/finansii?tab=bank`,
+  cash: () => `/finansii?tab=cash`,
+  payroll: () => `/vraboteni`,
+  depreciation: () => `/sredstva`,
+  advance_settle: () => `/smetkovodstvo`,
+  stock_move: (_id, src) => src?.workOrderId ? `/proizvodstvo?open=${src.workOrderId}` : src?.orphan || src?.missing ? "" : `/sklad?q=${encodeURIComponent(String(src?.text ?? "").split(" · ")[1] ?? "")}`,
 };
 
 function PeriodPicker({ from, to, onChange }: { from: string; to: string; onChange: (f: string, t: string) => void }) {
@@ -75,6 +87,12 @@ function JournalTab() {
     if (me && canPost && !autoSynced) { setAutoSynced(true); sync.mutate(); }
   }, [me, canPost, autoSynced]); // eslint-disable-line react-hooks/exhaustive-deps
   const del = trpc.finance.manualEntryDelete.useMutation({ onSuccess: () => utils.finance.journalList.invalidate(), onError: (e) => toast.error(e.message) });
+  const navigate = useNavigate();
+  const isAdmin = !me || me.role === "admin";
+  const removeOrphan = trpc.finance.orphanStockMoveDelete.useMutation({
+    onSuccess: () => { toast.success("Движењето и налогот се отстранети"); utils.finance.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const [mDate, setMDate] = useState(today());
   const [mDesc, setMDesc] = useState("");
@@ -117,10 +135,22 @@ function JournalTab() {
                 <span className="text-xs text-gray-400">{fmtDate(e.date)}</span>
                 <Badge variant="outline" className="text-[10px] font-normal">{SOURCE_LBL[e.sourceType] ?? e.sourceType}</Badge>
                 <span className="text-sm text-gray-700 flex-1 truncate">{e.description}</span>
+                {(() => { const href = e.sourceId != null ? SOURCE_HREF[e.sourceType]?.(e.sourceId, (e as any).source) : ""; return href ? (
+                  <button className="text-xs text-amber-700 hover:underline whitespace-nowrap" onClick={() => navigate(href)}>Отвори документ →</button>) : null; })()}
                 {e.sourceType === "manual" && (
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" onClick={() => { if (confirm("Да се избрише рачниот налог?")) del.mutate({ id: e.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 )}
               </div>
+              {(e as any).source && (() => { const src = (e as any).source; return (
+                <div className={`mb-1.5 flex flex-wrap items-center gap-2 text-xs ${src.orphan || src.missing ? "rounded-md bg-amber-50 px-2 py-1 text-amber-900" : "text-gray-500"}`}>
+                  <span><span className="text-gray-400">Од каде:</span> {src.text}</span>
+                  {src.orphan && <span>— материјалот е избришан, па ова движење останало без материјал. Ако било проба, отстрани го.</span>}
+                  {src.orphan && isAdmin && (
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs border-amber-300" disabled={removeOrphan.isPending}
+                      onClick={() => { if (confirm(`Да се отстрани движењето и налогот ${e.number}? Ова не може да се врати.`)) removeOrphan.mutate({ moveId: src.moveId }); }}>
+                      Отстрани го движењето и налогот</Button>
+                  )}
+                </div>); })()}
               <div className="grid grid-cols-[4rem_minmax(0,1fr)_6.5rem_6.5rem] sm:grid-cols-[4.5rem_minmax(0,24rem)_8rem_8rem] gap-x-3 gap-y-0.5 text-xs">
                 <span className="text-[10px] uppercase tracking-wider text-gray-400">Конто</span>
                 <span className="text-[10px] uppercase tracking-wider text-gray-400">Назив</span>

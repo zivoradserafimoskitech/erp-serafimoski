@@ -235,8 +235,18 @@ export const storageRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      // Материјал со движења не се брише (книжењата и историјата би останале без материјал) — се деактивира
+      const used = (await getPool().query(`SELECT
+          (SELECT COUNT(*) FROM inventory_transactions WHERE material_id = $1)
+        + (SELECT COUNT(*) FROM material_stock WHERE material_id = $1 AND quantity <> 0)
+        + (SELECT COUNT(*) FROM receipt_items WHERE material_id = $1)
+        + (SELECT COUNT(*) FROM work_order_materials WHERE material_id = $1) AS n`, [input.id])).rows[0];
+      if (Number(used?.n) > 0) {
+        await db.update(materials).set({ isActive: "inactive" } as any).where(eq(materials.id, input.id));
+        return { success: true, deactivated: true, message: "Материјалот има движења, па е деактивиран наместо избришан (историјата и книжењата остануваат)." };
+      }
       await db.delete(materials).where(eq(materials.id, input.id));
-      return { success: true };
+      return { success: true, deactivated: false };
     }),
 
   // === WEIGHTED AVERAGE RECEIPT PROCESSING ===

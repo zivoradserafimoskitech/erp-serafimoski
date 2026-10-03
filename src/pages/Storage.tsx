@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,10 +84,12 @@ export default function Storage() {
   });
 
   const deleteMutation = trpc.storage.materialDelete.useMutation({
-    onSuccess: () => {
+    onSuccess: (r: any) => {
       utils.storage.materialList.invalidate();
       utils.storage.storageStats.invalidate();
+      if (r?.deactivated) toast.info(r.message); else toast.success("Материјалот е избришан");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const updateMutation = trpc.storage.materialUpdate.useMutation({
