@@ -4,7 +4,8 @@ import { eq, desc, and } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
 import { openDocs, refreshPaymentStatus, assertNoPayments, type OpenDoc } from "./payment-status";
-import { guessExpenseAccount } from "@contracts/finance";
+import { guessExpenseAccount, toMkd } from "@contracts/finance";
+import { loadRates, iso } from "./rates-helper";
 import { getDb, getPool } from "./queries/connection";
 import {
   invoices, incomingInvoices, documentItems,
@@ -710,45 +711,57 @@ export const accountingRouter = createRouter({
     .input(z.object({ startDate: z.string(), endDate: z.string() }))
     .query(async ({ input }) => {
       const db = getDb();
+      // Периодот вклучува и цел краен ден (записите со време на последниот ден не смеат да испаднат)
       const start = new Date(input.startDate);
-      const end = new Date(input.endDate);
+      const end = new Date(new Date(input.endDate).getTime() + 86400000 - 1);
+      const inRange = (d: any) => { const x = d ? new Date(d) : null; return !!x && x >= start && x <= end; };
+      // Исто како во ДДВ книгите и главната книга: само книжени документи, сè во денари
+      const rate = await loadRates();
+      const mkdOf = (v: any, cur: any, d: any) => { const n = parseFloat(String(v ?? 0)) || 0; const c = String(cur || "MKD").toUpperCase();
+        return c === "MKD" ? n : (toMkd(n, c, iso(d), rate) ?? n); };
+      const allCust = await db.select().from(customers), allSup = await db.select().from(suppliers);
+      const custNames = new Map(allCust.map((c: any) => [Number(c.id), c.company || c.name]));
+      const supNames = new Map(allSup.map((x: any) => [Number(x.id), x.name]));
+      const custTax = new Map(allCust.map((c: any) => [Number(c.id), c.edb || c.taxNumber || ""]));
+      const supTax = new Map(allSup.map((x: any) => [Number(x.id), x.edb || ""]));
+      // скеновите (base64) не се праќаат во извештајот — само знак дека постојат; се земаат одделно за ZIP
+      const lite = ({ fileUrl, ...r }: any) => ({ ...r, hasFile: !!fileUrl });
 
-      const allOutgoing = await db.select().from(invoices);
-      const filteredOutgoing = allOutgoing.filter(i => {
-        const d = i.issueDate ? new Date(i.issueDate) : null;
-        return d && d >= start && d <= end;
-      });
+      const filteredOutgoing = (await db.select().from(invoices))
+        .filter((i: any) => ["standard", "credit_note"].includes(i.invoiceType) && !["draft", "cancelled"].includes(i.status) && inRange(i.issueDate))
+        .map((i: any) => { const sg = i.invoiceType === "credit_note" ? -1 : 1; return { ...i, customerName: custNames.get(Number(i.customerId)) ?? "", partnerTaxId: custTax.get(Number(i.customerId)) ?? "",
+          baseMkd: sg * Math.abs(mkdOf(i.subtotal, i.currency, i.issueDate)), vatMkd: sg * Math.abs(mkdOf(i.vatAmount, i.currency, i.issueDate)),
+          totalMkd: sg * Math.abs(mkdOf(i.totalAmount, i.currency, i.issueDate)) }; })
+        .sort((x: any, y: any) => String(x.issueDate).localeCompare(String(y.issueDate)));
+      const filteredIncoming = (await db.select().from(incomingInvoices))
+        .filter((i: any) => i.status !== "cancelled" && inRange(i.issueDate ?? i.receivedDate))
+        .map((i: any) => { const d = i.issueDate ?? i.receivedDate; return { ...lite(i), supplierName: supNames.get(Number(i.supplierId)) ?? "", partnerTaxId: supTax.get(Number(i.supplierId)) ?? "",
+          baseMkd: mkdOf(i.subtotal, i.currency, d), vatMkd: mkdOf(i.vatAmount, i.currency, d), totalMkd: mkdOf(i.totalAmount, i.currency, d) }; })
+        .sort((x: any, y: any) => String(x.issueDate ?? x.receivedDate).localeCompare(String(y.issueDate ?? y.receivedDate)));
 
-      const allIncoming = await db.select().from(incomingInvoices);
-      const filteredIncoming = allIncoming.filter(i => {
-        const d = i.receivedDate ? new Date(i.receivedDate) : null;
-        return d && d >= start && d <= end;
-      });
-
-      const totalOutgoing = filteredOutgoing.reduce((s, i) => s + parseFloat(i.totalAmount), 0);
-      const totalOutgoingVat = filteredOutgoing.reduce((s, i) => s + parseFloat(i.vatAmount), 0);
-      const totalOutgoingBase = filteredOutgoing.reduce((s, i) => s + parseFloat(i.subtotal), 0);
-
-      const totalIncoming = filteredIncoming.reduce((s, i) => s + parseFloat(i.totalAmount), 0);
-      const totalIncomingVat = filteredIncoming.reduce((s, i) => s + parseFloat(i.vatAmount), 0);
-      const totalIncomingBase = filteredIncoming.reduce((s, i) => s + parseFloat(i.subtotal), 0);
-
+      const sum = (rows: any[], f: string) => rows.reduce((a, r) => a + (Number(r[f]) || 0), 0);
+      const totalOutgoing = sum(filteredOutgoing, "totalMkd"), totalOutgoingVat = sum(filteredOutgoing, "vatMkd"), totalOutgoingBase = sum(filteredOutgoing, "baseMkd");
+      const totalIncoming = sum(filteredIncoming, "totalMkd"), totalIncomingVat = sum(filteredIncoming, "vatMkd"), totalIncomingBase = sum(filteredIncoming, "baseMkd");
       const vatBalance = totalOutgoingVat - totalIncomingVat;
 
-      // Group by VAT rate
-      const vatGroups: Record<string, { base: number; vat: number }> = {};
-      for (const inv of filteredOutgoing) {
-        const rate = inv.vatRate;
-        if (!vatGroups[rate]) vatGroups[rate] = { base: 0, vat: 0 };
-        vatGroups[rate].base += parseFloat(inv.subtotal);
-        vatGroups[rate].vat += parseFloat(inv.vatAmount);
-      }
+      // По стапка на ДДВ (излезни и влезни)
+      const byRate = (rows: any[]) => {
+        const g: Record<string, { base: number; vat: number; count: number }> = {};
+        for (const inv of rows) {
+          const r = String(Number(inv.vatRate) || 0);
+          if (!g[r]) g[r] = { base: 0, vat: 0, count: 0 };
+          g[r].base += inv.baseMkd; g[r].vat += inv.vatMkd; g[r].count++;
+        }
+        return g;
+      };
+      const vatGroups = byRate(filteredOutgoing), vatGroupsIn = byRate(filteredIncoming);
 
       const { workOrders, receipts: rcT, deliveryNotes: dnT, workOrderMaterials: womT } = await import("@db/schema");
-      const inRange = (d: any) => { const x = d ? new Date(d) : null; return x && x >= start && x <= end; };
       const allWO = (await db.select().from(workOrders)).filter((w: any) => inRange(w.createdAt));
-      const allRc = (await db.select().from(rcT)).filter((r: any) => inRange(r.receiptDate ?? r.createdAt));
-      const allDn = (await db.select().from(dnT)).filter((d: any) => inRange(d.issueDate ?? d.createdAt));
+      const allRc = (await db.select().from(rcT)).filter((r: any) => r.status !== "cancelled" && inRange(r.receiptDate ?? r.createdAt))
+        .map((r: any) => ({ ...lite(r), supplierName: supNames.get(Number(r.supplierId)) ?? "" }));
+      const allDn = (await db.select().from(dnT)).filter((d: any) => d.status !== "cancelled" && inRange(d.issueDate ?? d.createdAt))
+        .map((d: any) => ({ ...d, customerName: custNames.get(Number(d.customerId)) ?? "" }));
 
       // Требовања: реално потрошен материјал (isActual='actual') по работните налози во периодот
       const woIds = new Set(allWO.map((w: any) => w.id));
@@ -793,6 +806,7 @@ export const accountingRouter = createRouter({
           totalVat: totalIncomingVat.toFixed(2),
           total: totalIncoming.toFixed(2),
           items: filteredIncoming,
+          vatGroups: vatGroupsIn,
         },
         vatRecapitulation: {
           outgoingVat: totalOutgoingVat.toFixed(2),

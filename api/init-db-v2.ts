@@ -164,6 +164,7 @@ export function getExtraSql(): string[] {
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "smtp_user" varchar(255)`,
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "smtp_password" varchar(255)`,
     `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "smtp_from" varchar(320)`,
+    `ALTER TABLE "company_settings" ADD COLUMN IF NOT EXISTS "accountant_email" varchar(320)`,
 
     // ===== ПОТСЕТНИЦИ =====
     `CREATE TABLE IF NOT EXISTS "app_kv" ("key" varchar(80) PRIMARY KEY NOT NULL, "value" text, "updated_at" timestamp DEFAULT now() NOT NULL)`,

@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { downloadTableXlsx } from "@/lib/xlsx";
 import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -40,12 +41,11 @@ function PeriodPicker({ from, to, onChange }: { from: string; to: string; onChan
   );
 }
 
+// „Excel“ копчињата прават вистински .xlsx (броевите остануваат броеви, датумите датуми)
 function csvDownload(name: string, rows: (string | number)[][]) {
-  const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = name; a.click();
-  URL.revokeObjectURL(a.href);
+  const key = name.replace(/-\d{4}.*$/, "");
+  const sheet = ({ "bruto-bilans": "Бруто биланс", kif: "КИФ излезни", kuf: "КУФ влезни", dobivka: "Добивка по нарачка" } as Record<string, string>)[key] ?? key;
+  void downloadTableXlsx(name.replace(/\.csv$/, ".xlsx"), sheet, rows);
 }
 
 // ───────────────────────── НАЛОЗИ ЗА КНИЖЕЊЕ ─────────────────────────
@@ -198,13 +198,13 @@ function TrialBalanceTab({ onOpenCard }: { onOpenCard: (code: string) => void })
   }, [data]);
   const exportCsv = () => csvDownload(`bruto-bilans-${from}-${to}.csv`, [
     ["Конто", "Назив", "Почетно салдо", "Должи", "Побарува", "Салдо"],
-    ...(data?.accounts ?? []).map(a => [a.code, a.name, a.opening.toFixed(2), a.debit.toFixed(2), a.credit.toFixed(2), a.closing.toFixed(2)]),
+    ...(data?.accounts ?? []).map(a => [a.code, a.name, a.opening, a.debit, a.credit, a.closing]),
   ]);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PeriodPicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
-        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!data?.accounts.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel (CSV)</Button>
+        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!data?.accounts.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel</Button>
       </div>
       {data && (data.unposted.invoices > 0 || data.unposted.incoming > 0) && (
         <p className="text-sm text-amber-700">Има некнижени документи ({data.unposted.invoices} излезни, {data.unposted.incoming} влезни фактури) — отвори „Налози“ за да се книжат.</p>
@@ -315,13 +315,13 @@ function VatTab() {
   const rows = book === "out" ? data?.outgoing : data?.incoming;
   const exportCsv = () => csvDownload(`${book === "out" ? "kif" : "kuf"}-${from}-${to}.csv`, [
     ["Реден бр.", "Број", "Датум", "Партнер", "ЕДБ", "Држава", "Валута", "Стапка %", "Основица (ден)", "ДДВ (ден)", "Вкупно (ден)"],
-    ...(rows ?? []).map((r, i) => [i + 1, r.number, r.date, r.partner ?? "", r.taxId, r.country, r.currency, r.vatRate, r.baseMkd.toFixed(2), r.vatMkd.toFixed(2), r.totalMkd.toFixed(2)]),
+    ...(rows ?? []).map((r, i) => [i + 1, r.number, r.date, r.partner ?? "", r.taxId, r.country, r.currency, r.vatRate, r.baseMkd, r.vatMkd, r.totalMkd]),
   ]);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PeriodPicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
-        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!rows?.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel (CSV)</Button>
+        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!rows?.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel</Button>
       </div>
       {data && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -628,7 +628,7 @@ function ProfitTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PeriodPicker from={from} to={to} onChange={(a, b) => { setFrom(a); setTo(b); }} />
-        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!data?.rows.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel (CSV)</Button>
+        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!data?.rows.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel</Button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[

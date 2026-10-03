@@ -13,7 +13,7 @@ const dt = (s: any) => {
   if (isNaN(d.getTime())) return esc(s);
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${dd}-${mm}-${d.getFullYear()}`;
+  return `${dd}.${mm}.${d.getFullYear()}`;
 };
 
 const PRIORITY_MK: Record<string, string> = { low: "Низок", normal: "Нормален", high: "Висок", urgent: "ИТНО" };
@@ -673,6 +673,11 @@ export function printReceipt(rc: any, settings: any) {
 
 // ══════════════ ИЗВЕШТАЈ ЗА СМЕТКОВОДИТЕЛ ══════════════
 export function printAccountantReport(rep: any, period: { startDate: string; endDate: string }, settings: any) {
+  openPrint(accountantReportHtml(rep, period, settings));
+}
+
+/** Извештај за сметководител (A4) — истата содржина за печатење и за PDF. */
+export function accountantReportHtml(rep: any, period: { startDate: string; endDate: string }, settings: any): string {
   const s = settings ?? {};
   const logo = "/logo-black.png?v=1";
   const outItems: any[] = rep?.outgoing?.items ?? [];
@@ -692,18 +697,24 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
       <tbody>${rows || `<tr><td colspan="${heads.length}" class="c empty">Нема записи во периодот</td></tr>`}${totalRow}</tbody></table>
     </div>`;
 
-  const out = outItems.map((i, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(i.invoiceNumber)}</td><td>${dt(i.issueDate)}</td><td class="r">${den(i.subtotal)}</td><td class="r">${den(i.vatAmount)}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
-  const outTotal = outItems.length ? `<tr class="sumrow"><td colspan="3">Вкупно излезни (${outItems.length})</td><td class="r">${den(rep?.outgoing?.totalBase)}</td><td class="r">${den(rep?.outgoing?.totalVat)}</td><td class="r">${den(rep?.outgoing?.total)}</td></tr>` : "";
+  // КИФ / КУФ: број, датум, партнер со ЕДБ, стапка, износи во денари
+  const bookRow = (i: any, n: number, num: string, partner: string) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(num)}${i.invoiceType === "credit_note" ? ' <span class="dim">КО</span>' : ""}</td><td>${dt(i.issueDate ?? i.receivedDate)}</td><td>${esc(partner)}${i.partnerTaxId ? `<div class="dim">ЕДБ ${esc(i.partnerTaxId)}</div>` : ""}</td><td class="r">${esc(Number(i.vatRate) || 0)}%</td><td class="r">${den(i.baseMkd ?? i.subtotal)}</td><td class="r">${den(i.vatMkd ?? i.vatAmount)}</td><td class="r"><b>${den(i.totalMkd ?? i.totalAmount)}</b></td></tr>`;
+  const out = outItems.map((i, n) => bookRow(i, n, i.invoiceNumber, i.customerName ?? "")).join("");
+  const outTotal = outItems.length ? `<tr class="sumrow"><td colspan="5">Вкупно излезни (${outItems.length})</td><td class="r">${den(rep?.outgoing?.totalBase)}</td><td class="r">${den(rep?.outgoing?.totalVat)}</td><td class="r">${den(rep?.outgoing?.total)}</td></tr>` : "";
 
-  const inc = incItems.map((i, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(i.supplierInvoiceNumber ?? i.invoiceNumber ?? "")}</td><td>${dt(i.receivedDate)}</td><td class="r">${den(i.subtotal)}</td><td class="r">${den(i.vatAmount)}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
-  const incTotal = incItems.length ? `<tr class="sumrow"><td colspan="3">Вкупно влезни (${incItems.length})</td><td class="r">${den(rep?.incoming?.totalBase)}</td><td class="r">${den(rep?.incoming?.totalVat)}</td><td class="r">${den(rep?.incoming?.total)}</td></tr>` : "";
+  const inc = incItems.map((i, n) => bookRow(i, n, i.supplierInvoiceNumber ?? i.invoiceNumber ?? "", i.supplierName ?? "")).join("");
+  const incTotal = incItems.length ? `<tr class="sumrow"><td colspan="5">Вкупно влезни (${incItems.length})</td><td class="r">${den(rep?.incoming?.totalBase)}</td><td class="r">${den(rep?.incoming?.totalVat)}</td><td class="r">${den(rep?.incoming?.total)}</td></tr>` : "";
 
-  const vatRows = Object.entries(vatGroups).map(([rate, g]) => `<tr><td>ДДВ ${esc(rate)}%</td><td class="r">${den(g.base)}</td><td class="r"><b>${den(g.vat)}</b></td></tr>`).join("");
+  // ДДВ по стапки — излезен и влезен една до друга (помош за ДДВ-04)
+  const vatGroupsIn: Record<string, { base: number; vat: number; count?: number }> = rep?.incoming?.vatGroups ?? {};
+  const rates = [...new Set([...Object.keys(vatGroups), ...Object.keys(vatGroupsIn)])].sort((a, b) => Number(b) - Number(a));
+  const vatRows = rates.map(r => { const o = vatGroups[r] ?? { base: 0, vat: 0 }, i = vatGroupsIn[r] ?? { base: 0, vat: 0 };
+    return `<tr><td>${esc(r)}%</td><td class="r">${den(o.base)}</td><td class="r"><b>${den(o.vat)}</b></td><td class="r">${den(i.base)}</td><td class="r"><b>${den(i.vat)}</b></td></tr>`; }).join("");
 
-  const rc = rcList.map((r, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(r.receiptNumber)}</td><td>${dt(r.receiptDate ?? r.createdAt)}</td><td class="r"><b>${den(r.totalAmount)}</b></td></tr>`).join("");
-  const rcTotal = rcList.length ? `<tr class="sumrow"><td colspan="3">Вкупно приемници (${rcList.length})</td><td class="r">${den(rep?.totalReceipts)}</td></tr>` : "";
+  const rc = rcList.map((r, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(r.receiptNumber)}</td><td>${dt(r.receiptDate ?? r.createdAt)}</td><td>${esc(r.supplierName ?? "")}</td><td class="r"><b>${den(r.totalAmount)}</b></td></tr>`).join("");
+  const rcTotal = rcList.length ? `<tr class="sumrow"><td colspan="4">Вкупно приемници (${rcList.length})</td><td class="r">${den(rep?.totalReceipts)}</td></tr>` : "";
 
-  const dnr = dnList.map((x, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(x.dnNumber)}</td><td>${dt(x.issueDate)}</td><td>${esc(STATUS_MK[x.status] ?? x.status ?? "")}</td></tr>`).join("");
+  const dnr = dnList.map((x, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(x.dnNumber)}</td><td>${dt(x.issueDate)}</td><td>${esc(x.customerName ?? "")}</td><td>${esc(STATUS_MK[x.status] ?? x.status ?? "")}</td></tr>`).join("");
 
   const wo = woList.map((w, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(w.woNumber)}</td><td>${dt(w.createdAt)}</td><td>${esc(w.description ?? "")}</td><td>${esc(STATUS_MK[w.status] ?? w.status ?? "")}</td><td class="r">${den(w.costAmount)}</td></tr>`).join("");
   const woTotal = woList.length ? `<tr class="sumrow"><td colspan="5">Вкупно налози (${woList.length})</td><td class="r">${den(woCost)}</td></tr>` : "";
@@ -790,11 +801,11 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
     <div class="kpi hl"><span class="lbl">ДДВ салдо</span><div class="v">${den(Math.abs(vatBalance))} ден.</div><div class="n">${vatBalance >= 0 ? "за уплата" : "ДДВ побарување (за поврат)"}</div></div>
   </div>
 
-  ${section("Излезни фактури", ["#", "Број", "Датум", ">Основица", ">ДДВ", ">Вкупно (ден.)"], out, outTotal)}
-  ${vatRows ? section("ДДВ рекапитулација по стапки (излезни)", ["Стапка", ">Основица", ">ДДВ (ден.)"], vatRows) : ""}
-  ${section("Влезни фактури", ["#", "Број", "Датум прием", ">Основица", ">ДДВ", ">Вкупно (ден.)"], inc, incTotal)}
-  ${section("Приемници", ["#", "Број", "Датум", ">Вкупно (ден.)"], rc, rcTotal)}
-  ${section("Испратници", ["#", "Број", "Датум", "Статус"], dnr)}
+  ${vatRows ? section("ДДВ по стапки (за ДДВ-04)", ["Стапка", ">Излезни: основица", ">Излезен ДДВ", ">Влезни: основица", ">Влезен ДДВ"], vatRows) : ""}
+  ${section("КИФ — излезни фактури", ["#", "Број", "Датум", "Купувач", ">ДДВ %", ">Основица", ">ДДВ", ">Вкупно (ден.)"], out, outTotal)}
+  ${section("КУФ — влезни фактури", ["#", "Број", "Датум", "Добавувач", ">ДДВ %", ">Основица", ">ДДВ", ">Вкупно (ден.)"], inc, incTotal)}
+  ${section("Приемници", ["#", "Број", "Датум", "Добавувач", ">Вкупно (ден.)"], rc, rcTotal)}
+  ${section("Испратници", ["#", "Број", "Датум", "Купувач", "Статус"], dnr)}
   ${section("Работни налози", ["#", "Број", "Датум", "Опис", "Статус", ">Трошок (ден.)"], wo, woTotal)}
   ${section("Требовања (потрошен материјал по работни налози)", ["#", "Раб. налог", "Материјал", ">Количина", ">Цена", ">Вкупно (ден.)"], req, reqTotal)}
 
@@ -808,7 +819,7 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
   <div class="foot"><b>${esc(s?.name ?? "Serafimoski Tech DOOEL")}</b> · ЕДБ ${esc(s?.edb ?? "")} · Извештај генериран од Metal ERP на ${dt(new Date())}</div>
 <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
 </body></html>`;
-  openPrint(html);
+  return html;
 }
 
 
@@ -991,12 +1002,16 @@ export function printCertificateStatement(dn: any, certs: any[], settings: any) 
 }
 
 
-// ══════════════ PDF ВО ПРЕЛИСТУВАЧОТ (за праќање по е-пошта) ══════════════
-/** Го исцртува HTML документот во скриен A4 iframe и враќа PDF како base64 (без префикс). */
-export async function htmlToPdfBase64(html: string): Promise<string> {
+// ══════════════ PDF ВО ПРЕЛИСТУВАЧОТ (симнување и праќање по е-пошта) ══════════════
+// Страниците се сечат помеѓу редовите (не преку средина на ред од табела), а секоја
+// следна страна добива горна маргина. Секое парче е посебна слика, па PDF-от е лесен.
+const PX_W = 794, PX_H = 1123; // A4 на 96 dpi
+const BREAK_AT = "tr, .sec, .stitle, .kpis, .vatblock, .sigs, .foot, .head, .rule, .parties, .totals, .box, .notes, p, h1, h2, h3, li";
+
+export async function htmlToPdfBlob(html: string): Promise<Blob> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
   const frame = document.createElement("iframe");
-  frame.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;";
+  frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${PX_W}px;height:${PX_H}px;border:0;`;
   document.body.appendChild(frame);
   try {
     const doc = frame.contentDocument!;
@@ -1012,24 +1027,61 @@ export async function htmlToPdfBase64(html: string): Promise<string> {
       setTimeout(res, 3000);
     });
     const body = doc.body;
-    const canvas = await html2canvas(body, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 794, width: 794, height: body.scrollHeight });
-    const pdf = new jsPDF({ unit: "mm", format: "a4" });
-    const pageW = 210, pageH = 297;
-    const imgH = (canvas.height * pageW) / canvas.width;
-    const img = canvas.toDataURL("image/jpeg", 0.92);
-    let y = 0;
-    pdf.addImage(img, "JPEG", 0, y, pageW, imgH);
-    let left = imgH - pageH;
-    while (left > 1) {
-      y -= pageH;
-      pdf.addPage();
-      pdf.addImage(img, "JPEG", 0, y, pageW, imgH);
-      left -= pageH;
+    const top0 = body.getBoundingClientRect().top;
+    // каде навистина завршува содржината (без долната маргина на страната) — инаку останува празна последна страна
+    let contentEnd = 0;
+    body.querySelectorAll("*").forEach(el => { const b = (el as HTMLElement).getBoundingClientRect(); if (b.height > 0) contentEnd = Math.max(contentEnd, b.bottom - top0); });
+    const total = Math.ceil(Math.min(Math.max(body.scrollHeight, doc.documentElement.scrollHeight), contentEnd + 16)) || PX_H;
+    // каде смее да се пресече: дното на секој ред/блок
+    const cuts = Array.from(doc.querySelectorAll(BREAK_AT))
+      .map(el => Math.round((el as HTMLElement).getBoundingClientRect().bottom - top0))
+      .filter(y => y > 0 && y < total).sort((a, b) => a - b);
+    const SCALE = 2;
+    const canvas = await html2canvas(body, { scale: SCALE, useCORS: true, backgroundColor: "#ffffff", windowWidth: PX_W, width: PX_W, height: total });
+    const TOP = 40, BOTTOM = 34; // ~10 мм горе на следните страни, ~9 мм долу
+    const pages: [number, number][] = [];
+    let y = 0, first = true;
+    while (y < total - 2) {
+      const room = PX_H - (first ? 0 : TOP) - BOTTOM;
+      let end = y + room;
+      if (end >= total) end = total;
+      else {
+        const ok = cuts.filter(c => c > y + room * 0.4 && c <= end);
+        if (ok.length) end = ok[ok.length - 1];
+      }
+      pages.push([y, end]);
+      y = end; first = false;
     }
-    return pdf.output("datauristring").split(",")[1];
+    const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
+    const mm = 210 / PX_W;
+    pages.forEach(([a, b], i) => {
+      if (i) pdf.addPage();
+      const part = document.createElement("canvas");
+      part.width = canvas.width; part.height = Math.max(1, Math.round((b - a) * SCALE));
+      const ctx = part.getContext("2d")!;
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, part.width, part.height);
+      ctx.drawImage(canvas, 0, Math.round(a * SCALE), canvas.width, part.height, 0, 0, canvas.width, part.height);
+      pdf.addImage(part.toDataURL("image/jpeg", 0.9), "JPEG", 0, (i ? TOP : 0) * mm, 210, (b - a) * mm);
+      if (pages.length > 1) { pdf.setFontSize(7); pdf.setTextColor(150); pdf.text(`${i + 1} / ${pages.length}`, 200, 292, { align: "right" }); }
+    });
+    return pdf.output("blob");
   } finally {
     frame.remove();
   }
+}
+
+/** Истото како PDF, само како base64 (без префикс) — за прилог во е-пошта. */
+export async function htmlToPdfBase64(html: string): Promise<string> {
+  return blobToBase64(await htmlToPdfBlob(html));
+}
+
+export function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
 }
 
 // ══════════════ НАБАВНА НАРАЧКА (до добавувач) ══════════════

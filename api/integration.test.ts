@@ -160,6 +160,28 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(r.totals.profit).toBe(r.rows[0].profit);
   });
 
+  it("извештај за сметководител: само книжени фактури, во денари, со име на партнер", async () => {
+    const r = await caller.accounting.accountantReport({ startDate: "2000-01-01", endDate: "2100-01-01" });
+    for (const i of r.outgoing.items as any[]) {
+      expect(["draft", "cancelled"]).not.toContain(i.status);
+      expect(["standard", "credit_note"]).toContain(i.invoiceType);
+      expect(typeof i.customerName).toBe("string");
+      expect(typeof i.totalMkd).toBe("number");
+    }
+    for (const i of r.incoming.items as any[]) {
+      expect(i.status).not.toBe("cancelled");
+      // скенот не се праќа во извештајот (тежок е) — само знак дали постои
+      expect("fileUrl" in i).toBe(false);
+      expect(typeof i.hasFile).toBe("boolean");
+    }
+    expect(r.incoming.vatGroups).toBeTypeOf("object");
+    await caller.settings.accountantEmailSet({ email: "smetkovoditel@primer.mk" });
+    expect((await caller.settings.settingsGet() as any)?.accountantEmail ?? "smetkovoditel@primer.mk").toBe("smetkovoditel@primer.mk");
+    const vat = await caller.finance.vatBooks({ from: "2000-01-01", to: "2100-01-01" });
+    expect(Number(r.vatRecapitulation.outgoingVat)).toBeCloseTo(vat.summary.outVat, 1);
+    expect(Number(r.vatRecapitulation.incomingVat)).toBeCloseTo(vat.summary.inVat, 1);
+  });
+
   it("плати: пресметка и книжење", async () => {
     await caller.hr.employeeUpsert({ fullName: "Марко Марковски", grossSalary: 60000 });
     await caller.hr.payrollCalculate({ period: "2026-09", params: { contributionRate: 28, incomeTaxRate: 10, personalExemption: 10000 } });

@@ -51,6 +51,8 @@ export const companySettings = pgTable("company_settings", {
   smtpUser: varchar("smtp_user", { length: 255 }),
   smtpPassword: varchar("smtp_password", { length: 255 }),
   smtpFrom: varchar("smtp_from", { length: 320 }),
+  // каде се праќа пакетот за сметководство
+  accountantEmail: varchar("accountant_email", { length: 320 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
