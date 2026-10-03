@@ -719,18 +719,23 @@ export const accountingRouter = createRouter({
       const rate = await loadRates();
       const mkdOf = (v: any, cur: any, d: any) => { const n = parseFloat(String(v ?? 0)) || 0; const c = String(cur || "MKD").toUpperCase();
         return c === "MKD" ? n : (toMkd(n, c, iso(d), rate) ?? n); };
-      const custNames = new Map((await db.select().from(customers)).map((c: any) => [Number(c.id), c.company || c.name]));
-      const supNames = new Map((await db.select().from(suppliers)).map((x: any) => [Number(x.id), x.name]));
+      const allCust = await db.select().from(customers), allSup = await db.select().from(suppliers);
+      const custNames = new Map(allCust.map((c: any) => [Number(c.id), c.company || c.name]));
+      const supNames = new Map(allSup.map((x: any) => [Number(x.id), x.name]));
+      const custTax = new Map(allCust.map((c: any) => [Number(c.id), c.edb || c.taxNumber || ""]));
+      const supTax = new Map(allSup.map((x: any) => [Number(x.id), x.edb || ""]));
+      // скеновите (base64) не се праќаат во извештајот — само знак дека постојат; се земаат одделно за ZIP
+      const lite = ({ fileUrl, ...r }: any) => ({ ...r, hasFile: !!fileUrl });
 
       const filteredOutgoing = (await db.select().from(invoices))
         .filter((i: any) => ["standard", "credit_note"].includes(i.invoiceType) && !["draft", "cancelled"].includes(i.status) && inRange(i.issueDate))
-        .map((i: any) => { const sg = i.invoiceType === "credit_note" ? -1 : 1; return { ...i, customerName: custNames.get(Number(i.customerId)) ?? "",
+        .map((i: any) => { const sg = i.invoiceType === "credit_note" ? -1 : 1; return { ...i, customerName: custNames.get(Number(i.customerId)) ?? "", partnerTaxId: custTax.get(Number(i.customerId)) ?? "",
           baseMkd: sg * Math.abs(mkdOf(i.subtotal, i.currency, i.issueDate)), vatMkd: sg * Math.abs(mkdOf(i.vatAmount, i.currency, i.issueDate)),
           totalMkd: sg * Math.abs(mkdOf(i.totalAmount, i.currency, i.issueDate)) }; })
         .sort((x: any, y: any) => String(x.issueDate).localeCompare(String(y.issueDate)));
       const filteredIncoming = (await db.select().from(incomingInvoices))
         .filter((i: any) => i.status !== "cancelled" && inRange(i.issueDate ?? i.receivedDate))
-        .map((i: any) => { const d = i.issueDate ?? i.receivedDate; return { ...i, supplierName: supNames.get(Number(i.supplierId)) ?? "",
+        .map((i: any) => { const d = i.issueDate ?? i.receivedDate; return { ...lite(i), supplierName: supNames.get(Number(i.supplierId)) ?? "", partnerTaxId: supTax.get(Number(i.supplierId)) ?? "",
           baseMkd: mkdOf(i.subtotal, i.currency, d), vatMkd: mkdOf(i.vatAmount, i.currency, d), totalMkd: mkdOf(i.totalAmount, i.currency, d) }; })
         .sort((x: any, y: any) => String(x.issueDate ?? x.receivedDate).localeCompare(String(y.issueDate ?? y.receivedDate)));
 
@@ -739,19 +744,22 @@ export const accountingRouter = createRouter({
       const totalIncoming = sum(filteredIncoming, "totalMkd"), totalIncomingVat = sum(filteredIncoming, "vatMkd"), totalIncomingBase = sum(filteredIncoming, "baseMkd");
       const vatBalance = totalOutgoingVat - totalIncomingVat;
 
-      // По стапка на ДДВ (излезни)
-      const vatGroups: Record<string, { base: number; vat: number }> = {};
-      for (const inv of filteredOutgoing as any[]) {
-        const r = String(inv.vatRate);
-        if (!vatGroups[r]) vatGroups[r] = { base: 0, vat: 0 };
-        vatGroups[r].base += inv.baseMkd;
-        vatGroups[r].vat += inv.vatMkd;
-      }
+      // По стапка на ДДВ (излезни и влезни)
+      const byRate = (rows: any[]) => {
+        const g: Record<string, { base: number; vat: number; count: number }> = {};
+        for (const inv of rows) {
+          const r = String(Number(inv.vatRate) || 0);
+          if (!g[r]) g[r] = { base: 0, vat: 0, count: 0 };
+          g[r].base += inv.baseMkd; g[r].vat += inv.vatMkd; g[r].count++;
+        }
+        return g;
+      };
+      const vatGroups = byRate(filteredOutgoing), vatGroupsIn = byRate(filteredIncoming);
 
       const { workOrders, receipts: rcT, deliveryNotes: dnT, workOrderMaterials: womT } = await import("@db/schema");
       const allWO = (await db.select().from(workOrders)).filter((w: any) => inRange(w.createdAt));
       const allRc = (await db.select().from(rcT)).filter((r: any) => r.status !== "cancelled" && inRange(r.receiptDate ?? r.createdAt))
-        .map((r: any) => ({ ...r, supplierName: supNames.get(Number(r.supplierId)) ?? "" }));
+        .map((r: any) => ({ ...lite(r), supplierName: supNames.get(Number(r.supplierId)) ?? "" }));
       const allDn = (await db.select().from(dnT)).filter((d: any) => d.status !== "cancelled" && inRange(d.issueDate ?? d.createdAt))
         .map((d: any) => ({ ...d, customerName: custNames.get(Number(d.customerId)) ?? "" }));
 
@@ -798,6 +806,7 @@ export const accountingRouter = createRouter({
           totalVat: totalIncomingVat.toFixed(2),
           total: totalIncoming.toFixed(2),
           items: filteredIncoming,
+          vatGroups: vatGroupsIn,
         },
         vatRecapitulation: {
           outgoingVat: totalOutgoingVat.toFixed(2),

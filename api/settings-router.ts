@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
-import { getDb } from "./queries/connection";
+import { getDb, getPool } from "./queries/connection";
 import { companySettings, units, unitConversions } from "@db/schema";
 
 export const settingsRouter = createRouter({
@@ -52,6 +52,7 @@ export const settingsRouter = createRouter({
       smtpUser: z.string().optional(),
       smtpPassword: z.string().optional(),
       smtpFrom: z.string().optional(),
+      accountantEmail: z.preprocess((v) => (v === "" ? null : v), z.string().email().nullable().optional()),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -62,6 +63,14 @@ export const settingsRouter = createRouter({
       } else {
         await db.update(companySettings).set(input as any).where(eq(companySettings.id, existing[0].id));
       }
+      return { success: true };
+    }),
+
+  // Е-пошта на сметководителот — се памти од прозорецот „Прати до сметководител“
+  accountantEmailSet: publicQuery
+    .input(z.object({ email: z.string().email() }))
+    .mutation(async ({ input }) => {
+      await getPool().query(`UPDATE company_settings SET accountant_email = $1, updated_at = now()`, [input.email]);
       return { success: true };
     }),
 

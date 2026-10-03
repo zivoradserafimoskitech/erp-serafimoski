@@ -30,7 +30,7 @@ export default function SettingsPage() {
     nameEn: settings?.nameEn ?? "", addressEn: settings?.addressEn ?? "", iban: settings?.iban ?? "",
     swift: settings?.swift ?? "", bankNameEn: settings?.bankNameEn ?? "", bankAddress: settings?.bankAddress ?? "",
     smtpHost: (settings as any)?.smtpHost ?? "", smtpPort: String((settings as any)?.smtpPort ?? "587"), smtpUser: (settings as any)?.smtpUser ?? "",
-    smtpPassword: "", smtpFrom: (settings as any)?.smtpFrom ?? "",
+    smtpPassword: "", smtpFrom: (settings as any)?.smtpFrom ?? "", accountantEmail: (settings as any)?.accountantEmail ?? "",
   });
 
   // Подесувањата стигнуваат асинхроно -- пополни ја формата кога ќе се вчитаат
@@ -44,7 +44,7 @@ export default function SettingsPage() {
       nameEn: settings.nameEn ?? "", addressEn: settings.addressEn ?? "", iban: settings.iban ?? "",
       swift: settings.swift ?? "", bankNameEn: settings.bankNameEn ?? "", bankAddress: settings.bankAddress ?? "",
       smtpHost: (settings as any).smtpHost ?? "", smtpPort: String((settings as any).smtpPort ?? "587"), smtpUser: (settings as any).smtpUser ?? "",
-      smtpPassword: "", smtpFrom: (settings as any).smtpFrom ?? "",
+      smtpPassword: "", smtpFrom: (settings as any).smtpFrom ?? "", accountantEmail: (settings as any).accountantEmail ?? "",
     });
   }, [settings]);
 
@@ -170,6 +170,8 @@ export default function SettingsPage() {
                   <Input type="password" value={form.smtpPassword} onChange={e => setForm({ ...form, smtpPassword: e.target.value })} /></div>
               </div>
               <div className="space-y-1"><Label>Испраќач (од)</Label><Input value={form.smtpFrom} onChange={e => setForm({ ...form, smtpFrom: e.target.value })} placeholder="Serafimoski Tech <info@serafimoski.mk>" /></div>
+              <div className="space-y-1"><Label>Е-пошта на сметководителот</Label><Input type="email" value={form.accountantEmail} onChange={e => setForm({ ...form, accountantEmail: e.target.value })} placeholder="smetkovoditel@primer.mk" />
+                <p className="text-xs text-gray-500">Тука оди „Прати до сметководител“ од Фактури → Извештај за сметководител.</p></div>
               <div className="flex flex-wrap gap-2">
                 <Button onClick={handleSave} disabled={upsertMutation.isPending} className="bg-emerald-700 hover:bg-emerald-800"><Save className="h-4 w-4 mr-1" /> Зачувај</Button>
                 <Input className="w-64" placeholder="Тест до: moj@email.com" value={testTo} onChange={e => setTestTo(e.target.value)} />

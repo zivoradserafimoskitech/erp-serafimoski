@@ -1,4 +1,5 @@
-import { downloadXlsx, type Sheet, type Cell } from "@/lib/xlsx";
+import { buildXlsx, saveBlob, type Sheet, type Cell } from "@/lib/xlsx";
+import { accountantReportHtml, htmlToPdfBlob, invoiceHtml } from "@/lib/print-documents";
 
 const SOURCE: Record<string, string> = {
   invoice: "Излезна фактура", incoming_invoice: "Влезна фактура", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати",
@@ -20,8 +21,19 @@ type Fetchers = {
   journalList: (i: { from: string; to: string; limit: number; offset: number }) => Promise<any>;
 };
 
-/** Сè што му треба на сметководството за периодот, во еден Excel со листови. */
+export const packName = (from: string, to: string) => `smetkovodstvo_${from}_${to}`;
+
+/** Сè што му треба на сметководството за периодот, во еден Excel со листови — симнување. */
 export async function exportAccountantXlsx(report: any, from: string, to: string, company: string | undefined, f: Fetchers) {
+  saveBlob(await buildAccountantXlsx(report, from, to, company, f), `${packName(from, to)}.xlsx`);
+}
+
+/** Извештајот како PDF (истата содржина како печатењето). */
+export async function buildAccountantPdf(report: any, from: string, to: string, settings: any): Promise<Blob> {
+  return htmlToPdfBlob(accountantReportHtml(report, { startDate: from, endDate: to }, settings));
+}
+
+export async function buildAccountantXlsx(report: any, from: string, to: string, company: string | undefined, f: Fetchers): Promise<Blob> {
   // Налозите се земаат по 500 додека не се земат сите
   const journal: any[] = [];
   for (let offset = 0; ; offset += 500) {
@@ -88,5 +100,85 @@ export async function exportAccountantXlsx(report: any, from: string, to: string
     { name: "Требовања", title: head("Потрошен материјал по налози"), header: ["Работен налог", "Датум", "Материјал", "Количина", "Единица", "Цена (ден)", "Вкупно (ден)"],
       rows: req, total: ["Вкупно", null, null, null, null, null, sum(req, 6)] },
   ];
-  await downloadXlsx(`smetkovodstvo_${from}_${to}.xlsx`, sheets);
+  return buildXlsx(sheets);
+}
+
+// ── ZIP со документите ──
+type DocFetchers = {
+  invoiceById: (i: { id: number }) => Promise<any>;
+  incomingInvoiceById: (i: { id: number }) => Promise<any>;
+  receiptById: (i: { id: number }) => Promise<any>;
+};
+// скенот е зачуван како base64 — од првите бајти се знае дали е PDF или слика
+const sniff = (b64: string): { ext: string; type: string } =>
+  b64.startsWith("JVBER") ? { ext: "pdf", type: "application/pdf" }
+  : b64.startsWith("/9j/") ? { ext: "jpg", type: "image/jpeg" }
+  : b64.startsWith("iVBOR") ? { ext: "png", type: "image/png" }
+  : b64.startsWith("UEsDB") ? { ext: "zip", type: "application/zip" }
+  : { ext: "pdf", type: "application/pdf" };
+const stripDataUrl = (v: string) => v.replace(/^data:[^;]+;base64,/, "");
+const safe = (s: any) => String(s ?? "").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 80) || "без-број";
+
+/**
+ * Еден ZIP за сметководителот: извештај (PDF + Excel), излезните фактури како PDF,
+ * оригиналните скенови од влезните фактури и приемниците, и листа што недостасува.
+ */
+export async function buildDocumentsZip(report: any, from: string, to: string, settings: any, f: DocFetchers,
+  extras: { xlsx?: Blob; pdf?: Blob }, onProgress?: (done: number, total: number, what: string) => void): Promise<Blob> {
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+  const base = packName(from, to);
+  if (extras.pdf) zip.file(`${base}.pdf`, extras.pdf);
+  if (extras.xlsx) zip.file(`${base}.xlsx`, extras.xlsx);
+  const out: any[] = report.outgoing?.items ?? [];
+  const inc: any[] = report.incoming?.items ?? [];
+  const rcs: any[] = (report.receiptsList ?? []).filter((r: any) => r.hasFile);
+  const total = out.length + inc.filter((i: any) => i.hasFile).length + rcs.length;
+  let done = 0;
+  const tick = (what: string) => onProgress?.(++done, total, what);
+  const missing: string[] = [];
+
+  for (const i of out) {
+    try {
+      const full = await f.invoiceById({ id: Number(i.id) });
+      const pdf = await htmlToPdfBlob(invoiceHtml(full, settings));
+      zip.file(`Излезни фактури/${safe(d(i.issueDate))} ${safe(i.invoiceNumber)} ${safe(i.customerName)}.pdf`, pdf);
+    } catch (e: any) { missing.push(`Излезна фактура ${i.invoiceNumber}: не можеше да се направи PDF (${e?.message ?? e})`); }
+    tick(`фактура ${i.invoiceNumber}`);
+  }
+  for (const i of inc) {
+    const name = `${safe(d(i.issueDate ?? i.receivedDate))} ${safe(i.supplierInvoiceNumber)} ${safe(i.supplierName)}`;
+    if (!i.hasFile) { missing.push(`Влезна фактура ${i.supplierInvoiceNumber} (${i.supplierName ?? ""}) — нема прикачен скен`); continue; }
+    try {
+      const full = await f.incomingInvoiceById({ id: Number(i.id) });
+      const b64 = stripDataUrl(String(full?.fileUrl ?? ""));
+      if (!b64) throw new Error("празен скен");
+      zip.file(`Влезни фактури/${name}.${sniff(b64).ext}`, b64, { base64: true });
+    } catch (e: any) { missing.push(`Влезна фактура ${i.supplierInvoiceNumber}: скенот не се отвора (${e?.message ?? e})`); }
+    tick(`влезна ${i.supplierInvoiceNumber}`);
+  }
+  for (const r of rcs) {
+    try {
+      const full = await f.receiptById({ id: Number(r.id) });
+      const b64 = stripDataUrl(String(full?.fileUrl ?? ""));
+      if (b64) zip.file(`Приемници/${safe(d(r.receiptDate ?? r.createdAt))} ${safe(r.receiptNumber)}.${sniff(b64).ext}`, b64, { base64: true });
+    } catch { /* приемницата е во извештајот; скенот е дополнителен */ }
+    tick(`приемница ${r.receiptNumber}`);
+  }
+
+  const lines = [
+    `Документи за сметководство — ${settings?.name ?? ""}`,
+    `Период: ${from.split("-").reverse().join(".")} – ${to.split("-").reverse().join(".")}`,
+    "",
+    `${base}.pdf   — извештај за печатење и архива (КИФ, КУФ, ДДВ по стапки, приемници, налози)`,
+    `${base}.xlsx  — истите податоци во Excel, со налози за книжење и бруто биланс`,
+    `Излезни фактури/  — ${out.length} фактури како PDF`,
+    `Влезни фактури/   — ${inc.filter((i: any) => i.hasFile).length} од ${inc.length} оригинални скенови`,
+    ...(rcs.length ? [`Приемници/        — ${rcs.length} скенови`] : []),
+    "",
+    missing.length ? "НЕДОСТАСУВА:" : "Сите документи се вклучени.",
+    ...missing.map(m => " - " + m),
+  ];
+  zip.file("ПРОЧИТАЈ.txt", "\ufeff" + lines.join("\r\n"));
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }

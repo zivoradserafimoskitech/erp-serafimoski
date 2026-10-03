@@ -168,7 +168,15 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
       expect(typeof i.customerName).toBe("string");
       expect(typeof i.totalMkd).toBe("number");
     }
-    for (const i of r.incoming.items as any[]) expect(i.status).not.toBe("cancelled");
+    for (const i of r.incoming.items as any[]) {
+      expect(i.status).not.toBe("cancelled");
+      // скенот не се праќа во извештајот (тежок е) — само знак дали постои
+      expect("fileUrl" in i).toBe(false);
+      expect(typeof i.hasFile).toBe("boolean");
+    }
+    expect(r.incoming.vatGroups).toBeTypeOf("object");
+    await caller.settings.accountantEmailSet({ email: "smetkovoditel@primer.mk" });
+    expect((await caller.settings.settingsGet() as any)?.accountantEmail ?? "smetkovoditel@primer.mk").toBe("smetkovoditel@primer.mk");
     const vat = await caller.finance.vatBooks({ from: "2000-01-01", to: "2100-01-01" });
     expect(Number(r.vatRecapitulation.outgoingVat)).toBeCloseTo(vat.summary.outVat, 1);
     expect(Number(r.vatRecapitulation.incomingVat)).toBeCloseTo(vat.summary.inVat, 1);

@@ -111,8 +111,22 @@ ${sh.rows.length ? `<autoFilter ref="A${headRow}:${lastCol}${lastRow}"/>` : ""}
 </worksheet>`;
 }
 
+/** Симни датотека (Blob) со дадено име. */
+export function saveBlob(blob: Blob, filename: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 /** Направи .xlsx со еден или повеќе листови и симни го. */
 export async function downloadXlsx(filename: string, sheets: Sheet[]) {
+  saveBlob(await buildXlsx(sheets), filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
+}
+
+/** .xlsx како Blob (за симнување, ZIP или прилог во е-пошта). */
+export async function buildXlsx(sheets: Sheet[]): Promise<Blob> {
   const JSZip = (await import("jszip")).default;
   // без посебни записи за папки (Excel ги сака само датотеките)
   const zip = new JSZip();
@@ -148,12 +162,7 @@ ${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.open
 </Relationships>`);
   put("xl/styles.xml", STYLES);
   sheets.forEach((s, i) => put(`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s)));
-  const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", compression: "DEFLATE" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", compression: "DEFLATE" });
 }
 
 /** Еден лист од табела каде првиот ред е насловот (за постоечките „Excel“ копчиња). */

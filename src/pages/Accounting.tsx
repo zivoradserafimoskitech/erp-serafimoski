@@ -13,19 +13,20 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import ListLimitNote from "@/components/ListLimitNote";
 import { MaterialPicker } from "@/components/MaterialPicker";
-import { printInvoice, printDeliveryNote, printAccountantReport, invoiceHtml } from "@/lib/print-documents";
+import { printInvoice, printDeliveryNote, invoiceHtml } from "@/lib/print-documents";
 import SendEmailDialog from "@/components/SendEmailDialog";
 import { EXPENSE_CHOICES } from "@contracts/finance";
 import IncomingAccountPicker from "@/components/IncomingAccountPicker";
 import IncomingAccountReview from "@/components/IncomingAccountReview";
 import { useSearchParams, useNavigate } from "react-router";
 import { formatDate } from "@/lib/utils";
+import AccountantPackActions from "@/components/AccountantPackActions";
 import { DnCertificates } from "@/components/DnCertificates";
 import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
   Receipt, Truck, ArrowUpRight, ArrowDownLeft, Calculator,
   Radio, RefreshCw, Send, SearchIcon, Upload, Building2, Zap,
-  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck, Landmark, FileSpreadsheet, Loader2,
+  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck, Landmark,
 } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
@@ -159,25 +160,6 @@ export default function Accounting() {
   const [reportData, setReportData] = useState<any>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
-  // Едно копче: сите листови (КИФ, КУФ, налози, бруто биланс, приемници...) во еден Excel
-  const [xlsxBusy, setXlsxBusy] = useState(false);
-  const exportXlsx = async () => {
-    if (!reportData) return;
-    setXlsxBusy(true);
-    try {
-      const { exportAccountantXlsx } = await import("@/lib/accountant-export");
-      const p = { from: reportPeriod.startDate, to: reportPeriod.endDate };
-      await exportAccountantXlsx(reportData, p.from, p.to, companySettings?.name, {
-        vatBooks: (i) => utils.finance.vatBooks.fetch(i),
-        trialBalance: (i) => utils.finance.trialBalance.fetch(i),
-        journalList: (i) => utils.finance.journalList.fetch(i),
-      });
-      toast.success("Excel е симнат");
-    } catch (e: any) {
-      toast.error(`Excel не е направен: ${e?.message ?? e}`);
-    } finally { setXlsxBusy(false); }
-  };
-
   const handleGenerateReport = async () => {
     if (!reportPeriod.startDate || !reportPeriod.endDate) {
       toast.error("Изберете ги двете датуми");
@@ -628,8 +610,8 @@ export default function Accounting() {
               <DialogHeader><DialogTitle>Извештај за сметководител</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2"><Label>Од датум</Label><DateInput value={reportPeriod.startDate} onChange={(e) => setReportPeriod({ ...reportPeriod, startDate: e.target.value })} /></div>
-                  <div className="space-y-2"><Label>До датум</Label><DateInput value={reportPeriod.endDate} onChange={(e) => setReportPeriod({ ...reportPeriod, endDate: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Од датум</Label><DateInput value={reportPeriod.startDate} onChange={(e) => { setReportPeriod({ ...reportPeriod, startDate: e.target.value }); setReportData(null); }} /></div>
+                  <div className="space-y-2"><Label>До датум</Label><DateInput value={reportPeriod.endDate} onChange={(e) => { setReportPeriod({ ...reportPeriod, endDate: e.target.value }); setReportData(null); }} /></div>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {([["month", "Овој месец"], ["prev", "Претходен месец"], ["year", "Оваа година"]] as const).map(([k, l]) => (
@@ -645,10 +627,9 @@ export default function Accounting() {
                   >
                     {reportLoading ? "Се генерира..." : <><Calculator className="h-4 w-4 mr-2" />Генерирај извештај</>}
                   </Button>
-                  {reportData && <Button variant="outline" className="border-emerald-300 text-emerald-800 hover:bg-emerald-50" disabled={xlsxBusy} onClick={exportXlsx}>
-                    {xlsxBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}Excel за сметководство</Button>}
-                  {reportData && <Button variant="outline" onClick={() => printAccountantReport(reportData, reportPeriod, companySettings)}><FileText className="h-4 w-4 mr-2" />Печати / PDF</Button>}
+
                 </div>
+                {reportData && <AccountantPackActions report={reportData} from={reportPeriod.startDate} to={reportPeriod.endDate} />}
                 {reportError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 space-y-2">
                     <p className="text-sm font-medium text-red-800">Извештајот не е генериран</p>
