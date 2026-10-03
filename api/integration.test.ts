@@ -219,9 +219,22 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     await caller.finance.terkSave({ id, name: "Закупнина", lines: [{ account: "220", side: "P" }, { account: "412", side: "D" }] });
     expect((await caller.finance.terkList()).find(x => x.id === id)!.lines.map(l => l.account)).toEqual(["220", "412"]);
     const r = await caller.finance.manualEntryCreate({ date: "2026-09-30", description: "Закупнина 09", templateName: "Закупнина",
-      lines: [{ account: "412", debit: 10000, credit: 0 }, { account: "220", debit: 0, credit: 10000 }] });
+      lines: [{ account: "412", debit: 10000, credit: 0 }, { account: "220", debit: 0, credit: 10000, partnerType: "supplier", partnerId: ids.sup }] });
     const j = await caller.finance.journalList({ from: "2026-09-30", to: "2026-09-30", search: r.number, limit: 5, offset: 0 });
     expect(j.entries[0].templateName).toBe("Закупнина");
+    // партнер: на 220 без добавувач не смее; со добавувач влегува во „неплатено кон добавувачи“
+    await expect(caller.finance.manualEntryCreate({ date: "2026-09-30", description: "Без партнер",
+      lines: [{ account: "412", debit: 500, credit: 0 }, { account: "220", debit: 0, credit: 500 }] })).rejects.toThrow(/добавувач/);
+    await expect(caller.finance.manualEntryCreate({ date: "2026-09-30", description: "Погрешен вид",
+      lines: [{ account: "412", debit: 500, credit: 0 }, { account: "220", debit: 0, credit: 500, partnerType: "supplier", partnerId: 99999999 }] })).rejects.toThrow(/Непостоечки/);
+    const before = (await caller.dashboard.stats()).kpi;
+    const r2 = await caller.finance.manualEntryCreate({ date: "2026-09-30", description: "Закупнина 10", templateName: "Закупнина",
+      lines: [{ account: "412", debit: 700, credit: 0 }, { account: "220", debit: 0, credit: 700, partnerType: "supplier", partnerId: ids.sup }] });
+    const after = (await caller.dashboard.stats()).kpi;
+    expect(after.payables).toBeCloseTo(before.payables + 700, 2);
+    expect(after.manualPayables).toBeCloseTo(before.manualPayables + 700, 2);
+    const jl = await caller.finance.journalList({ from: "2026-09-30", to: "2026-09-30", search: r2.number, limit: 5, offset: 0 });
+    expect(jl.entries[0].lines.find((l: any) => l.account === "220")?.partner).toBeTruthy();
     await caller.finance.terkRemove({ id });
     expect((await caller.finance.terkList()).some(x => x.id === id)).toBe(false);
     // налогот останува и по бришење на теркот

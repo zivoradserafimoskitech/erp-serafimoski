@@ -96,7 +96,7 @@ function JournalTab() {
   });
 
   // Нов налог: од терк (конта и страна се зададени, се пишуваат само износи) или слободно
-  type MLine = { account: string; debit: string; credit: string; side?: "D" | "P"; note?: string };
+  type MLine = { account: string; debit: string; credit: string; side?: "D" | "P"; note?: string; partnerId?: number | null };
   const emptyLines = (): MLine[] => [{ account: "", debit: "", credit: "" }, { account: "", debit: "", credit: "" }];
   const [mDate, setMDate] = useState(today());
   const [mDesc, setMDesc] = useState("");
@@ -105,6 +105,13 @@ function JournalTab() {
   const [terkDraft, setTerkDraft] = useState<any>(null);
   const { data: terks } = trpc.finance.terkList.useQuery();
   const accountItems = useAccountItems();
+  // Партнер на конта на купувачи (12…) и добавувачи (22…): налогот се гледа во салдото на тој партнер
+  const { data: partners } = trpc.ops.qualityLinkOptions.useQuery(undefined, { enabled: manualOpen });
+  const { data: rulesList } = trpc.finance.postingRulesGet.useQuery(undefined, { enabled: manualOpen });
+  const mainPartnerAcc = new Set((rulesList ?? []).filter(r => /^(customers|suppliers)_/.test(r.key)).map(r => r.accountCode));
+  const partnerKind = (acc: string): "customer" | "supplier" | null => acc.startsWith("12") ? "customer" : acc.startsWith("22") ? "supplier" : null;
+  const partnerItems = (k: "customer" | "supplier") => (k === "customer" ? partners?.customers : partners?.suppliers)?.map(x => ({ id: x.id, label: x.name })) ?? [];
+  const missingPartner = mLines.some(l => mainPartnerAcc.has(l.account) && !l.partnerId && (parseFloat(l.debit) || parseFloat(l.credit)));
   const terk = terks?.find(t => String(t.id) === mTerk);
   const pickTerk = (v: string) => {
     setMTerk(v);
@@ -186,7 +193,7 @@ function JournalTab() {
                 {e.lines.map((l, i) => (
                   <div key={i} className="contents">
                     <span className="font-mono text-gray-600">{l.account}</span>
-                    <span className="text-gray-500 truncate">{l.accountName}</span>
+                    <span className="text-gray-500 truncate">{l.accountName}{(l as any).partner ? <span className="text-gray-700"> · {(l as any).partner}</span> : null}</span>
                     <span className="text-right tabular-nums">{l.debit ? fmt(l.debit) : ""}</span>
                     <span className="text-right tabular-nums">{l.credit ? fmt(l.credit) : ""}</span>
                   </div>
@@ -234,9 +241,15 @@ function JournalTab() {
                     <div className="h-9 flex items-center gap-2 rounded-md border bg-gray-50 px-3 text-sm truncate" title="Од теркот">
                       <span className="font-mono font-medium">{l.account}</span><span className="text-gray-500 truncate">{accountItems.find(a => a.id === l.account)?.sub}</span></div>
                   ) : (
-                    <SearchPick<string> items={accountItems} value={l.account || null} onChange={(v) => set({ account: v ?? "" })} placeholder="Избери конто" clearable={false} />
+                    <SearchPick<string> items={accountItems} value={l.account || null} onChange={(v) => set({ account: v ?? "", partnerId: partnerKind(v ?? "") === partnerKind(l.account) ? l.partnerId : null })} placeholder="Избери конто" clearable={false} />
                   )}
                   {l.note && <p className="text-[11px] text-gray-500 mt-0.5 px-1">{l.note}</p>}
+                  {partnerKind(l.account) && (
+                    <div className="mt-1">
+                      <SearchPick items={partnerItems(partnerKind(l.account)!)} value={l.partnerId ?? null} onChange={(v) => set({ partnerId: v })}
+                        placeholder={`${partnerKind(l.account) === "customer" ? "Купувач" : "Добавувач"}${mainPartnerAcc.has(l.account) ? " *" : " (не е задолжително)"}`} />
+                    </div>
+                  )}
                 </div>
                 {l.side === "P" ? <div className="h-9 rounded-md border border-dashed bg-gray-50" /> :
                   <Input type="number" min="0" step="0.01" className="text-right" autoFocus={!!l.side && i === 0} value={l.debit} placeholder={l.side === "D" ? "износ" : ""}
@@ -258,10 +271,12 @@ function JournalTab() {
               </div>
               <span className={`text-sm tabular-nums ${Math.abs(diff) < 0.005 && dSum > 0 ? "text-emerald-700" : "text-red-600"}`}>Должи {fmt(dSum)} · Побарува {fmt(cSum)}</span>
             </div>
-            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={manual.isPending || Math.abs(diff) > 0.005 || dSum === 0 || mDesc.length < 2 || mLines.some(l => !l.account && (l.debit || l.credit))}
+            {missingPartner && <p className="text-xs text-amber-700">Избери купувач/добавувач на редот со конто на купувачи или добавувачи — така налогот влегува во неговото салдо.</p>}
+            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={manual.isPending || Math.abs(diff) > 0.005 || dSum === 0 || mDesc.length < 2 || missingPartner || mLines.some(l => !l.account && (l.debit || l.credit))}
               onClick={() => manual.mutate({ date: mDate, description: mDesc, templateName: terk?.name,
                 lines: mLines.filter(l => l.account && ((parseFloat(l.debit) || 0) + (parseFloat(l.credit) || 0)) > 0)
-                  .map(l => ({ account: l.account, debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0, description: l.note || undefined })) })}>
+                  .map(l => ({ account: l.account, debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0, description: l.note || undefined,
+                    ...(l.partnerId && partnerKind(l.account) ? { partnerType: partnerKind(l.account)!, partnerId: l.partnerId } : {}) })) })}>
               Внеси налог
             </Button>
           </div>

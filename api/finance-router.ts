@@ -468,7 +468,11 @@ export const financeRouter = createRouter({
       params.push(input.limit, input.offset);
       const entries = await q(`SELECT e.* FROM gl_entries e WHERE ${where} ORDER BY e.entry_date DESC, e.id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
       const ids = entries.map(e => e.id);
-      const lines = ids.length ? await q(`SELECT l.*, a.name AS account_name FROM gl_lines l LEFT JOIN gl_accounts a ON a.code = l.account_code WHERE l.entry_id = ANY($1) ORDER BY l.id`, [ids]) : [];
+      const lines = ids.length ? await q(`SELECT l.*, a.name AS account_name, COALESCE(c.company, c.name, s.name) AS partner_name FROM gl_lines l
+        LEFT JOIN gl_accounts a ON a.code = l.account_code
+        LEFT JOIN customers c ON l.partner_type = 'customer' AND c.id = l.partner_id
+        LEFT JOIN suppliers s ON l.partner_type = 'supplier' AND s.id = l.partner_id
+        WHERE l.entry_id = ANY($1) ORDER BY l.id`, [ids]) : [];
       // Од каде е налогот: за залиха -- самото движење (материјал, количина, цена, налог), за другите -- документот
       const moveIds = entries.filter(e => e.source_type === "stock_move" && e.source_id != null).map(e => Number(e.source_id));
       const moves = moveIds.length ? await q(`SELECT t.id, t.type, t.quantity, t.unit_cost, t.total_cost, t.reference, t.notes, t.created_at,
@@ -496,7 +500,7 @@ export const financeRouter = createRouter({
         entries: entries.map(e => ({
           id: Number(e.id), number: e.entry_number, date: iso(e.entry_date), description: e.description, sourceType: e.source_type, sourceId: e.source_id == null ? null : Number(e.source_id),
           source: sourceOf(e), templateName: (e.template_name ?? null) as string | null,
-          lines: lines.filter(l => Number(l.entry_id) === Number(e.id)).map(l => ({ account: l.account_code, accountName: l.account_name, debit: Number(l.debit), credit: Number(l.credit), description: l.description })),
+          lines: lines.filter(l => Number(l.entry_id) === Number(e.id)).map(l => ({ account: l.account_code, accountName: l.account_name, debit: Number(l.debit), credit: Number(l.credit), description: l.description, partner: (l.partner_name ?? null) as string | null })),
         })),
       };
     }),
@@ -570,10 +574,34 @@ export const financeRouter = createRouter({
     .input(z.object({
       date: dateStr, description: z.string().min(2),
       templateName: z.string().max(120).optional(),
-      lines: z.array(z.object({ account: z.string(), debit: z.number().min(0), credit: z.number().min(0), description: z.string().optional() })).min(2),
+      lines: z.array(z.object({ account: z.string(), debit: z.number().min(0), credit: z.number().min(0), description: z.string().optional(),
+        partnerType: z.enum(["customer", "supplier"]).optional(), partnerId: z.number().optional() })).min(2),
     }))
     .mutation(async ({ input }) => {
-      const lines = normalizeLines(input.lines.map(l => ({ account: l.account, debit: l.debit, credit: l.credit, description: l.description })));
+      // Партнер: на конта на купувачи (12x) -> купувач, на добавувачи (22x) -> добавувач; на главните конта е задолжителен
+      const rules = await loadRules();
+      const mustPartner: Record<string, "customer" | "supplier"> = {
+        [rules.customers_domestic]: "customer", [rules.customers_foreign]: "customer",
+        [rules.suppliers_domestic]: "supplier", [rules.suppliers_foreign]: "supplier",
+      };
+      const kindOf = (acc: string): "customer" | "supplier" | null => mustPartner[acc] ?? (acc.startsWith("12") ? "customer" : acc.startsWith("22") ? "supplier" : null);
+      for (const l of input.lines) {
+        const kind = kindOf(l.account);
+        if (l.partnerId && kind && l.partnerType && l.partnerType !== kind)
+          throw new TRPCError({ code: "BAD_REQUEST", message: `На конто ${l.account} оди ${kind === "customer" ? "купувач" : "добавувач"}` });
+        if (!l.partnerId && mustPartner[l.account] && (l.debit || l.credit))
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Избери ${mustPartner[l.account] === "customer" ? "купувач" : "добавувач"} за конто ${l.account}` });
+      }
+      for (const kind of ["customer", "supplier"] as const) {
+        const ids = [...new Set(input.lines.filter(l => l.partnerId && kindOf(l.account) === kind).map(l => l.partnerId!))];
+        if (!ids.length) continue;
+        const found = await q(`SELECT id FROM ${kind === "customer" ? "customers" : "suppliers"} WHERE id = ANY($1)`, [ids]);
+        if (found.length !== ids.length) throw new TRPCError({ code: "BAD_REQUEST", message: kind === "customer" ? "Непостоечки купувач" : "Непостоечки добавувач" });
+      }
+      const lines = normalizeLines(input.lines.map(l => {
+        const kind = l.partnerId ? kindOf(l.account) : null;
+        return { account: l.account, debit: l.debit, credit: l.credit, description: l.description, partnerType: kind ?? undefined, partnerId: kind ? l.partnerId : undefined };
+      }));
       if (!isBalanced(lines)) throw new TRPCError({ code: "BAD_REQUEST", message: "Должи и побарува не се еднакви" });
       const codes = [...new Set(lines.map(l => l.account))];
       const ex = await q(`SELECT code FROM gl_accounts WHERE code = ANY($1)`, [codes]);
