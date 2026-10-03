@@ -495,7 +495,7 @@ export const financeRouter = createRouter({
         total,
         entries: entries.map(e => ({
           id: Number(e.id), number: e.entry_number, date: iso(e.entry_date), description: e.description, sourceType: e.source_type, sourceId: e.source_id == null ? null : Number(e.source_id),
-          source: sourceOf(e),
+          source: sourceOf(e), templateName: (e.template_name ?? null) as string | null,
           lines: lines.filter(l => Number(l.entry_id) === Number(e.id)).map(l => ({ account: l.account_code, accountName: l.account_name, debit: Number(l.debit), credit: Number(l.credit), description: l.description })),
         })),
       };
@@ -513,9 +513,63 @@ export const financeRouter = createRouter({
       return { success: true, removed: sync.removed };
     }),
 
+  // ===== ТЕРК: шеми на книжење (конта + страна, без износи) =====
+  terkList: publicQuery.query(async () => {
+    const t = await q(`SELECT id, name, description, updated_at FROM gl_templates ORDER BY lower(name)`);
+    const l = t.length ? await q(`SELECT tl.template_id, tl.account_code, tl.side, tl.note, a.name AS account_name
+      FROM gl_template_lines tl LEFT JOIN gl_accounts a ON a.code = tl.account_code ORDER BY tl.template_id, tl.position, tl.id`) : [];
+    return t.map(x => ({
+      id: Number(x.id), name: x.name as string, description: (x.description ?? "") as string, updatedAt: x.updated_at,
+      lines: l.filter(r => Number(r.template_id) === Number(x.id)).map(r => ({ account: r.account_code as string, accountName: (r.account_name ?? "") as string, side: r.side as "D" | "P", note: (r.note ?? "") as string })),
+    }));
+  }),
+
+  terkSave: publicQuery
+    .input(z.object({
+      id: z.number().optional(),
+      name: z.string().trim().min(2, "Внеси назив на теркот").max(120),
+      description: z.string().max(2000).optional(),
+      lines: z.array(z.object({ account: z.string().min(1), side: z.enum(["D", "P"]), note: z.string().max(200).optional() })).min(2, "Теркот треба најмалку два реда"),
+    }))
+    .mutation(async ({ input }) => {
+      if (!input.lines.some(l => l.side === "D") || !input.lines.some(l => l.side === "P"))
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Теркот треба да има барем едно конто на Должи и едно на Побарува" });
+      const codes = [...new Set(input.lines.map(l => l.account))];
+      const ex = await q(`SELECT code FROM gl_accounts WHERE code = ANY($1)`, [codes]);
+      const missing = codes.filter(c => !ex.some(e => e.code === c));
+      if (missing.length) throw new TRPCError({ code: "BAD_REQUEST", message: `Непостоечки конта: ${missing.join(", ")} — додади ги во Контен план` });
+      const dup = await q(`SELECT id FROM gl_templates WHERE lower(name) = lower($1) AND id <> $2`, [input.name, input.id ?? 0]);
+      if (dup.length) throw new TRPCError({ code: "CONFLICT", message: `Веќе постои терк „${input.name}“` });
+      const client = await getPool().connect();
+      try {
+        await client.query("BEGIN");
+        let id = input.id;
+        if (id) {
+          const r = await client.query(`UPDATE gl_templates SET name = $2, description = $3, updated_at = now() WHERE id = $1`, [id, input.name, input.description ?? null]);
+          if (!r.rowCount) throw new TRPCError({ code: "NOT_FOUND", message: "Теркот не постои" });
+          await client.query(`DELETE FROM gl_template_lines WHERE template_id = $1`, [id]);
+        } else {
+          id = (await client.query(`INSERT INTO gl_templates (name, description) VALUES ($1, $2) RETURNING id`, [input.name, input.description ?? null])).rows[0].id;
+        }
+        for (const [i, l] of input.lines.entries())
+          await client.query(`INSERT INTO gl_template_lines (template_id, position, account_code, side, note) VALUES ($1,$2,$3,$4,$5)`, [id, i, l.account, l.side, l.note || null]);
+        await client.query("COMMIT");
+        return { success: true, id: Number(id) };
+      } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
+    }),
+
+  // шема, не книжење — бришењето не допира налози, па не бара администратор
+  terkRemove: publicQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await q(`DELETE FROM gl_templates WHERE id = $1`, [input.id]);
+      return { success: true };
+    }),
+
   manualEntryCreate: publicQuery
     .input(z.object({
       date: dateStr, description: z.string().min(2),
+      templateName: z.string().max(120).optional(),
       lines: z.array(z.object({ account: z.string(), debit: z.number().min(0), credit: z.number().min(0), description: z.string().optional() })).min(2),
     }))
     .mutation(async ({ input }) => {
@@ -529,7 +583,7 @@ export const financeRouter = createRouter({
       try {
         await client.query("BEGIN");
         const num = await nextEntryNumber(client, input.date);
-        const r = await client.query(`INSERT INTO gl_entries (entry_number, entry_date, description, source_type) VALUES ($1,$2,$3,'manual') RETURNING id`, [num, input.date, input.description]);
+        const r = await client.query(`INSERT INTO gl_entries (entry_number, entry_date, description, source_type, template_name) VALUES ($1,$2,$3,'manual',$4) RETURNING id`, [num, input.date, input.description, input.templateName ?? null]);
         await insertLines(client, r.rows[0].id, lines);
         await client.query("COMMIT");
         return { success: true, number: num };

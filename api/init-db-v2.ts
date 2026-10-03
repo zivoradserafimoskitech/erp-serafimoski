@@ -69,6 +69,25 @@ export function getExtraSql(): string[] {
     )`,
     `CREATE INDEX IF NOT EXISTS "gl_lines_entry_idx" ON "gl_lines" ("entry_id")`,
     `CREATE INDEX IF NOT EXISTS "gl_lines_account_idx" ON "gl_lines" ("account_code")`,
+    // Терк: зачувана шема на книжење (конта и страна, без износи) — се избира при нов налог
+    `CREATE TABLE IF NOT EXISTS "gl_templates" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "name" varchar(120) NOT NULL,
+      "description" text,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "gl_templates_name_uq" ON "gl_templates" (lower("name"))`,
+    `CREATE TABLE IF NOT EXISTS "gl_template_lines" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "template_id" integer NOT NULL REFERENCES "gl_templates"("id") ON DELETE CASCADE,
+      "position" integer DEFAULT 0 NOT NULL,
+      "account_code" varchar(10) NOT NULL,
+      "side" char(1) NOT NULL CHECK ("side" IN ('D', 'P')),
+      "note" varchar(200)
+    )`,
+    `CREATE INDEX IF NOT EXISTS "gl_template_lines_tpl_idx" ON "gl_template_lines" ("template_id")`,
+    `ALTER TABLE "gl_entries" ADD COLUMN IF NOT EXISTS "template_name" varchar(120)`,
 
     // ===== РАСПОРЕД НА ПРОИЗВОДСТВО =====
     `ALTER TABLE "work_order_operations" ADD COLUMN IF NOT EXISTS "machine_id" bigint`,
