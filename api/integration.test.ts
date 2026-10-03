@@ -182,6 +182,30 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(Number(r.vatRecapitulation.incomingVat)).toBeCloseTo(vat.summary.inVat, 1);
   });
 
+  it("материјал со движења не се брише (се деактивира); движење без материјал се отстранува заедно со налогот", async () => {
+    const r: any = await caller.storage.materialDelete({ id: ids.mat });
+    expect(r.deactivated).toBe(true);
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    expect((await pool.query(`SELECT is_active FROM materials WHERE id = $1`, [ids.mat])).rows[0]?.is_active).toBe("inactive");
+    await pool.query(`UPDATE materials SET is_active = 'active' WHERE id = $1`, [ids.mat]);
+    // старо движење чиј материјал бил избришан
+    const mv = (await pool.query(`INSERT INTO inventory_transactions (material_id, warehouse_id, type, quantity, unit_cost, total_cost, created_at)
+      VALUES (987654, $1, 'issue', -50, 855, 42750, '2026-07-17') RETURNING id`, [ids.wh])).rows[0].id;
+    await caller.finance.ledgerSync();
+    const j = await caller.finance.journalList({ from: "2026-07-01", to: "2026-07-31", limit: 50, offset: 0 });
+    const e: any = j.entries.find((x: any) => x.sourceType === "stock_move" && x.sourceId === Number(mv));
+    expect(e.description).toContain("избришан материјал #987654");
+    expect(e.source.orphan).toBe(true);
+    // вистинско движење (материјалот постои) не смее да се отстрани одовде
+    const real = (await pool.query(`SELECT id FROM inventory_transactions WHERE material_id = $1 LIMIT 1`, [ids.mat])).rows[0].id;
+    await expect(caller.finance.orphanStockMoveDelete({ moveId: Number(real) })).rejects.toThrow();
+    const res = await caller.finance.orphanStockMoveDelete({ moveId: Number(mv) });
+    expect(res.removed).toBeGreaterThanOrEqual(1);
+    const j2 = await caller.finance.journalList({ from: "2026-07-01", to: "2026-07-31", limit: 50, offset: 0 });
+    expect(j2.entries.some((x: any) => x.sourceId === Number(mv) && x.sourceType === "stock_move")).toBe(false);
+  });
+
   it("плати: пресметка и книжење", async () => {
     await caller.hr.employeeUpsert({ fullName: "Марко Марковски", grossSalary: 60000 });
     await caller.hr.payrollCalculate({ period: "2026-09", params: { contributionRate: 28, incomeTaxRate: 10, personalExemption: 10000 } });

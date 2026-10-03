@@ -96,10 +96,12 @@ export default function Accounting() {
   const [params, setParams] = useSearchParams();
   useEffect(() => {
     const id = Number(params.get("open"));
+    const inId = Number(params.get("openIn")); // влезна фактура (од главната книга)
     const qq = params.get("q");
     if (id) { setSelId(id); setDetailType("out"); setDetailOpen(true); }
+    if (inId) { setTab("incoming"); setSelId(inId); setDetailType("inc"); setDetailOpen(true); }
     if (qq) setSearch(qq);
-    if (id || qq) { params.delete("open"); params.delete("q"); setParams(params, { replace: true }); }
+    if (id || inId || qq) { params.delete("open"); params.delete("openIn"); params.delete("q"); setParams(params, { replace: true }); }
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [mailOpen, setMailOpen] = useState(false);
   const { data: outDetail } = trpc.accounting.invoiceById.useQuery({ id: selId! }, { enabled: detailType === "out" && !!selId });

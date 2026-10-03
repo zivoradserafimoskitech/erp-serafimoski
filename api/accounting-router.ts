@@ -769,8 +769,8 @@ export const accountingRouter = createRouter({
         ? (await db.select().from(womT)).filter((m: any) => m.isActual === "actual" && woIds.has(m.workOrderId))
         : [];
       const allMaterialsForReport = await db.select().from(materials);
-      const matById = new Map(allMaterialsForReport.map((m: any) => [m.id, m]));
-      const woById = new Map(allWO.map((w: any) => [w.id, w]));
+      const matById = new Map<number, any>(allMaterialsForReport.map((m: any) => [m.id, m]));
+      const woById = new Map<number, any>(allWO.map((w: any) => [w.id, w]));
       const requisitions = allWOM.map((m: any) => {
         const mat = matById.get(m.materialId);
         const wo = woById.get(m.workOrderId);

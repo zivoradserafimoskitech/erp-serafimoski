@@ -122,19 +122,20 @@ function SendDialog({ open, onOpenChange, from, to, report, settings, mailReady,
     try {
       setStep("Се прави Excel и PDF...");
       const [x, p] = await Promise.all([build.xlsx(), build.pdf()]);
-      const atts = [
-        { filename: `smetkovodstvo_${from}_${to}.pdf`, base64: await blobToBase64(p), contentType: "application/pdf" as const },
-        { filename: `smetkovodstvo_${from}_${to}.xlsx`, base64: await blobToBase64(x), contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" as const },
+      type Att = { filename: string; base64: string; contentType: "application/pdf" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" | "application/zip" };
+      const atts: Att[] = [
+        { filename: `smetkovodstvo_${from}_${to}.pdf`, base64: await blobToBase64(p), contentType: "application/pdf" },
+        { filename: `smetkovodstvo_${from}_${to}.xlsx`, base64: await blobToBase64(x), contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
       ];
       if (withZip) {
         setStep("Се собираат документите во ZIP...");
         // извештајот е веќе во прилог, па ZIP-от ги носи само документите; преголем ZIP не се праќа
         const z = await build.zip();
         if (z.size > 15 * 1048576) toast.warning(`ZIP-от е ${MB(z.size)} — преголем за е-пошта. Се праќаат само Excel и PDF; ZIP-от симни го со „Документи (ZIP)“.`);
-        else atts.push({ filename: `dokumenti_${from}_${to}.zip`, base64: await blobToBase64(z), contentType: "application/zip" as const });
+        else atts.push({ filename: `dokumenti_${from}_${to}.zip`, base64: await blobToBase64(z), contentType: "application/zip" });
       }
       setStep("Се праќа...");
-      await send.mutateAsync({ to: emails(toAddr), cc: cc ? emails(cc) : undefined, subject, body, period: { from, to }, attachments: atts as any });
+      await send.mutateAsync({ to: emails(toAddr), cc: cc ? emails(cc) : undefined, subject, body, period: { from, to }, attachments: atts });
       // адресата се памти за следниот пат
       const first = emails(toAddr)[0];
       if (first && first !== settings?.accountantEmail) saveEmail.mutateAsync({ email: first }).then(() => utils.settings.settingsGet.invalidate()).catch(() => {});

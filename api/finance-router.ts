@@ -108,7 +108,7 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
   }
 
   // 2б) Залиха на материјали: потрошено во производство, кусок/отпис, вишок (по набавна цена)
-  const moves = await q(`SELECT t.id, t.type, t.quantity, t.unit_cost, t.total_cost, t.reference, t.notes, t.created_at, t.source_doc_type,
+  const moves = await q(`SELECT t.id, t.type, t.quantity, t.unit_cost, t.total_cost, t.reference, t.notes, t.created_at, t.source_doc_type, t.material_id,
       m.code, m.name, m.unit, m.avg_cost
     FROM inventory_transactions t LEFT JOIN materials m ON m.id = t.material_id
     WHERE t.type IN ('issue', 'scrap', 'adjustment') AND COALESCE(t.reference, '') <> 'Почетна залиха'`);
@@ -131,7 +131,7 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
     if (!lines.length) continue;
     const label = kind === "consume" ? "Потрошен материјал" : kind === "shortage" ? "Кусок/отпис" : "Вишок";
     // „Потрошен материјал: Лим 2мм — 50 kg · РН-001“ (количината секогаш позитивна, насоката е во зборот)
-    const what = t.name || t.code || "материјал";
+    const what = t.name || t.code || `избришан материјал #${t.material_id}`;
     const q3 = Math.abs(qty).toLocaleString("mk-MK", { maximumFractionDigits: 3 });
     desired.push({ sourceType: "stock_move", sourceId: t.id, date: iso(t.created_at),
       description: `${label}: ${what} — ${q3}${t.unit ? " " + t.unit : ""}${t.reference ? " · " + t.reference : ""}`, lines });
@@ -469,13 +469,48 @@ export const financeRouter = createRouter({
       const entries = await q(`SELECT e.* FROM gl_entries e WHERE ${where} ORDER BY e.entry_date DESC, e.id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
       const ids = entries.map(e => e.id);
       const lines = ids.length ? await q(`SELECT l.*, a.name AS account_name FROM gl_lines l LEFT JOIN gl_accounts a ON a.code = l.account_code WHERE l.entry_id = ANY($1) ORDER BY l.id`, [ids]) : [];
+      // Од каде е налогот: за залиха -- самото движење (материјал, количина, цена, налог), за другите -- документот
+      const moveIds = entries.filter(e => e.source_type === "stock_move" && e.source_id != null).map(e => Number(e.source_id));
+      const moves = moveIds.length ? await q(`SELECT t.id, t.type, t.quantity, t.unit_cost, t.total_cost, t.reference, t.notes, t.created_at,
+          t.material_id, t.source_doc_type, t.source_doc_id, m.id AS mid, m.code, m.name, m.unit, w.wo_number, u.name AS user_name
+        FROM inventory_transactions t LEFT JOIN materials m ON m.id = t.material_id
+        LEFT JOIN work_orders w ON t.source_doc_type = 'work_order' AND w.id = t.source_doc_id
+        LEFT JOIN app_users u ON u.id = t.created_by
+        WHERE t.id = ANY($1)`, [moveIds]).catch(() => [] as any[]) : [];
+      const moveById = new Map(moves.map((m: any) => [Number(m.id), m]));
+      const MOVE_KIND: Record<string, string> = { issue: "Издавање од магацин", scrap: "Отпис / кусок", adjustment: "Корекција на залиха" };
+      const sourceOf = (e: any) => {
+        if (e.source_type !== "stock_move") return null;
+        const m: any = moveById.get(Number(e.source_id));
+        if (!m) return { kind: "stock", missing: true, text: "Движењето на залиха повеќе не постои" };
+        return {
+          kind: "stock", missing: false, moveId: Number(m.id), orphan: m.mid == null, materialId: Number(m.material_id),
+          text: [MOVE_KIND[m.type] ?? m.type, m.mid == null ? `избришан материјал (#${m.material_id})` : `${m.code ? m.code + " " : ""}${m.name}`,
+            `${Math.abs(Number(m.quantity)).toLocaleString("mk-MK", { maximumFractionDigits: 3 })}${m.unit ? " " + m.unit : ""} × ${Number(m.unit_cost || 0).toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ден`,
+            m.wo_number ? `налог ${m.wo_number}` : m.reference || null, m.user_name ? `внел ${m.user_name}` : null, iso(m.created_at).split("-").reverse().join(".")].filter(Boolean).join(" · "),
+          workOrderId: m.source_doc_type === "work_order" && m.source_doc_id ? Number(m.source_doc_id) : null,
+        };
+      };
       return {
         total,
         entries: entries.map(e => ({
           id: Number(e.id), number: e.entry_number, date: iso(e.entry_date), description: e.description, sourceType: e.source_type, sourceId: e.source_id == null ? null : Number(e.source_id),
+          source: sourceOf(e),
           lines: lines.filter(l => Number(l.entry_id) === Number(e.id)).map(l => ({ account: l.account_code, accountName: l.account_name, debit: Number(l.debit), credit: Number(l.credit), description: l.description })),
         })),
       };
+    }),
+
+  // Движење на залиха чиј материјал е избришан (најчесто проба): се отстранува, а со него и налогот
+  orphanStockMoveDelete: publicQuery
+    .input(z.object({ moveId: z.number() }))
+    .mutation(async ({ input }) => {
+      const r = (await q(`SELECT t.id, m.id AS mid FROM inventory_transactions t LEFT JOIN materials m ON m.id = t.material_id WHERE t.id = $1`, [input.moveId]))[0];
+      if (!r) throw new TRPCError({ code: "NOT_FOUND", message: "Движењето не постои" });
+      if (r.mid != null) throw new TRPCError({ code: "BAD_REQUEST", message: "Материјалот постои — ова движење е вистинско и не се брише одовде. Исправи го преку Склад." });
+      await q(`DELETE FROM inventory_transactions WHERE id = $1`, [input.moveId]);
+      const sync = await syncLedger();
+      return { success: true, removed: sync.removed };
     }),
 
   manualEntryCreate: publicQuery
