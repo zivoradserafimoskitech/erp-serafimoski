@@ -25,7 +25,7 @@ import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
   Receipt, Truck, ArrowUpRight, ArrowDownLeft, Calculator,
   Radio, RefreshCw, Send, SearchIcon, Upload, Building2, Zap,
-  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck, Landmark,
+  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck, Landmark, FileSpreadsheet, Loader2,
 } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
@@ -58,14 +58,13 @@ const dnStatus: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "Откажан", cls: "bg-gray-100 text-gray-500" },
 };
 
-// ===== CSV EXPORT =====
-function exportCSV(filename: string, headers: string[], rows: string[][]) {
-  const csv = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+// Брз избор на период за извештајот (локален датум, не UTC)
+const ymdLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function periodPreset(kind: "month" | "prev" | "year") {
+  const now = new Date();
+  if (kind === "prev") return { startDate: ymdLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1)), endDate: ymdLocal(new Date(now.getFullYear(), now.getMonth(), 0)) };
+  if (kind === "year") return { startDate: `${now.getFullYear()}-01-01`, endDate: ymdLocal(now) };
+  return { startDate: ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1)), endDate: ymdLocal(now) };
 }
 
 export default function Accounting() {
@@ -134,7 +133,7 @@ export default function Accounting() {
   const [certDn, setCertDn] = useState<any>(null);
   const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string; productId?: number; materialId?: number; weightPerUnit?: number; itemType?: "product" | "material" | "manual" }[]>([]);
   const { data: materialsData } = trpc.storage.materialList.useQuery({});
-  const [reportPeriod, setReportPeriod] = useState({ startDate: "", endDate: "" });
+  const [reportPeriod, setReportPeriod] = useState(() => periodPreset("month"));
 
   // Products & services for invoicing
   const { data: productsForInvoice } = trpc.accounting.productListForInvoice.useQuery();
@@ -160,6 +159,25 @@ export default function Accounting() {
   const [reportData, setReportData] = useState<any>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  // Едно копче: сите листови (КИФ, КУФ, налози, бруто биланс, приемници...) во еден Excel
+  const [xlsxBusy, setXlsxBusy] = useState(false);
+  const exportXlsx = async () => {
+    if (!reportData) return;
+    setXlsxBusy(true);
+    try {
+      const { exportAccountantXlsx } = await import("@/lib/accountant-export");
+      const p = { from: reportPeriod.startDate, to: reportPeriod.endDate };
+      await exportAccountantXlsx(reportData, p.from, p.to, companySettings?.name, {
+        vatBooks: (i) => utils.finance.vatBooks.fetch(i),
+        trialBalance: (i) => utils.finance.trialBalance.fetch(i),
+        journalList: (i) => utils.finance.journalList.fetch(i),
+      });
+      toast.success("Excel е симнат");
+    } catch (e: any) {
+      toast.error(`Excel не е направен: ${e?.message ?? e}`);
+    } finally { setXlsxBusy(false); }
+  };
+
   const handleGenerateReport = async () => {
     if (!reportPeriod.startDate || !reportPeriod.endDate) {
       toast.error("Изберете ги двете датуми");
@@ -613,6 +631,11 @@ export default function Accounting() {
                   <div className="space-y-2"><Label>Од датум</Label><DateInput value={reportPeriod.startDate} onChange={(e) => setReportPeriod({ ...reportPeriod, startDate: e.target.value })} /></div>
                   <div className="space-y-2"><Label>До датум</Label><DateInput value={reportPeriod.endDate} onChange={(e) => setReportPeriod({ ...reportPeriod, endDate: e.target.value })} /></div>
                 </div>
+                <div className="flex flex-wrap gap-1">
+                  {([["month", "Овој месец"], ["prev", "Претходен месец"], ["year", "Оваа година"]] as const).map(([k, l]) => (
+                    <Button key={k} type="button" size="sm" variant="ghost" className="h-8" onClick={() => { setReportPeriod(periodPreset(k)); setReportData(null); }}>{l}</Button>
+                  ))}
+                </div>
                 <div className="flex gap-2">
                   <Button
                     variant="default"
@@ -622,7 +645,9 @@ export default function Accounting() {
                   >
                     {reportLoading ? "Се генерира..." : <><Calculator className="h-4 w-4 mr-2" />Генерирај извештај</>}
                   </Button>
-                  {reportData && <Button variant="outline" onClick={() => printAccountantReport(reportData, reportPeriod, companySettings)}><FileText className="h-4 w-4 mr-2" />Печати извештај / PDF</Button>}
+                  {reportData && <Button variant="outline" className="border-emerald-300 text-emerald-800 hover:bg-emerald-50" disabled={xlsxBusy} onClick={exportXlsx}>
+                    {xlsxBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}Excel за сметководство</Button>}
+                  {reportData && <Button variant="outline" onClick={() => printAccountantReport(reportData, reportPeriod, companySettings)}><FileText className="h-4 w-4 mr-2" />Печати / PDF</Button>}
                 </div>
                 {reportError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 space-y-2">
@@ -646,16 +671,13 @@ export default function Accounting() {
                   const mkd = (n: any) => Number(n ?? 0).toLocaleString("mk-MK");
                   const dt = (d: any) => d ? formatDate(d) : "";
 
-                  const Section = ({ title, count, total, headers, rows, onExport, color }: any) => (
+                  const Section = ({ title, count, total, headers, rows, color }: any) => (
                     <div className="border rounded-lg overflow-hidden">
                       <div className={`flex items-center justify-between px-4 py-2.5 ${color}`}>
                         <div>
                           <span className="font-semibold text-gray-800">{title}</span>
                           <span className="text-sm text-gray-500 ml-2">{count} · {mkd(total)} ден.</span>
                         </div>
-                        <Button size="sm" variant="outline" className="bg-white" onClick={onExport} disabled={count === 0}>
-                          <Download className="h-3.5 w-3.5 mr-1" />CSV
-                        </Button>
                       </div>
                       <div className="max-h-52 overflow-y-auto">
                         <Table>
@@ -681,30 +703,27 @@ export default function Accounting() {
                         <Card className="bg-orange-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Требовања</p><p className="text-lg font-bold text-orange-700">{req.length} · {mkd(reportData.totalRequisitionCost)}</p></CardContent></Card>
                       </div>
                       <div className="bg-gray-100 p-3 rounded-lg text-center">
-                        <span className="text-gray-600">ДДВ салдо: </span>
-                        <span className="font-bold text-lg">{mkd(reportData.vatRecapitulation.vatBalance)} ден.</span>
+                        {(() => { const b = Number(reportData.vatRecapitulation.vatBalance); return (<>
+                          <span className="text-gray-600">{b > 0 ? "ДДВ за плаќање" : b < 0 ? "ДДВ за поврат" : "ДДВ салдо"}: </span>
+                          <span className="font-bold text-lg">{mkd(Math.abs(b))} ден.</span>
+                          <span className="text-xs text-gray-500 ml-2">(излезен {mkd(reportData.vatRecapitulation.outgoingVat)} − влезен {mkd(reportData.vatRecapitulation.incomingVat)})</span>
+                        </>); })()}
                       </div>
 
                       {/* Излезни фактури */}
                       <Section title="Излезни фактури" count={reportData.outgoing.count} total={reportData.outgoing.total} color="bg-blue-50/60"
-                        headers={["Број", "Клиент", "Датум", "Основица", "ДДВ", "Вкупно"]}
+                        headers={["Број", "Клиент", "Датум", "Основица (ден)", "ДДВ (ден)", "Вкупно (ден)"]}
                         rows={reportData.outgoing.items.map((i: any) => (
-                          <TableRow key={i.id}><TableCell className="font-mono text-xs">{i.invoiceNumber}</TableCell><TableCell className="text-sm">{i.customerName ?? ""}</TableCell><TableCell className="text-sm">{dt(i.issueDate)}</TableCell><TableCell className="text-sm text-right">{mkd(i.subtotal)}</TableCell><TableCell className="text-sm text-right">{mkd(i.vatAmount)}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(i.totalAmount)}</TableCell></TableRow>
+                          <TableRow key={i.id}><TableCell className="font-mono text-xs">{i.invoiceNumber}</TableCell><TableCell className="text-sm">{i.customerName ?? ""}</TableCell><TableCell className="text-sm">{dt(i.issueDate)}</TableCell><TableCell className="text-sm text-right">{mkd(i.baseMkd)}</TableCell><TableCell className="text-sm text-right">{mkd(i.vatMkd)}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(i.totalMkd)}</TableCell></TableRow>
                         ))}
-                        onExport={() => exportCSV(`излезни-фактури_${reportData.period.start}_${reportData.period.end}.csv`,
-                          ["Број", "Клиент", "Датум", "Основица", "ДДВ", "Вкупно"],
-                          reportData.outgoing.items.map((i: any) => [i.invoiceNumber, i.customerName ?? "", dt(i.issueDate), i.subtotal, i.vatAmount, i.totalAmount]))}
                       />
 
                       {/* Влезни фактури */}
                       <Section title="Влезни фактури" count={reportData.incoming.count} total={reportData.incoming.total} color="bg-emerald-50/60"
-                        headers={["Број", "Добавувач", "Датум прием", "Основица", "ДДВ", "Вкупно"]}
+                        headers={["Број", "Добавувач", "Датум", "Основица (ден)", "ДДВ (ден)", "Вкупно (ден)"]}
                         rows={reportData.incoming.items.map((i: any) => (
-                          <TableRow key={i.id}><TableCell className="font-mono text-xs">{i.supplierInvoiceNumber}</TableCell><TableCell className="text-sm">{i.supplierName ?? ""}</TableCell><TableCell className="text-sm">{dt(i.receivedDate)}</TableCell><TableCell className="text-sm text-right">{mkd(i.subtotal)}</TableCell><TableCell className="text-sm text-right">{mkd(i.vatAmount)}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(i.totalAmount)}</TableCell></TableRow>
+                          <TableRow key={i.id}><TableCell className="font-mono text-xs">{i.supplierInvoiceNumber}</TableCell><TableCell className="text-sm">{i.supplierName ?? ""}</TableCell><TableCell className="text-sm">{dt(i.issueDate ?? i.receivedDate)}</TableCell><TableCell className="text-sm text-right">{mkd(i.baseMkd)}</TableCell><TableCell className="text-sm text-right">{mkd(i.vatMkd)}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(i.totalMkd)}</TableCell></TableRow>
                         ))}
-                        onExport={() => exportCSV(`влезни-фактури_${reportData.period.start}_${reportData.period.end}.csv`,
-                          ["Број", "Добавувач", "Датум прием", "Основица", "ДДВ", "Вкупно"],
-                          reportData.incoming.items.map((i: any) => [i.supplierInvoiceNumber, i.supplierName ?? "", dt(i.receivedDate), i.subtotal, i.vatAmount, i.totalAmount]))}
                       />
 
                       {/* Работни налози */}
@@ -713,9 +732,6 @@ export default function Accounting() {
                         rows={wo.map((w: any) => (
                           <TableRow key={w.id}><TableCell className="font-mono text-xs">{w.woNumber}</TableCell><TableCell className="text-sm">{dt(w.createdAt)}</TableCell><TableCell className="text-sm">{w.description ?? ""}</TableCell><TableCell className="text-sm">{w.status ?? ""}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(w.costAmount)}</TableCell></TableRow>
                         ))}
-                        onExport={() => exportCSV(`работни-налози_${reportData.period.start}_${reportData.period.end}.csv`,
-                          ["Број", "Датум", "Опис", "Статус", "Трошок"],
-                          wo.map((w: any) => [w.woNumber, dt(w.createdAt), w.description ?? "", w.status ?? "", w.costAmount]))}
                       />
 
                       {/* Требовања */}
@@ -724,9 +740,6 @@ export default function Accounting() {
                         rows={req.map((r: any, n: number) => (
                           <TableRow key={n}><TableCell className="font-mono text-xs">{r.workOrderNumber}</TableCell><TableCell className="text-sm">{r.materialName}</TableCell><TableCell className="text-sm text-right">{r.quantity} {r.unit}</TableCell><TableCell className="text-sm text-right">{mkd(r.unitCost)}</TableCell><TableCell className="text-sm text-right font-medium">{mkd(r.totalCost)}</TableCell></TableRow>
                         ))}
-                        onExport={() => exportCSV(`требовања_${reportData.period.start}_${reportData.period.end}.csv`,
-                          ["Раб. налог", "Материјал", "Количина", "Единица", "Цена", "Вкупно"],
-                          req.map((r: any) => [r.workOrderNumber, r.materialName, r.quantity, r.unit, r.unitCost, r.totalCost]))}
                       />
                     </div>
                   );

@@ -692,10 +692,10 @@ export function printAccountantReport(rep: any, period: { startDate: string; end
       <tbody>${rows || `<tr><td colspan="${heads.length}" class="c empty">Нема записи во периодот</td></tr>`}${totalRow}</tbody></table>
     </div>`;
 
-  const out = outItems.map((i, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(i.invoiceNumber)}</td><td>${dt(i.issueDate)}</td><td class="r">${den(i.subtotal)}</td><td class="r">${den(i.vatAmount)}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
+  const out = outItems.map((i, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(i.invoiceNumber)}</td><td>${dt(i.issueDate)}</td><td class="r">${den(i.baseMkd ?? i.subtotal)}</td><td class="r">${den(i.vatMkd ?? i.vatAmount)}</td><td class="r"><b>${den(i.totalMkd ?? i.totalAmount)}</b></td></tr>`).join("");
   const outTotal = outItems.length ? `<tr class="sumrow"><td colspan="3">Вкупно излезни (${outItems.length})</td><td class="r">${den(rep?.outgoing?.totalBase)}</td><td class="r">${den(rep?.outgoing?.totalVat)}</td><td class="r">${den(rep?.outgoing?.total)}</td></tr>` : "";
 
-  const inc = incItems.map((i, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(i.supplierInvoiceNumber ?? i.invoiceNumber ?? "")}</td><td>${dt(i.receivedDate)}</td><td class="r">${den(i.subtotal)}</td><td class="r">${den(i.vatAmount)}</td><td class="r"><b>${den(i.totalAmount)}</b></td></tr>`).join("");
+  const inc = incItems.map((i, n) => `<tr><td class="c dim">${String(n + 1).padStart(2, "0")}</td><td class="mono">${esc(i.supplierInvoiceNumber ?? i.invoiceNumber ?? "")}</td><td>${dt(i.issueDate ?? i.receivedDate)}</td><td class="r">${den(i.baseMkd ?? i.subtotal)}</td><td class="r">${den(i.vatMkd ?? i.vatAmount)}</td><td class="r"><b>${den(i.totalMkd ?? i.totalAmount)}</b></td></tr>`).join("");
   const incTotal = incItems.length ? `<tr class="sumrow"><td colspan="3">Вкупно влезни (${incItems.length})</td><td class="r">${den(rep?.incoming?.totalBase)}</td><td class="r">${den(rep?.incoming?.totalVat)}</td><td class="r">${den(rep?.incoming?.total)}</td></tr>` : "";
 
   const vatRows = Object.entries(vatGroups).map(([rate, g]) => `<tr><td>ДДВ ${esc(rate)}%</td><td class="r">${den(g.base)}</td><td class="r"><b>${den(g.vat)}</b></td></tr>`).join("");
