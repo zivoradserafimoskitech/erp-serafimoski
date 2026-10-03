@@ -136,3 +136,22 @@ export async function refreshAllPaymentStatuses() {
   }
   return changed;
 }
+
+/**
+ * Салда по партнер од рачните налози (налог/терк на 12x купувачи или 22x добавувачи со избран партнер).
+ * Купувач: должи − побарува (тој ни должи); добавувач: побарува − должи (ние му должиме).
+ */
+export async function manualPartnerBalances(): Promise<{ customers: Map<number, number>; suppliers: Map<number, number> }> {
+  const rows = (await getPool().query(`SELECT l.partner_type, l.partner_id, SUM(l.debit - l.credit) AS net
+    FROM gl_lines l JOIN gl_entries e ON e.id = l.entry_id
+    WHERE e.source_type = 'manual' AND l.partner_id IS NOT NULL AND (l.account_code LIKE '12%' OR l.account_code LIKE '22%')
+    GROUP BY 1, 2`).catch(() => ({ rows: [] as any[] }))).rows as any[];
+  const customers = new Map<number, number>(), suppliers = new Map<number, number>();
+  for (const r of rows) {
+    const net = round2(Number(r.net));
+    if (!net) continue;
+    if (r.partner_type === "customer") customers.set(Number(r.partner_id), net);
+    else if (r.partner_type === "supplier") suppliers.set(Number(r.partner_id), -net);
+  }
+  return { customers, suppliers };
+}

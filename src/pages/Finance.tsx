@@ -14,7 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { downloadTableXlsx } from "@/lib/xlsx";
-import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp } from "lucide-react";
+import TerkTab, { TerkEditor, useAccountItems } from "@/components/TerkTab";
+import SearchPick from "@/components/SearchPick";
+import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -69,7 +71,6 @@ function JournalTab() {
   const [page, setPage] = useState(0);
   const [manualOpen, setManualOpen] = useState(false);
   const { data, isLoading } = trpc.finance.journalList.useQuery({ from, to, search: search || undefined, limit: 50, offset: page * 50 });
-  const { data: accounts } = trpc.finance.accountsList.useQuery();
   const sync = trpc.finance.ledgerSync.useMutation({
     onSuccess: (r) => {
       utils.finance.invalidate();
@@ -94,13 +95,45 @@ function JournalTab() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Нов налог: од терк (конта и страна се зададени, се пишуваат само износи) или слободно
+  type MLine = { account: string; debit: string; credit: string; side?: "D" | "P"; note?: string; partnerId?: number | null };
+  const emptyLines = (): MLine[] => [{ account: "", debit: "", credit: "" }, { account: "", debit: "", credit: "" }];
   const [mDate, setMDate] = useState(today());
   const [mDesc, setMDesc] = useState("");
-  const [mLines, setMLines] = useState([{ account: "", debit: "", credit: "" }, { account: "", debit: "", credit: "" }]);
+  const [mLines, setMLines] = useState<MLine[]>(emptyLines());
+  const [mTerk, setMTerk] = useState<string>("none");
+  const [terkDraft, setTerkDraft] = useState<any>(null);
+  const { data: terks } = trpc.finance.terkList.useQuery();
+  const accountItems = useAccountItems();
+  // Партнер на конта на купувачи (12…) и добавувачи (22…): налогот се гледа во салдото на тој партнер
+  const { data: partners } = trpc.ops.qualityLinkOptions.useQuery(undefined, { enabled: manualOpen });
+  const { data: rulesList } = trpc.finance.postingRulesGet.useQuery(undefined, { enabled: manualOpen });
+  const mainPartnerAcc = new Set((rulesList ?? []).filter(r => /^(customers|suppliers)_/.test(r.key)).map(r => r.accountCode));
+  const partnerKind = (acc: string): "customer" | "supplier" | null => acc.startsWith("12") ? "customer" : acc.startsWith("22") ? "supplier" : null;
+  const partnerItems = (k: "customer" | "supplier") => (k === "customer" ? partners?.customers : partners?.suppliers)?.map(x => ({ id: x.id, label: x.name })) ?? [];
+  const missingPartner = mLines.some(l => mainPartnerAcc.has(l.account) && !l.partnerId && (parseFloat(l.debit) || parseFloat(l.credit)));
+  const terk = terks?.find(t => String(t.id) === mTerk);
+  const pickTerk = (v: string) => {
+    setMTerk(v);
+    const t = terks?.find(x => String(x.id) === v);
+    if (!t) { setMLines(emptyLines()); return; }
+    setMLines(t.lines.map(l => ({ account: l.account, debit: "", credit: "", side: l.side, note: l.note })));
+    if (!mDesc.trim() || terks?.some(x => x.name === mDesc)) setMDesc(t.name);
+  };
   const dSum = mLines.reduce((a, l) => a + (parseFloat(l.debit) || 0), 0);
   const cSum = mLines.reduce((a, l) => a + (parseFloat(l.credit) || 0), 0);
+  const diff = Math.round((dSum - cSum) * 100) / 100;
+  // „Дополни разлика“: разликата оди во првиот празен ред на страната што фали
+  const fillDiff = () => {
+    const need: "D" | "P" = diff > 0 ? "P" : "D";
+    const i = mLines.findIndex(l => !(parseFloat(l.debit) || parseFloat(l.credit)) && (l.side ? l.side === need : !!l.account));
+    if (i < 0) { toast.info(`Нема празен ред на ${need === "D" ? "Должи" : "Побарува"} за разликата`); return; }
+    const v = Math.abs(diff).toFixed(2);
+    setMLines(mLines.map((l, j) => j === i ? { ...l, debit: need === "D" ? v : "", credit: need === "P" ? v : "" } : l));
+  };
+  const resetManual = () => { setMDesc(""); setMLines(emptyLines()); setMTerk("none"); };
   const manual = trpc.finance.manualEntryCreate.useMutation({
-    onSuccess: (r) => { toast.success(`Внесен налог ${r.number}`); setManualOpen(false); setMDesc(""); setMLines([{ account: "", debit: "", credit: "" }, { account: "", debit: "", credit: "" }]); utils.finance.invalidate(); },
+    onSuccess: (r) => { toast.success(`Внесен налог ${r.number}`); setManualOpen(false); resetManual(); utils.finance.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -111,7 +144,7 @@ function JournalTab() {
         <div className="flex gap-2">
           <Input placeholder="Пребарај..." className="h-9 w-48" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
           <Button size="sm" variant="outline" className="h-9" onClick={() => sync.mutate()} disabled={sync.isPending || !canPost}><RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${sync.isPending ? "animate-spin" : ""}`} />Книжи документи</Button>
-          <Button size="sm" className="h-9 bg-amber-500 hover:bg-amber-600" onClick={() => setManualOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Рачен налог</Button>
+          <Button size="sm" className="h-9 bg-amber-500 hover:bg-amber-600" onClick={() => setManualOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Нов налог</Button>
         </div>
       </div>
 
@@ -134,6 +167,7 @@ function JournalTab() {
                 <span className="font-mono text-xs font-semibold text-gray-700">{e.number}</span>
                 <span className="text-xs text-gray-400">{fmtDate(e.date)}</span>
                 <Badge variant="outline" className="text-[10px] font-normal">{SOURCE_LBL[e.sourceType] ?? e.sourceType}</Badge>
+                {(e as any).templateName && <Badge variant="outline" className="text-[10px] font-normal border-amber-300 text-amber-800">терк: {(e as any).templateName}</Badge>}
                 <span className="text-sm text-gray-700 flex-1 truncate">{e.description}</span>
                 {(() => { const href = e.sourceId != null ? SOURCE_HREF[e.sourceType]?.(e.sourceId, (e as any).source) : ""; return href ? (
                   <button className="text-xs text-amber-700 hover:underline whitespace-nowrap" onClick={() => navigate(href)}>Отвори документ →</button>) : null; })()}
@@ -159,7 +193,7 @@ function JournalTab() {
                 {e.lines.map((l, i) => (
                   <div key={i} className="contents">
                     <span className="font-mono text-gray-600">{l.account}</span>
-                    <span className="text-gray-500 truncate">{l.accountName}</span>
+                    <span className="text-gray-500 truncate">{l.accountName}{(l as any).partner ? <span className="text-gray-700"> · {(l as any).partner}</span> : null}</span>
                     <span className="text-right tabular-nums">{l.debit ? fmt(l.debit) : ""}</span>
                     <span className="text-right tabular-nums">{l.credit ? fmt(l.credit) : ""}</span>
                   </div>
@@ -178,35 +212,77 @@ function JournalTab() {
 
       <Dialog open={manualOpen} onOpenChange={setManualOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>Рачен налог за книжење</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Нов налог за книжење</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-1">
+              <Label className="text-xs">Терк (шема на книжење)</Label>
+              <div className="flex gap-2">
+                <Select value={mTerk} onValueChange={pickTerk}>
+                  <SelectTrigger className="bg-white"><SelectValue placeholder="Избери терк" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— без терк (слободно внесување) —</SelectItem>
+                    {terks?.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[11px] text-gray-500">{terk ? (terk.description || "Контата и страните се од теркот — пополни ги само износите.") : terks?.length ? "Избери терк и ќе ги пополниш само износите." : "Нема зачувани терк-ови — направи во табот „Терк“, или внеси слободно и кликни „Зачувај како терк“."}</p>
+            </div>
             <div className="grid grid-cols-[10rem_1fr] gap-3">
               <div className="space-y-1"><Label className="text-xs">Датум</Label><DateInput value={mDate} onChange={(e) => setMDate(e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Опис</Label><Input value={mDesc} onChange={(e) => setMDesc(e.target.value)} placeholder="на пр. Почетна состојба, пресметка на камата..." /></div>
             </div>
             <div className="grid grid-cols-[1fr_8rem_8rem_2rem] gap-2 text-xs text-gray-500 font-medium"><span>Конто</span><span className="text-right">Должи</span><span className="text-right">Побарува</span><span /></div>
-            {mLines.map((l, i) => (
-              <div key={i} className="grid grid-cols-[1fr_8rem_8rem_2rem] gap-2">
-                <Select value={l.account} onValueChange={(v) => setMLines(mLines.map((x, j) => j === i ? { ...x, account: v } : x))}>
-                  <SelectTrigger><SelectValue placeholder="Избери конто" /></SelectTrigger>
-                  <SelectContent>{accounts?.map(a => <SelectItem key={a.code} value={a.code}>{a.code} — {a.name}</SelectItem>)}</SelectContent>
-                </Select>
-                <Input type="number" className="text-right" value={l.debit} onChange={(e) => setMLines(mLines.map((x, j) => j === i ? { ...x, debit: e.target.value, credit: e.target.value ? "" : x.credit } : x))} />
-                <Input type="number" className="text-right" value={l.credit} onChange={(e) => setMLines(mLines.map((x, j) => j === i ? { ...x, credit: e.target.value, debit: e.target.value ? "" : x.debit } : x))} />
+            {mLines.map((l, i) => {
+              const set = (p: Partial<MLine>) => setMLines(mLines.map((x, j) => j === i ? { ...x, ...p } : x));
+              return (
+              <div key={i} className="grid grid-cols-[1fr_8rem_8rem_2rem] gap-2 items-start">
+                <div className="min-w-0">
+                  {l.side ? (
+                    <div className="h-9 flex items-center gap-2 rounded-md border bg-gray-50 px-3 text-sm truncate" title="Од теркот">
+                      <span className="font-mono font-medium">{l.account}</span><span className="text-gray-500 truncate">{accountItems.find(a => a.id === l.account)?.sub}</span></div>
+                  ) : (
+                    <SearchPick<string> items={accountItems} value={l.account || null} onChange={(v) => set({ account: v ?? "", partnerId: partnerKind(v ?? "") === partnerKind(l.account) ? l.partnerId : null })} placeholder="Избери конто" clearable={false} />
+                  )}
+                  {l.note && <p className="text-[11px] text-gray-500 mt-0.5 px-1">{l.note}</p>}
+                  {partnerKind(l.account) && (
+                    <div className="mt-1">
+                      <SearchPick items={partnerItems(partnerKind(l.account)!)} value={l.partnerId ?? null} onChange={(v) => set({ partnerId: v })}
+                        placeholder={`${partnerKind(l.account) === "customer" ? "Купувач" : "Добавувач"}${mainPartnerAcc.has(l.account) ? " *" : " (не е задолжително)"}`} />
+                    </div>
+                  )}
+                </div>
+                {l.side === "P" ? <div className="h-9 rounded-md border border-dashed bg-gray-50" /> :
+                  <Input type="number" min="0" step="0.01" className="text-right" autoFocus={!!l.side && i === 0} value={l.debit} placeholder={l.side === "D" ? "износ" : ""}
+                    onChange={(e) => set({ debit: e.target.value, credit: e.target.value && !l.side ? "" : l.credit })} />}
+                {l.side === "D" ? <div className="h-9 rounded-md border border-dashed bg-gray-50" /> :
+                  <Input type="number" min="0" step="0.01" className="text-right" value={l.credit} placeholder={l.side === "P" ? "износ" : ""}
+                    onChange={(e) => set({ credit: e.target.value, debit: e.target.value && !l.side ? "" : l.debit })} />}
                 <Button size="sm" variant="ghost" className="h-9 w-8 p-0 text-gray-400" disabled={mLines.length <= 2} onClick={() => setMLines(mLines.filter((_, j) => j !== i))}>×</Button>
+              </div>); })}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-1">
+                <Button size="sm" variant="ghost" onClick={() => setMLines([...mLines, { account: "", debit: "", credit: "" }])}><Plus className="h-3.5 w-3.5 mr-1" />Ред</Button>
+                {Math.abs(diff) >= 0.005 && <Button size="sm" variant="ghost" className="text-amber-700" onClick={fillDiff}>Дополни разлика ({fmt(Math.abs(diff))})</Button>}
+                {mLines.filter(l => l.account).length >= 2 && (
+                  <Button size="sm" variant="ghost" onClick={() => setTerkDraft({ id: terk?.id, name: terk?.name ?? mDesc, description: terk?.description ?? "",
+                    lines: mLines.filter(l => l.account).map(l => ({ account: l.account, side: l.side ?? (parseFloat(l.credit) ? "P" : "D"), note: l.note ?? "" })) })}>
+                    {terk ? "Измени го теркот" : "Зачувај како терк"}</Button>
+                )}
               </div>
-            ))}
-            <div className="flex items-center justify-between">
-              <Button size="sm" variant="ghost" onClick={() => setMLines([...mLines, { account: "", debit: "", credit: "" }])}><Plus className="h-3.5 w-3.5 mr-1" />Ред</Button>
-              <span className={`text-sm tabular-nums ${Math.abs(dSum - cSum) < 0.005 && dSum > 0 ? "text-emerald-700" : "text-red-600"}`}>Должи {fmt(dSum)} · Побарува {fmt(cSum)}</span>
+              <span className={`text-sm tabular-nums ${Math.abs(diff) < 0.005 && dSum > 0 ? "text-emerald-700" : "text-red-600"}`}>Должи {fmt(dSum)} · Побарува {fmt(cSum)}</span>
             </div>
-            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={manual.isPending || Math.abs(dSum - cSum) > 0.005 || dSum === 0 || mDesc.length < 2 || mLines.some(l => !l.account && (l.debit || l.credit))}
-              onClick={() => manual.mutate({ date: mDate, description: mDesc, lines: mLines.filter(l => l.account).map(l => ({ account: l.account, debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0 })) })}>
+            {missingPartner && <p className="text-xs text-amber-700">Избери купувач/добавувач на редот со конто на купувачи или добавувачи — така налогот влегува во неговото салдо.</p>}
+            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={manual.isPending || Math.abs(diff) > 0.005 || dSum === 0 || mDesc.length < 2 || missingPartner || mLines.some(l => !l.account && (l.debit || l.credit))}
+              onClick={() => manual.mutate({ date: mDate, description: mDesc, templateName: terk?.name,
+                lines: mLines.filter(l => l.account && ((parseFloat(l.debit) || 0) + (parseFloat(l.credit) || 0)) > 0)
+                  .map(l => ({ account: l.account, debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0, description: l.note || undefined,
+                    ...(l.partnerId && partnerKind(l.account) ? { partnerType: partnerKind(l.account)!, partnerId: l.partnerId } : {}) })) })}>
               Внеси налог
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+      <TerkEditor draft={terkDraft} onClose={() => setTerkDraft(null)} onSaved={(id) => { utils.finance.terkList.invalidate().then(() => setMTerk(String(id))); }} />
     </div>
   );
 }
@@ -734,7 +810,7 @@ function ProfitTab() {
 const FIN_GROUPS = [
   { label: "Пари", tabs: [{ key: "bank", label: "Банка", icon: Landmark }, { key: "cash", label: "Благајна", icon: Wallet }] },
   { label: "Извештаи", tabs: [{ key: "vat", label: "ДДВ", icon: Receipt }, { key: "profit", label: "Добивка по нарачка", icon: TrendingUp }] },
-  { label: "Главна книга", tabs: [{ key: "journal", label: "Налози", icon: BookOpen }, { key: "trial", label: "Бруто биланс", icon: Scale }, { key: "card", label: "Картица", icon: FileSpreadsheet }] },
+  { label: "Главна книга", tabs: [{ key: "journal", label: "Налози", icon: BookOpen }, { key: "terk", label: "Терк", icon: ListChecks }, { key: "trial", label: "Бруто биланс", icon: Scale }, { key: "card", label: "Картица", icon: FileSpreadsheet }] },
   { label: "Поставки", tabs: [{ key: "rates", label: "Курсна листа", icon: Coins }, { key: "chart", label: "Контен план", icon: ListTree }] },
 ];
 
@@ -765,6 +841,7 @@ export default function Finance() {
         <TabsContent value="bank" className="mt-4"><BankTab /></TabsContent>
         <TabsContent value="profit" className="mt-4"><ProfitTab /></TabsContent>
         <TabsContent value="journal" className="mt-4"><JournalTab /></TabsContent>
+        <TabsContent value="terk" className="mt-4"><TerkTab /></TabsContent>
         <TabsContent value="trial" className="mt-4"><TrialBalanceTab onOpenCard={(c) => { setCardCode(c); setTab("card"); }} /></TabsContent>
         <TabsContent value="card" className="mt-4"><AccountCardTab code={cardCode} setCode={setCardCode} /></TabsContent>
         <TabsContent value="vat" className="mt-4"><VatTab /></TabsContent>

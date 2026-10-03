@@ -6,7 +6,7 @@ import {
   quotations,
 } from "@db/schema";
 import { isLowStock } from "@contracts/stock";
-import { openDocs } from "./payment-status";
+import { openDocs, manualPartnerBalances } from "./payment-status";
 import { loadRates, iso } from "./rates-helper";
 import { toMkd } from "@contracts/finance";
 
@@ -69,8 +69,12 @@ export const dashboardRouter = createRouter({
     const totalInvoiced = booked.reduce((sum: number, i: any) => sum + iSign(i) * Math.abs(mkd(i.totalAmount, iCur(i), i.issueDate)), 0);
     // Отворени обврски/побарувања: вистинско салдо по плаќања (банка + благајна), во денари
     const open = await openDocs();
-    const totalPayables = open.filter(d => d.docType === "incoming_invoice").reduce((s, d) => s + d.openMkd, 0);
-    const totalReceivables = open.filter(d => d.docType === "invoice").reduce((s, d) => s + d.openMkd, 0);
+    // + салда од рачните налози со партнер (на пр. терк „Закупнина“ на 220 со избран добавувач)
+    const manual = await manualPartnerBalances();
+    const sumMap = (m: Map<number, number>) => [...m.values()].reduce((a, v) => a + v, 0);
+    const manualPayables = sumMap(manual.suppliers), manualReceivables = sumMap(manual.customers);
+    const totalPayables = open.filter(d => d.docType === "incoming_invoice").reduce((s, d) => s + d.openMkd, 0) + manualPayables;
+    const totalReceivables = open.filter(d => d.docType === "invoice").reduce((s, d) => s + d.openMkd, 0) + manualReceivables;
 
     // Customers
     const activeCustomers = allCustomers.filter((c) => c.isActive === "active").length;
@@ -117,6 +121,7 @@ export const dashboardRouter = createRouter({
         invoicedYear: Math.round(invoicedYear * 100) / 100, invoicedYearCount, invoicedNoRate,
         receivables: Math.round(totalReceivables * 100) / 100, receivablesCount,
         payables: Math.round(totalPayables * 100) / 100, payablesCount,
+        manualPayables: Math.round(manualPayables * 100) / 100, manualReceivables: Math.round(manualReceivables * 100) / 100,
         qualityOpen,
       },
       orders: {

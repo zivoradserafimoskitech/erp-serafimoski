@@ -3,7 +3,7 @@ import { eq, desc, and } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
-import { openDocs, refreshPaymentStatus, assertNoPayments, type OpenDoc } from "./payment-status";
+import { openDocs, refreshPaymentStatus, assertNoPayments, manualPartnerBalances, type OpenDoc } from "./payment-status";
 import { guessExpenseAccount, toMkd } from "@contracts/finance";
 import { loadRates, iso } from "./rates-helper";
 import { getDb, getPool } from "./queries/connection";
@@ -1067,8 +1067,11 @@ export const accountingRouter = createRouter({
       for (const d of list) { const g = m.get(d.partnerId) ?? { total: 0, count: 0 }; g.total += d.openMkd; g.count++; m.set(d.partnerId, g); }
       return Array.from(m, ([id, g]) => ({ [key]: id, total: Math.round(g.total * 100) / 100, count: g.count }));
     };
-    const payables = group(docs.filter(d => d.docType === "incoming_invoice"), "supplierId");
-    const receivables = group(docs.filter(d => d.docType === "invoice"), "customerId");
+    const manual = await manualPartnerBalances();
+    // рачните налози со партнер се додаваат како уште еден „документ“ кај тој партнер
+    const asDocs = (m: Map<number, number>, docType: "invoice" | "incoming_invoice") => [...m].map(([pid, v]) => ({ docType, partnerId: pid, openMkd: v } as OpenDoc));
+    const payables = group([...docs.filter(d => d.docType === "incoming_invoice"), ...asDocs(manual.suppliers, "incoming_invoice")], "supplierId");
+    const receivables = group([...docs.filter(d => d.docType === "invoice"), ...asDocs(manual.customers, "invoice")], "customerId");
     return {
       totalPayables: payables.reduce((s, p) => s + p.total, 0).toFixed(2),
       totalReceivables: receivables.reduce((s, r) => s + r.total, 0).toFixed(2),

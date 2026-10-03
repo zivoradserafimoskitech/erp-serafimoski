@@ -468,7 +468,11 @@ export const financeRouter = createRouter({
       params.push(input.limit, input.offset);
       const entries = await q(`SELECT e.* FROM gl_entries e WHERE ${where} ORDER BY e.entry_date DESC, e.id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
       const ids = entries.map(e => e.id);
-      const lines = ids.length ? await q(`SELECT l.*, a.name AS account_name FROM gl_lines l LEFT JOIN gl_accounts a ON a.code = l.account_code WHERE l.entry_id = ANY($1) ORDER BY l.id`, [ids]) : [];
+      const lines = ids.length ? await q(`SELECT l.*, a.name AS account_name, COALESCE(c.company, c.name, s.name) AS partner_name FROM gl_lines l
+        LEFT JOIN gl_accounts a ON a.code = l.account_code
+        LEFT JOIN customers c ON l.partner_type = 'customer' AND c.id = l.partner_id
+        LEFT JOIN suppliers s ON l.partner_type = 'supplier' AND s.id = l.partner_id
+        WHERE l.entry_id = ANY($1) ORDER BY l.id`, [ids]) : [];
       // Од каде е налогот: за залиха -- самото движење (материјал, количина, цена, налог), за другите -- документот
       const moveIds = entries.filter(e => e.source_type === "stock_move" && e.source_id != null).map(e => Number(e.source_id));
       const moves = moveIds.length ? await q(`SELECT t.id, t.type, t.quantity, t.unit_cost, t.total_cost, t.reference, t.notes, t.created_at,
@@ -495,8 +499,8 @@ export const financeRouter = createRouter({
         total,
         entries: entries.map(e => ({
           id: Number(e.id), number: e.entry_number, date: iso(e.entry_date), description: e.description, sourceType: e.source_type, sourceId: e.source_id == null ? null : Number(e.source_id),
-          source: sourceOf(e),
-          lines: lines.filter(l => Number(l.entry_id) === Number(e.id)).map(l => ({ account: l.account_code, accountName: l.account_name, debit: Number(l.debit), credit: Number(l.credit), description: l.description })),
+          source: sourceOf(e), templateName: (e.template_name ?? null) as string | null,
+          lines: lines.filter(l => Number(l.entry_id) === Number(e.id)).map(l => ({ account: l.account_code, accountName: l.account_name, debit: Number(l.debit), credit: Number(l.credit), description: l.description, partner: (l.partner_name ?? null) as string | null })),
         })),
       };
     }),
@@ -513,13 +517,91 @@ export const financeRouter = createRouter({
       return { success: true, removed: sync.removed };
     }),
 
+  // ===== ТЕРК: шеми на книжење (конта + страна, без износи) =====
+  terkList: publicQuery.query(async () => {
+    const t = await q(`SELECT id, name, description, updated_at FROM gl_templates ORDER BY lower(name)`);
+    const l = t.length ? await q(`SELECT tl.template_id, tl.account_code, tl.side, tl.note, a.name AS account_name
+      FROM gl_template_lines tl LEFT JOIN gl_accounts a ON a.code = tl.account_code ORDER BY tl.template_id, tl.position, tl.id`) : [];
+    return t.map(x => ({
+      id: Number(x.id), name: x.name as string, description: (x.description ?? "") as string, updatedAt: x.updated_at,
+      lines: l.filter(r => Number(r.template_id) === Number(x.id)).map(r => ({ account: r.account_code as string, accountName: (r.account_name ?? "") as string, side: r.side as "D" | "P", note: (r.note ?? "") as string })),
+    }));
+  }),
+
+  terkSave: publicQuery
+    .input(z.object({
+      id: z.number().optional(),
+      name: z.string().trim().min(2, "Внеси назив на теркот").max(120),
+      description: z.string().max(2000).optional(),
+      lines: z.array(z.object({ account: z.string().min(1), side: z.enum(["D", "P"]), note: z.string().max(200).optional() })).min(2, "Теркот треба најмалку два реда"),
+    }))
+    .mutation(async ({ input }) => {
+      if (!input.lines.some(l => l.side === "D") || !input.lines.some(l => l.side === "P"))
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Теркот треба да има барем едно конто на Должи и едно на Побарува" });
+      const codes = [...new Set(input.lines.map(l => l.account))];
+      const ex = await q(`SELECT code FROM gl_accounts WHERE code = ANY($1)`, [codes]);
+      const missing = codes.filter(c => !ex.some(e => e.code === c));
+      if (missing.length) throw new TRPCError({ code: "BAD_REQUEST", message: `Непостоечки конта: ${missing.join(", ")} — додади ги во Контен план` });
+      const dup = await q(`SELECT id FROM gl_templates WHERE lower(name) = lower($1) AND id <> $2`, [input.name, input.id ?? 0]);
+      if (dup.length) throw new TRPCError({ code: "CONFLICT", message: `Веќе постои терк „${input.name}“` });
+      const client = await getPool().connect();
+      try {
+        await client.query("BEGIN");
+        let id = input.id;
+        if (id) {
+          const r = await client.query(`UPDATE gl_templates SET name = $2, description = $3, updated_at = now() WHERE id = $1`, [id, input.name, input.description ?? null]);
+          if (!r.rowCount) throw new TRPCError({ code: "NOT_FOUND", message: "Теркот не постои" });
+          await client.query(`DELETE FROM gl_template_lines WHERE template_id = $1`, [id]);
+        } else {
+          id = (await client.query(`INSERT INTO gl_templates (name, description) VALUES ($1, $2) RETURNING id`, [input.name, input.description ?? null])).rows[0].id;
+        }
+        for (const [i, l] of input.lines.entries())
+          await client.query(`INSERT INTO gl_template_lines (template_id, position, account_code, side, note) VALUES ($1,$2,$3,$4,$5)`, [id, i, l.account, l.side, l.note || null]);
+        await client.query("COMMIT");
+        return { success: true, id: Number(id) };
+      } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
+    }),
+
+  // шема, не книжење — бришењето не допира налози, па не бара администратор
+  terkRemove: publicQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await q(`DELETE FROM gl_templates WHERE id = $1`, [input.id]);
+      return { success: true };
+    }),
+
   manualEntryCreate: publicQuery
     .input(z.object({
       date: dateStr, description: z.string().min(2),
-      lines: z.array(z.object({ account: z.string(), debit: z.number().min(0), credit: z.number().min(0), description: z.string().optional() })).min(2),
+      templateName: z.string().max(120).optional(),
+      lines: z.array(z.object({ account: z.string(), debit: z.number().min(0), credit: z.number().min(0), description: z.string().optional(),
+        partnerType: z.enum(["customer", "supplier"]).optional(), partnerId: z.number().optional() })).min(2),
     }))
     .mutation(async ({ input }) => {
-      const lines = normalizeLines(input.lines.map(l => ({ account: l.account, debit: l.debit, credit: l.credit, description: l.description })));
+      // Партнер: на конта на купувачи (12x) -> купувач, на добавувачи (22x) -> добавувач; на главните конта е задолжителен
+      const rules = await loadRules();
+      const mustPartner: Record<string, "customer" | "supplier"> = {
+        [rules.customers_domestic]: "customer", [rules.customers_foreign]: "customer",
+        [rules.suppliers_domestic]: "supplier", [rules.suppliers_foreign]: "supplier",
+      };
+      const kindOf = (acc: string): "customer" | "supplier" | null => mustPartner[acc] ?? (acc.startsWith("12") ? "customer" : acc.startsWith("22") ? "supplier" : null);
+      for (const l of input.lines) {
+        const kind = kindOf(l.account);
+        if (l.partnerId && kind && l.partnerType && l.partnerType !== kind)
+          throw new TRPCError({ code: "BAD_REQUEST", message: `На конто ${l.account} оди ${kind === "customer" ? "купувач" : "добавувач"}` });
+        if (!l.partnerId && mustPartner[l.account] && (l.debit || l.credit))
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Избери ${mustPartner[l.account] === "customer" ? "купувач" : "добавувач"} за конто ${l.account}` });
+      }
+      for (const kind of ["customer", "supplier"] as const) {
+        const ids = [...new Set(input.lines.filter(l => l.partnerId && kindOf(l.account) === kind).map(l => l.partnerId!))];
+        if (!ids.length) continue;
+        const found = await q(`SELECT id FROM ${kind === "customer" ? "customers" : "suppliers"} WHERE id = ANY($1)`, [ids]);
+        if (found.length !== ids.length) throw new TRPCError({ code: "BAD_REQUEST", message: kind === "customer" ? "Непостоечки купувач" : "Непостоечки добавувач" });
+      }
+      const lines = normalizeLines(input.lines.map(l => {
+        const kind = l.partnerId ? kindOf(l.account) : null;
+        return { account: l.account, debit: l.debit, credit: l.credit, description: l.description, partnerType: kind ?? undefined, partnerId: kind ? l.partnerId : undefined };
+      }));
       if (!isBalanced(lines)) throw new TRPCError({ code: "BAD_REQUEST", message: "Должи и побарува не се еднакви" });
       const codes = [...new Set(lines.map(l => l.account))];
       const ex = await q(`SELECT code FROM gl_accounts WHERE code = ANY($1)`, [codes]);
@@ -529,7 +611,7 @@ export const financeRouter = createRouter({
       try {
         await client.query("BEGIN");
         const num = await nextEntryNumber(client, input.date);
-        const r = await client.query(`INSERT INTO gl_entries (entry_number, entry_date, description, source_type) VALUES ($1,$2,$3,'manual') RETURNING id`, [num, input.date, input.description]);
+        const r = await client.query(`INSERT INTO gl_entries (entry_number, entry_date, description, source_type, template_name) VALUES ($1,$2,$3,'manual',$4) RETURNING id`, [num, input.date, input.description, input.templateName ?? null]);
         await insertLines(client, r.rows[0].id, lines);
         await client.query("COMMIT");
         return { success: true, number: num };
