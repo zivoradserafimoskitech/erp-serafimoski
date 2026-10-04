@@ -713,4 +713,17 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(await fin.ledgerFingerprint()).not.toBe(a);
     expect((await fin.syncLedgerIfChanged("тест") as any).skipped).toBeUndefined();
   });
+
+  it("DXF: поставки за сечење и зачуван цртеж", async () => {
+    const st: any = await caller.quotation.dxfSettingsGet();
+    expect(st.table.length).toBeGreaterThan(5);
+    await caller.quotation.dxfSettingsSave({ table: [{ t: 5, speed: 3, pierce: 1 }, { t: 1, speed: 20, pierce: 0.2 }], machineId: null, margin: 25, edge: 5, setupMin: 10, materialBasis: "net" });
+    const st2: any = await caller.quotation.dxfSettingsGet();
+    expect(st2.table[0].t).toBe(1);
+    expect(st2.margin).toBe(25);
+    const { id } = await caller.quotation.drawingSave({ fileName: "deo.dxf", dxf: "0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF", stats: { cutLength: 1 } });
+    const d: any = await caller.quotation.drawingGet({ id });
+    expect(d.fileName).toBe("deo.dxf");
+    expect(d.stats.cutLength).toBe(1);
+  });
 });

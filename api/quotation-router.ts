@@ -3,13 +3,25 @@ import { eq, desc } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
-import { getDb } from "./queries/connection";
+import { getDb, getPool } from "./queries/connection";
+import { DEFAULT_CUT_TABLE } from "@contracts/dxf";
 import {
   quotations, quotationItems,
   services, products, productComponents, materials,
   customers, orders, orderItems,
 } from "@db/schema";
 import { logAudit } from "./audit-helper";
+
+// Поставки за калкулација на сечење од DXF (табела брзини по дебелина, маржа, додатоци)
+const dxfSettingsSchema = z.object({
+  table: z.array(z.object({ t: z.number().positive(), speed: z.number().positive(), pierce: z.number().min(0) })).min(1).max(40),
+  machineId: z.number().nullable().default(null),
+  margin: z.number().min(0).max(500).default(30),
+  edge: z.number().min(0).max(100).default(5),
+  setupMin: z.number().min(0).max(600).default(10),
+  materialBasis: z.enum(["net", "bbox"]).default("bbox"),
+});
+const kvq = async (sql: string, params: any[] = []) => (await getPool().query(sql, params)).rows as any[];
 
 export const quotationRouter = createRouter({
   // ===== SERVICES =====
@@ -349,6 +361,34 @@ export const quotationRouter = createRouter({
 
       await logAudit({ action: "CREATE", entityType: "invoice", entityId: insertId, description: `Про-фактура ${payload.invoiceNumber} од понуда ${quo[0].quoteNumber}` });
       return { success: true, id: insertId, invoiceNumber: payload.invoiceNumber as string };
+    }),
+
+  // ===== DXF → КАЛКУЛАЦИЈА =====
+  dxfSettingsGet: publicQuery.query(async () => {
+    const raw = (await kvq(`SELECT value FROM app_kv WHERE key = 'dxf:settings'`))[0]?.value;
+    let st: z.infer<typeof dxfSettingsSchema>;
+    try { st = dxfSettingsSchema.parse(raw ? JSON.parse(raw) : { table: DEFAULT_CUT_TABLE }); } catch { st = dxfSettingsSchema.parse({ table: DEFAULT_CUT_TABLE }); }
+    const machines = await kvq(`SELECT id, name, type, cost_per_hour, cost_per_meter FROM machines WHERE COALESCE(is_active, 'active') = 'active' ORDER BY name`);
+    return { ...st, machines: machines.map((m) => ({ id: m.id, name: m.name, type: m.type, perHour: Number(m.cost_per_hour), perMeter: Number(m.cost_per_meter) })) };
+  }),
+  dxfSettingsSave: publicQuery.input(dxfSettingsSchema).mutation(async ({ input }) => {
+    await kvq(`INSERT INTO app_kv (key, value, updated_at) VALUES ('dxf:settings', $1, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [JSON.stringify({ ...input, table: [...input.table].sort((a, b) => a.t - b.t) })]);
+    return { success: true };
+  }),
+  /** Оригиналниот цртеж се чува (за налогот и машината); ставката во понудата има врска до него. */
+  drawingSave: publicQuery
+    .input(z.object({ fileName: z.string().min(1).max(255), dxf: z.string().min(10).max(12_000_000), stats: z.any().optional(), calc: z.any().optional(), quotationId: z.number().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const r = await kvq(`INSERT INTO cad_drawings (file_name, dxf, stats, calc, quotation_id, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+        [input.fileName, input.dxf, input.stats ? JSON.stringify(input.stats) : null, input.calc ? JSON.stringify(input.calc) : null, input.quotationId ?? null, (ctx as any)?.actor?.name ?? null]);
+      return { id: Number(r[0].id) };
+    }),
+  drawingGet: publicQuery
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const r = (await kvq(`SELECT id, file_name, dxf, stats, calc, created_at FROM cad_drawings WHERE id = $1`, [input.id]))[0];
+      return r ? { id: r.id, fileName: r.file_name, dxf: r.dxf, stats: r.stats, calc: r.calc, createdAt: r.created_at } : null;
     }),
 
   quotationNextNumber: publicQuery.query(async () => {

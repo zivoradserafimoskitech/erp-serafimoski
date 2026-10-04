@@ -194,6 +194,17 @@ export function getExtraSql(): string[] {
       "payment_code" varchar(10)
     )`,
     `CREATE INDEX IF NOT EXISTS "payment_order_items_inc_idx" ON "payment_order_items" ("incoming_invoice_id")`,
+    // DXF цртежи од калкулацијата за сечење (оригиналот се чува за налогот/машината)
+    `CREATE TABLE IF NOT EXISTS "cad_drawings" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "file_name" varchar(255) NOT NULL,
+      "dxf" text NOT NULL,
+      "stats" jsonb,
+      "calc" jsonb,
+      "quotation_id" integer,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
 
     // ===== РАСПОРЕД НА ПРОИЗВОДСТВО =====
     `ALTER TABLE "work_order_operations" ADD COLUMN IF NOT EXISTS "machine_id" bigint`,

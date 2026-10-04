@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import DxfCalcDialog from "@/components/DxfCalcDialog";
 import { DateInput } from "@/components/ui/date-input";
 import { printQuotation, printInvoice, quotationHtml, type DocLang } from "@/lib/print-documents";
 import SendEmailDialog from "@/components/SendEmailDialog";
@@ -117,7 +118,9 @@ export default function Quotations() {
     totalPrice: string; notes: string; sortOrder: number;
     weightPerUnit?: string; weightKg?: string;
     priceMode?: "unit" | "kg"; pricePerKg?: string;
+    unitCost?: string; totalCost?: string;
   }>>([]);
+  const [dxfOpen, setDxfOpen] = useState(false);
 
   const [svcForm, setSvcForm] = useState({ name: "", code: "", type: "laser_cutting" as keyof typeof svcTypes, unit: "m2" as keyof typeof svcUnits, description: "", saleRate: "0", costRate: "0" });
   const [prodForm, setProdForm] = useState({ name: "", code: "", category: "laser_fence" as keyof typeof prodCats, unit: "m2" as keyof typeof prodUnits, description: "", defaultPrice: "0", materialCost: "0", laborCost: "0" });
@@ -291,6 +294,7 @@ export default function Quotations() {
       weightPerUnit: String(i.weightPerUnit ?? "0"), weightKg: String(i.weightKg ?? "0"),
       priceMode: (i.priceMode === "kg" ? "kg" : "unit") as "unit" | "kg",
       pricePerKg: String(i.pricePerKg ?? "0"),
+      unitCost: String(i.unitCost ?? "0"), totalCost: String(i.totalCost ?? "0"),
     })));
     setEditingId(qDetail.id);
     setDetailOpen(false);
@@ -336,6 +340,7 @@ export default function Quotations() {
 
       const p2 = parseFloat(it.unitPrice) || 0;
       it.totalPrice = (q * p2).toFixed(2);
+      if (it.unitCost) it.totalCost = (q * (parseFloat(it.unitCost) || 0)).toFixed(2);
     }
     setQItems(items);
   };
@@ -450,7 +455,7 @@ export default function Quotations() {
                   {/* Add items section */}
                   <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
                     <h4 className="font-semibold text-sm">Додади ставки во понуда</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                       <MaterialPicker tile={{ icon: "🔩", label: "Материјал" }} title="Избери материјал" materials={materialsData as any} value={null}
                         onSelect={(m: any) => addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0"), String(m.weightPerUnit ?? "0"))} />
                       <MaterialPicker tile={{ icon: "⚙️", label: "Услуга" }} title="Избери услуга" value={null}
@@ -463,6 +468,10 @@ export default function Quotations() {
                         onClick={() => { setCustomForm({ name: "", unit: "pcs", quantity: "1", salePrice: "" }); setEstMats([]); setEstSvcs([]); setCustomDialog(true); }}>
                         <span className="text-lg leading-none">✏️</span>
                         <span className="text-xs font-medium">Custom производ</span>
+                      </Button>
+                      <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300" onClick={() => setDxfOpen(true)}>
+                        <span className="text-lg leading-none">📐</span>
+                        <span className="text-xs font-medium">Од DXF цртеж</span>
                       </Button>
                     </div>
 
@@ -875,7 +884,16 @@ export default function Quotations() {
                           {qDetail.items.map((i: any) => (
                             <TableRow key={i.id}>
                               <TableCell><Badge variant="outline" className="font-normal">{i.itemType === "material" ? "Мат" : i.itemType === "service" ? "Усл" : "Прд"}</Badge></TableCell>
-                              <TableCell className="font-medium text-gray-800">{i.description}</TableCell>
+                              <TableCell className="font-medium text-gray-800">{i.description}
+                                {/Цртеж #(\d+)/.test(i.notes ?? "") && (
+                                  <button type="button" className="block text-[11px] font-normal text-amber-700 hover:underline" onClick={async () => {
+                                    const d = await utils.quotation.drawingGet.fetch({ id: Number(/Цртеж #(\d+)/.exec(i.notes)![1]) });
+                                    if (!d) { toast.error("Цртежот не е пронајден"); return; }
+                                    const url = URL.createObjectURL(new Blob([d.dxf], { type: "application/dxf" }));
+                                    const a = document.createElement("a"); a.href = url; a.download = d.fileName; a.click(); setTimeout(() => URL.revokeObjectURL(url), 30_000);
+                                  }}>📐 {String(i.notes).split(" · ").slice(0, 4).join(" · ")} — преземи DXF</button>
+                                )}
+                              </TableCell>
                               <TableCell className="whitespace-nowrap text-gray-600">{i.quantity} {i.unit}</TableCell>
                               <TableCell className="text-right text-gray-600">{Number(i.unitPrice).toLocaleString("mk-MK")}</TableCell>
                               <TableCell className="text-right font-semibold text-gray-800">{Number(i.totalPrice).toLocaleString("mk-MK")}</TableCell>
@@ -1120,6 +1138,13 @@ export default function Quotations() {
           </div>
         </DialogContent>
       </Dialog>
+      <DxfCalcDialog open={dxfOpen} onOpenChange={setDxfOpen} materials={materialsData as any[]} onAdd={(it) => setQItems((items) => [...items, {
+        itemType: "product", referenceId: null, description: it.description, quantity: it.quantity, unit: it.unit,
+        unitPrice: it.unitPrice, totalPrice: ((parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0)).toFixed(2), notes: it.notes, sortOrder: items.length,
+        weightPerUnit: it.weightPerUnit, weightKg: ((parseFloat(it.quantity) || 0) * (parseFloat(it.weightPerUnit) || 0)).toFixed(3), priceMode: "unit",
+        pricePerKg: (parseFloat(it.weightPerUnit) || 0) > 0 ? ((parseFloat(it.unitPrice) || 0) / parseFloat(it.weightPerUnit)).toFixed(4) : "0",
+        unitCost: it.unitCost, totalCost: ((parseFloat(it.quantity) || 0) * (parseFloat(it.unitCost) || 0)).toFixed(2),
+      }])} />
     </div>
   );
 }
