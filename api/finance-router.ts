@@ -14,6 +14,7 @@ import { isDomesticCountry } from "@contracts/country";
 import { loadRates, iso } from "./rates-helper";
 import { refreshPaymentStatus, openDocs, type OpenDoc } from "./payment-status";
 import { lockedUntil, isLocked, assertOpen, glAudit, fmtMk, setLockedUntil } from "./period-lock";
+import { buildBalanceSheet, buildIncomeStatement, buildVat04, type AccountBalance } from "@contracts/statements";
 
 const q = async (text: string, params: any[] = []) => (await getPool().query(text, params)).rows as any[];
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -512,6 +513,30 @@ export async function vatBooksData(input: { from: string; to: string }) {
       const outVat = round2(outgoing.reduce((a, r) => a + r.vatMkd, 0));
       const inVat = round2(incoming.reduce((a, r) => a + r.vatMkd, 0));
       return { outgoing, incoming, summary: { output: group(outgoing), input: group(incoming), outVat, inVat, payable: round2(outVat - inVat) }, missingRates: missing, warnings };
+}
+
+
+// ───────────────────────── БИЛАНСИ ─────────────────────────
+
+/** Салда по конто (должи − побарува) за сите налози до датумот. */
+async function balancesAt(date: string): Promise<AccountBalance[]> {
+  const rows = await q(`SELECT l.account_code AS code, COALESCE(MAX(a.name), '') AS name, SUM(l.debit - l.credit) AS bal
+    FROM gl_lines l JOIN gl_entries e ON e.id = l.entry_id LEFT JOIN gl_accounts a ON a.code = l.account_code
+    WHERE e.entry_date <= $1 GROUP BY l.account_code ORDER BY l.account_code`, [date]);
+  return rows.map(r => ({ code: r.code, name: r.name, balance: round2(Number(r.bal)) }));
+}
+/** Промет по конто за периодот, без налогот за затворање на годината (тој ги нулира приходите и расходите). */
+async function movementsBetween(from: string, to: string): Promise<AccountBalance[]> {
+  const rows = await q(`SELECT l.account_code AS code, COALESCE(MAX(a.name), '') AS name, SUM(l.debit - l.credit) AS bal
+    FROM gl_lines l JOIN gl_entries e ON e.id = l.entry_id LEFT JOIN gl_accounts a ON a.code = l.account_code
+    WHERE e.entry_date BETWEEN $1 AND $2 AND e.source_type <> 'year_close' GROUP BY l.account_code ORDER BY l.account_code`, [from, to]);
+  return rows.map(r => ({ code: r.code, name: r.name, balance: round2(Number(r.bal)) }));
+}
+const minusYear = (d: string) => `${Number(d.slice(0, 4)) - 1}${d.slice(4)}`.replace(/-02-29$/, "-02-28");
+
+async function kvJson(key: string): Promise<Record<string, string>> {
+  const r = (await q(`SELECT value FROM app_kv WHERE key = $1`, [key]))[0];
+  try { return r?.value ? JSON.parse(r.value) : {}; } catch { return {}; }
 }
 
 // ───────────────────────── рутер ─────────────────────────
@@ -1044,4 +1069,56 @@ export const financeRouter = createRouter({
   vatBooks: publicQuery
     .input(z.object({ from: dateStr, to: dateStr }))
     .query(async ({ input }) => vatBooksData(input)),
+
+  /** Биланс на состојба на датум + Биланс на успех од почетокот на годината (или од `from`), со претходната година за споредба. */
+  financialStatements: publicQuery
+    .input(z.object({ date: dateStr, from: dateStr.optional() }))
+    .query(async ({ input }) => {
+      const from = input.from ?? `${input.date.slice(0, 4)}-01-01`;
+      const prevDate = `${Number(input.date.slice(0, 4)) - 1}-12-31`;
+      const [bs, bsPrev, is, isPrev, codes] = await Promise.all([
+        balancesAt(input.date), balancesAt(prevDate),
+        movementsBetween(from, input.date), movementsBetween(minusYear(from), minusYear(input.date)),
+        kvJson("statement_codes"),
+      ]);
+      const unposted = (await q(`SELECT
+          (SELECT COUNT(*)::int FROM invoices i WHERE i.invoice_type IN ('standard','credit_note') AND i.status NOT IN ('draft','cancelled') AND i.issue_date <= $1
+             AND NOT EXISTS (SELECT 1 FROM gl_entries e WHERE e.source_type='invoice' AND e.source_id=i.id)) AS inv,
+          (SELECT COUNT(*)::int FROM incoming_invoices ii WHERE ii.status <> 'cancelled' AND COALESCE(ii.vat_date, ii.received_date, ii.issue_date) <= $1
+             AND NOT EXISTS (SELECT 1 FROM gl_entries e WHERE e.source_type='incoming_invoice' AND e.source_id=ii.id)) AS inc`, [input.date]))[0];
+      const lastValuation = (await q(`SELECT MAX(period_end) AS d FROM inventory_valuations WHERE period_end <= $1`, [input.date]))[0]?.d;
+      // набавна вредност на основните средства: регистар наспроти главна книга (класа 0 без исправките x9)
+      const reg = Number((await q(`SELECT COALESCE(SUM(acquisition_value),0) AS v FROM fixed_assets
+        WHERE acquisition_date <= $1 AND (status <> 'disposed' OR disposal_date IS NULL OR disposal_date > $1)`, [input.date]).catch(() => [{ v: 0 }]))[0].v);
+      const glCost = round2(bs.filter(b => b.code.startsWith("0") && b.code[2] !== "9").reduce((a, b) => a + b.balance, 0));
+      return {
+        date: input.date, from, prevDate, prevFrom: minusYear(from), prevTo: minusYear(input.date),
+        balanceSheet: buildBalanceSheet(bs), balanceSheetPrev: buildBalanceSheet(bsPrev),
+        incomeStatement: buildIncomeStatement(is), incomeStatementPrev: buildIncomeStatement(isPrev),
+        codes,
+        notes: {
+          unpostedInvoices: Number(unposted.inv), unpostedIncoming: Number(unposted.inc),
+          lastInventoryValuation: lastValuation ? iso(lastValuation) : null,
+          assetRegister: round2(reg), assetGl: glCost,
+        },
+      };
+    }),
+
+  /** ДДВ-04 по полиња од КИФ/КУФ за периодот. */
+  vat04: publicQuery
+    .input(z.object({ from: dateStr, to: dateStr }))
+    .query(async ({ input }) => {
+      const vb = await vatBooksData(input);
+      return { lines: buildVat04(vb.outgoing, vb.incoming), codes: await kvJson("vat04_codes"), warnings: vb.warnings, missingRates: vb.missingRates };
+    }),
+
+  /** Броеви на полиња (АОП во билансите, поле во ДДВ-04) — ги внесува сметководителот еднаш. */
+  statementCodesSave: publicQuery
+    .input(z.object({ kind: z.enum(["statement", "vat04"]), codes: z.record(z.string(), z.string().max(20)) }))
+    .mutation(async ({ input }) => {
+      const key = input.kind === "statement" ? "statement_codes" : "vat04_codes";
+      const clean = Object.fromEntries(Object.entries(input.codes).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v));
+      await q(`INSERT INTO app_kv (key, value, updated_at) VALUES ($1,$2,now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, JSON.stringify(clean)]);
+      return { success: true };
+    }),
 });

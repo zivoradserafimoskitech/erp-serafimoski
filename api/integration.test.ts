@@ -604,4 +604,29 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     clearActorCache();
     expect((await resolveActor("445566"))?.name).toBe("Стар");
   });
+
+  it("биланси и ДДВ-04 од главната книга", async () => {
+    await caller.finance.ledgerSync();
+    const fs: any = await caller.finance.financialStatements({ date: "2026-12-31" });
+    expect(fs.balanceSheet.totalAssets).toBeGreaterThan(0);
+    expect(Math.abs(fs.balanceSheet.difference)).toBeLessThan(0.01);
+    expect(fs.balanceSheet.unmapped).toEqual([]);
+    // резултатот во билансот на успех = приходи − расходи од бруто билансот (класи 7 и 4) без затворањето
+    const tb: any = await caller.finance.trialBalance({ from: "2026-01-01", to: "2026-12-31" });
+    const cls = (c: string) => tb.accounts.filter((a: any) => a.code.startsWith(c)).reduce((s: number, a: any) => s + a.debit - a.credit, 0);
+    expect(fs.incomeStatement.beforeTax).toBeCloseTo(-(cls("7") + cls("4") + cls("5")), 1);
+    // купувачите во актива = салдо на 12x
+    const rec = fs.balanceSheet.assets.flatMap((x: any) => x.rows).find((r: any) => r.key === "a_receivables");
+    expect(rec.accounts.every((a: any) => a.code.startsWith("12"))).toBe(true);
+    // 235 (аванси) не е во „даноци“
+    const tax = fs.balanceSheet.liabilities.flatMap((x: any) => x.rows).find((r: any) => r.key === "l_tax");
+    expect(tax.accounts.some((a: any) => a.code === "235")).toBe(false);
+
+    const v: any = await caller.finance.vat04({ from: "2026-01-01", to: "2026-12-31" });
+    const vb: any = await caller.finance.vatBooks({ from: "2026-01-01", to: "2026-12-31" });
+    expect(v.lines.find((l: any) => l.key === "t_pay").vat).toBeCloseTo(vb.summary.payable, 2);
+    expect(v.lines.find((l: any) => l.key === "t_out").vat).toBeCloseTo(vb.summary.outVat, 2);
+    await caller.finance.statementCodesSave({ kind: "vat04", codes: { o18: " 01 ", o10: "" } });
+    expect((await caller.finance.vat04({ from: "2026-01-01", to: "2026-12-31" })).codes).toEqual({ o18: "01" });
+  });
 });

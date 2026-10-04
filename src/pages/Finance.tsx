@@ -17,8 +17,10 @@ import { downloadTableXlsx } from "@/lib/xlsx";
 import TerkTab, { TerkEditor, useAccountItems } from "@/components/TerkTab";
 import PeriodLockTab from "@/components/PeriodLockTab";
 import PeriodEndTab from "@/components/PeriodEndTab";
+import StatementsTab from "@/components/StatementsTab";
+import Vat04Card from "@/components/Vat04Card";
 import SearchPick from "@/components/SearchPick";
-import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks, Lock, Undo2, CalendarCheck } from "lucide-react";
+import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks, Lock, Undo2, CalendarCheck, FileBarChart } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -485,6 +487,7 @@ function VatTab() {
       {data && data.missingRates.length > 0 && (
         <p className="text-sm text-red-600 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />Нема курс за: {data.missingRates.slice(0, 5).join(", ")}{data.missingRates.length > 5 ? "..." : ""} — внеси го во „Курсна листа“.</p>
       )}
+      <Vat04Card from={from} to={to} />
       <div className="flex gap-2">
         <Button size="sm" variant={book === "out" ? "default" : "outline"} onClick={() => setBook("out")}>Книга на излезни фактури ({data?.outgoing.length ?? 0})</Button>
         <Button size="sm" variant={book === "in" ? "default" : "outline"} onClick={() => setBook("in")}>Книга на влезни фактури ({data?.incoming.length ?? 0})</Button>
@@ -843,7 +846,7 @@ function ProfitTab() {
 
 const FIN_GROUPS = [
   { label: "Пари", tabs: [{ key: "bank", label: "Банка", icon: Landmark }, { key: "cash", label: "Благајна", icon: Wallet }] },
-  { label: "Извештаи", tabs: [{ key: "vat", label: "ДДВ", icon: Receipt }, { key: "profit", label: "Добивка по нарачка", icon: TrendingUp }] },
+  { label: "Извештаи", tabs: [{ key: "vat", label: "ДДВ", icon: Receipt }, { key: "statements", label: "Биланси", icon: FileBarChart }, { key: "profit", label: "Добивка по нарачка", icon: TrendingUp }] },
   { label: "Главна книга", tabs: [{ key: "journal", label: "Налози", icon: BookOpen }, { key: "terk", label: "Терк", icon: ListChecks }, { key: "periodEnd", label: "Крај на период", icon: CalendarCheck }, { key: "trial", label: "Бруто биланс", icon: Scale }, { key: "card", label: "Картица", icon: FileSpreadsheet }] },
   { label: "Поставки", tabs: [{ key: "rates", label: "Курсна листа", icon: Coins }, { key: "lock", label: "Заклучување", icon: Lock }, { key: "chart", label: "Контен план", icon: ListTree }] },
 ];
@@ -881,6 +884,7 @@ export default function Finance() {
         <TabsContent value="trial" className="mt-4"><TrialBalanceTab onOpenCard={(c) => { setCardCode(c); setTab("card"); }} /></TabsContent>
         <TabsContent value="card" className="mt-4"><AccountCardTab code={cardCode} setCode={setCardCode} /></TabsContent>
         <TabsContent value="vat" className="mt-4"><VatTab /></TabsContent>
+        <TabsContent value="statements" className="mt-4"><StatementsTab /></TabsContent>
         <TabsContent value="cash" className="mt-4"><CashTab presetInvoiceId={cashInvoice} /></TabsContent>
         <TabsContent value="rates" className="mt-4"><RatesTab /></TabsContent>
         <TabsContent value="chart" className="mt-4"><ChartTab /></TabsContent>

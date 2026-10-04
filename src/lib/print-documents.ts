@@ -1180,3 +1180,54 @@ export function qualityIssueHtml(qi: any, settings: any): string {
 }
 
 export function printQualityIssue(qi: any, settings: any) { openPrint(qualityIssueHtml(qi, settings)); }
+
+/** Печатење на готов HTML (без отворање нов прозорец). */
+export function printHtml(html: string) { openPrint(html); }
+
+export type ReportRow = { cells: (string | number | null)[]; bold?: boolean; indent?: number; muted?: boolean };
+/**
+ * Едноставен A4 извештај со табела (биланси, ДДВ-04, ИОС...). Броевите се форматираат со две децимали;
+ * колоните со индекс во `numCols` се порамнети десно.
+ */
+export function simpleReportHtml(opts: {
+  title: string; subtitle?: string; settings: any; head: string[]; rows: ReportRow[]; numCols: number[];
+  notes?: string[]; signatures?: string[]; landscape?: boolean;
+}): string {
+  const s = opts.settings ?? {};
+  const num = (v: any) => typeof v === "number" ? v.toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : esc(String(v ?? ""));
+  const body = opts.rows.map((r) => `<tr class="${r.bold ? "b" : ""}${r.muted ? " m" : ""}">${r.cells.map((c, i) =>
+    `<td class="${opts.numCols.includes(i) ? "r" : ""}"${!opts.numCols.includes(i) && r.indent ? ` style="padding-left:${6 + r.indent * 14}px"` : ""}>${opts.numCols.includes(i) ? (c === null || c === "" ? "" : num(c)) : esc(String(c ?? ""))}</td>`).join("")}</tr>`).join("");
+  return `<!doctype html>
+<html lang="mk"><head><meta charset="utf-8"><title>${esc(opts.title)}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.5px; line-height: 1.4; color: #1f2933; padding: 12mm 13mm; }
+  @page { size: A4 ${opts.landscape ? "landscape" : "portrait"}; margin: 0; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1f2933; padding-bottom: 6px; margin-bottom: 10px; }
+  .co { font-size: 10px; color: #4a5568; line-height: 1.45; }
+  .co b { color: #1f2933; font-size: 11.5px; }
+  h1 { font-size: 16px; text-align: right; }
+  .sub { font-size: 10px; color: #4a5568; text-align: right; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .5px; color: #4a5568; border-bottom: 1px solid #9aa5b1; padding: 4px 6px; }
+  td { padding: 4px 6px; border-bottom: 1px solid #e4e7eb; }
+  th.r, td.r { text-align: right; white-space: nowrap; }
+  tr.b td { font-weight: 700; background: #f5f7fa; }
+  tr.m td { color: #7b8794; font-size: 9.5px; }
+  tr { page-break-inside: avoid; }
+  .notes { margin-top: 10px; font-size: 9.5px; color: #4a5568; line-height: 1.5; }
+  .sig { display: flex; justify-content: space-around; margin-top: 36px; font-size: 10px; }
+  .sig div { border-top: 1px solid #1f2933; padding-top: 3px; width: 180px; text-align: center; }
+  .foot { margin-top: 14px; font-size: 8.5px; color: #9aa5b1; text-align: center; }
+</style></head><body>
+  <div class="top">
+    <div class="co"><b>${esc(s.name ?? "")}</b>${s.address ? "<br>" + esc(s.address) : ""}<br>ЕДБ: ${esc(s.edb ?? "—")} · ЕМБС: ${esc(s.embs ?? "—")}</div>
+    <div><h1>${esc(opts.title)}</h1>${opts.subtitle ? `<div class="sub">${esc(opts.subtitle)}</div>` : ""}</div>
+  </div>
+  <table><thead><tr>${opts.head.map((h, i) => `<th class="${opts.numCols.includes(i) ? "r" : ""}">${esc(h)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>
+  ${opts.notes?.length ? `<div class="notes">${opts.notes.map((n) => esc(n)).join("<br>")}</div>` : ""}
+  ${opts.signatures?.length ? `<div class="sig">${opts.signatures.map((x) => `<div>${esc(x)}</div>`).join("")}</div>` : ""}
+  <div class="foot">${esc(s.name ?? "")} · Генерирано од ERP на ${dt(new Date())}</div>
+</body></html>`;
+}
