@@ -1,11 +1,14 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { eq, desc, and } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
 import { openDocs, refreshPaymentStatus, assertNoPayments, manualPartnerBalances, type OpenDoc } from "./payment-status";
-import { guessExpenseAccount, toMkd } from "@contracts/finance";
+import { guessExpenseAccount, toMkd, vatMismatch } from "@contracts/finance";
 import { loadRates, iso } from "./rates-helper";
+import { assertOpen } from "./period-lock";
+import { assertSequential, nextSequential, isLastInSequence } from "./invoice-numbering";
 import { getDb, getPool } from "./queries/connection";
 import {
   invoices, incomingInvoices, documentItems,
@@ -17,7 +20,18 @@ import {
 } from "@db/schema";
 import { sendInvoice, checkInvoiceStatus, lookupCompany, generateUJPXml, getActiveCertificates, storeCertificate, type UJPInvoicePayload } from "./ujp-service";
 import { logAudit } from "./audit-helper";
-import { getNextDocNumber } from "./counters-helper";
+
+/** ДДВ на влезна фактура мора да одговара на стапката; при обратно оданочување добавувачот не пресметува ДДВ. */
+function checkIncomingVat(inv: { subtotal?: string; vatRate?: string; vatAmount?: string; reverseCharge?: boolean }, items?: { totalPrice: string; vatRate?: string }[]) {
+  const base = Number(inv.subtotal) || 0, rate = Number(inv.vatRate) || 0, vat = Number(inv.vatAmount) || 0;
+  if (inv.reverseCharge) {
+    if (Math.abs(vat) > 0.005) throw new TRPCError({ code: "BAD_REQUEST", message: "Обратно оданочување: на фактурата од странскиот добавувач нема ДДВ (внеси 0) — ДДВ го пресметува програмата по стапката" });
+    if (!(rate > 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Обратно оданочување: избери стапка по која се пресметува ДДВ (најчесто 18%)" });
+    return;
+  }
+  const bad = vatMismatch({ base, rate, vat, items: (items ?? []).map(i => ({ total: Number(i.totalPrice) || 0, rate: Number(i.vatRate ?? rate) || 0 })) });
+  if (bad) throw new TRPCError({ code: "BAD_REQUEST", message: `ДДВ не одговара на стапката: ${base.toLocaleString("mk-MK")} × ${rate}% = ${bad.expected.toLocaleString("mk-MK", { minimumFractionDigits: 2 })}, а внесено е ${vat.toLocaleString("mk-MK", { minimumFractionDigits: 2 })}. Провери ја стапката или износот.` });
+}
 
 export const accountingRouter = createRouter({
   // ===== OUTGOING INVOICES =====
@@ -112,9 +126,10 @@ export const accountingRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
-      {
-        const { bumpDocCounter } = await import("./counters-helper");
-        await bumpDocCounter("invoice", input.invoiceNumber).catch(() => {});
+      // Излезна фактура / книжно одобрување: отворен период и број точно следен по ред
+      if (input.invoiceType !== "proforma") {
+        await assertOpen(input.issueDate, input.invoiceType === "credit_note" ? "Книжно одобрување" : "Фактура");
+        input.invoiceNumber = await assertSequential(input.invoiceType === "credit_note" ? "creditNote" : "invoice", input.invoiceNumber, input.issueDate);
       }
       const db = getDb();
       const { items, ...invData } = input;
@@ -198,10 +213,18 @@ export const accountingRouter = createRouter({
       status: z.enum(["draft", "issued", "sent", "partial", "paid", "overdue", "cancelled"]).optional(),
       dueDate: z.string().optional(),
       notes: z.string().optional(),
+      /** ЕЦД за извоз — доказ, не менува книжење (смее и по заклучувањето) */
+      customsDeclaration: z.string().max(60).nullable().optional(),
+      customsDate: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...data } = input;
+      if (data.status) {
+        const cur0: any = (await db.select().from(invoices).where(eq(invoices.id, id)))[0];
+        const affectsBooks = cur0 && cur0.invoiceType !== "proforma" && (data.status === "cancelled" || data.status === "draft" || cur0.status === "draft" || cur0.status === "cancelled") && data.status !== cur0.status;
+        if (affectsBooks) await assertOpen(cur0.issueDate, `Фактура ${cur0.invoiceNumber}`);
+      }
       const updateData: any = { ...data };
       if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
       await db.update(invoices).set(updateData).where(eq(invoices.id, id));
@@ -218,6 +241,13 @@ export const accountingRouter = createRouter({
       const db = getDb();
       await assertNoPayments("invoice", input.id);
       const cur: any = (await db.select().from(invoices).where(eq(invoices.id, input.id)))[0];
+      if (cur && cur.invoiceType !== "proforma") {
+        // Издадена фактура не се брише: се откажува или сторнира со книжно одобрување (бројот останува)
+        if (cur.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: `${cur.invoiceType === "credit_note" ? "Книжното одобрување" : "Фактурата"} ${cur.invoiceNumber} е издадена и не се брише — откажи ја или издади книжно одобрување (сторно)` });
+        if (!(await isLastInSequence(cur.invoiceType === "credit_note" ? "creditNote" : "invoice", cur.invoiceNumber)))
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Нацртот ${cur.invoiceNumber} не е последен број — бришењето би оставило празнина. Откажи го наместо да го бришеш.` });
+        await assertOpen(cur.issueDate, `Фактура ${cur.invoiceNumber}`);
+      }
       await db.delete(documentItems).where(and(eq(documentItems.documentId, input.id), eq(documentItems.documentType, "invoice")));
       await db.delete(invoices).where(eq(invoices.id, input.id));
       if (cur?.invoiceType === "credit_note" && cur.originalInvoiceId) await refreshPaymentStatus("invoice", Number(cur.originalInvoiceId));
@@ -307,6 +337,10 @@ export const accountingRouter = createRouter({
       notes: z.string().optional(),
       fileUrl: z.string().optional(),
       expenseAccount: z.string().max(10).optional(),
+      /** ДДВ период: кога фактурата е примена (по правило) — во тој месец се пријавува */
+      vatDate: z.string().optional(),
+      /** услуга од странски добавувач: ДДВ го пресметуваме ние (vatAmount на фактурата е 0) */
+      reverseCharge: z.boolean().default(false),
       items: z.array(z.object({
         description: z.string().min(1),
         quantity: z.string(),
@@ -321,6 +355,9 @@ export const accountingRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { items, ...invData } = input;
+      invData.vatDate = invData.vatDate || invData.receivedDate;
+      await assertOpen(invData.vatDate, "Влезна фактура");
+      checkIncomingVat(invData, items);
       // Конто: избрано -> последно кај добавувачот -> предлог од текстот -> „набавки“ (310)
       const sup: any = (await db.select().from(suppliers).where(eq(suppliers.id, invData.supplierId)))[0];
       if (!sup) throw new Error("Добавувачот не постои");
@@ -335,6 +372,7 @@ export const accountingRouter = createRouter({
         ...invData,
         issueDate: invData.issueDate ? new Date(invData.issueDate) : null,
         receivedDate: new Date(invData.receivedDate),
+        vatDate: invData.vatDate,
         dueDate: invData.dueDate ? new Date(invData.dueDate) : null,
       } as any);
       const insertId = Number(result[0].insertId);
@@ -350,12 +388,22 @@ export const accountingRouter = createRouter({
       status: z.enum(["received", "verified", "partial", "paid", "disputed", "cancelled"]).optional(),
       notes: z.string().optional(),
       expenseAccount: z.string().max(10).optional(),
+      vatDate: z.string().optional(),
       /** да се запамети изборот кај добавувачот (следниот пат не прашува) */
       rememberForSupplier: z.boolean().default(true),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, rememberForSupplier, ...data } = input;
+      const cur0: any = (await db.select().from(incomingInvoices).where(eq(incomingInvoices.id, id)))[0];
+      if (!cur0) throw new TRPCError({ code: "NOT_FOUND", message: "Фактурата не постои" });
+      // промена што влијае на книжењето (конто, откажување, ДДВ период) — само во отворен период, и стариот и новиот датум
+      const booked = (data.expenseAccount && data.expenseAccount !== cur0.expenseAccount) || (data.vatDate && iso(data.vatDate) !== iso(cur0.vatDate))
+        || (data.status && (data.status === "cancelled" || cur0.status === "cancelled") && data.status !== cur0.status);
+      if (booked) {
+        await assertOpen(cur0.vatDate ?? cur0.issueDate ?? cur0.receivedDate, `Влезна фактура ${cur0.supplierInvoiceNumber}`);
+        if (data.vatDate) await assertOpen(data.vatDate, "Нов ДДВ период");
+      }
       await db.update(incomingInvoices).set({ ...data, ...(data.expenseAccount ? { accountConfirmed: true } : {}) } as any).where(eq(incomingInvoices.id, id));
       if (data.expenseAccount && rememberForSupplier) {
         const inv: any = (await db.select().from(incomingInvoices).where(eq(incomingInvoices.id, id)))[0];
@@ -370,6 +418,8 @@ export const accountingRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       await assertNoPayments("incoming_invoice", input.id);
+      const cur0: any = (await db.select().from(incomingInvoices).where(eq(incomingInvoices.id, input.id)))[0];
+      if (cur0) await assertOpen(cur0.vatDate ?? cur0.issueDate ?? cur0.receivedDate, `Влезна фактура ${cur0.supplierInvoiceNumber}`);
       await db.delete(documentItems).where(and(eq(documentItems.documentId, input.id), eq(documentItems.documentType, "incoming_invoice")));
       await db.delete(incomingInvoices).where(eq(incomingInvoices.id, input.id));
       return { success: true };
@@ -734,15 +784,18 @@ export const accountingRouter = createRouter({
           totalMkd: sg * Math.abs(mkdOf(i.totalAmount, i.currency, i.issueDate)) }; })
         .sort((x: any, y: any) => String(x.issueDate).localeCompare(String(y.issueDate)));
       const filteredIncoming = (await db.select().from(incomingInvoices))
-        .filter((i: any) => i.status !== "cancelled" && inRange(i.issueDate ?? i.receivedDate))
+        .filter((i: any) => i.status !== "cancelled" && inRange(i.vatDate ?? i.receivedDate ?? i.issueDate))
         .map((i: any) => { const d = i.issueDate ?? i.receivedDate; return { ...lite(i), supplierName: supNames.get(Number(i.supplierId)) ?? "", partnerTaxId: supTax.get(Number(i.supplierId)) ?? "",
           baseMkd: mkdOf(i.subtotal, i.currency, d), vatMkd: mkdOf(i.vatAmount, i.currency, d), totalMkd: mkdOf(i.totalAmount, i.currency, d) }; })
-        .sort((x: any, y: any) => String(x.issueDate ?? x.receivedDate).localeCompare(String(y.issueDate ?? y.receivedDate)));
+        .sort((x: any, y: any) => String(x.vatDate ?? x.receivedDate).localeCompare(String(y.vatDate ?? y.receivedDate)));
 
       const sum = (rows: any[], f: string) => rows.reduce((a, r) => a + (Number(r[f]) || 0), 0);
       const totalOutgoing = sum(filteredOutgoing, "totalMkd"), totalOutgoingVat = sum(filteredOutgoing, "vatMkd"), totalOutgoingBase = sum(filteredOutgoing, "baseMkd");
       const totalIncoming = sum(filteredIncoming, "totalMkd"), totalIncomingVat = sum(filteredIncoming, "vatMkd"), totalIncomingBase = sum(filteredIncoming, "baseMkd");
-      const vatBalance = totalOutgoingVat - totalIncomingVat;
+      // ДДВ: од ДДВ книгите (вклучува ДДВ на аванси и обратно оданочување) — исто како ДДВ табот
+      const { vatBooksData } = await import("./finance-router");
+      const vb = await vatBooksData({ from: input.startDate, to: input.endDate });
+      const vatBalance = vb.summary.payable;
 
       // По стапка на ДДВ (излезни и влезни)
       const byRate = (rows: any[]) => {
@@ -754,7 +807,10 @@ export const accountingRouter = createRouter({
         }
         return g;
       };
-      const vatGroups = byRate(filteredOutgoing), vatGroupsIn = byRate(filteredIncoming);
+      const fromBook = (g: { key: string; base: number; vat: number; count: number }[]) =>
+        Object.fromEntries(g.map(x => [x.key.startsWith("0-") ? "0" : x.key, x])) as Record<string, { base: number; vat: number; count: number }>;
+      void byRate;
+      const vatGroups = fromBook(vb.summary.output), vatGroupsIn = fromBook(vb.summary.input);
 
       const { workOrders, receipts: rcT, deliveryNotes: dnT, workOrderMaterials: womT } = await import("@db/schema");
       const allWO = (await db.select().from(workOrders)).filter((w: any) => inRange(w.createdAt));
@@ -795,7 +851,7 @@ export const accountingRouter = createRouter({
         outgoing: {
           count: filteredOutgoing.length,
           totalBase: totalOutgoingBase.toFixed(2),
-          totalVat: totalOutgoingVat.toFixed(2),
+          totalVat: vb.summary.outVat.toFixed(2),
           total: totalOutgoing.toFixed(2),
           items: filteredOutgoing,
           vatGroups,
@@ -803,14 +859,14 @@ export const accountingRouter = createRouter({
         incoming: {
           count: filteredIncoming.length,
           totalBase: totalIncomingBase.toFixed(2),
-          totalVat: totalIncomingVat.toFixed(2),
+          totalVat: vb.summary.inVat.toFixed(2),
           total: totalIncoming.toFixed(2),
           items: filteredIncoming,
           vatGroups: vatGroupsIn,
         },
         vatRecapitulation: {
-          outgoingVat: totalOutgoingVat.toFixed(2),
-          incomingVat: totalIncomingVat.toFixed(2),
+          outgoingVat: vb.summary.outVat.toFixed(2),
+          incomingVat: vb.summary.inVat.toFixed(2),
           vatBalance: vatBalance.toFixed(2),
           vatToPay: vatBalance > 0 ? vatBalance.toFixed(2) : "0",
           vatCredit: vatBalance < 0 ? Math.abs(vatBalance).toFixed(2) : "0",
@@ -839,13 +895,22 @@ export const accountingRouter = createRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
-      {
-        const { bumpDocCounter } = await import("./counters-helper");
-        await bumpDocCounter("creditNote", input.creditNoteNumber).catch(() => {});
-      }
       const db = getDb();
       const orig = await db.select().from(invoices).where(eq(invoices.id, input.originalInvoiceId));
       if (!orig[0]) throw new Error("Оригиналната фактура не постои");
+      // Исправката оди во тековниот (отворен) период, со следен број по ред
+      await assertOpen(input.issueDate, "Книжно одобрување");
+      input.creditNoteNumber = await assertSequential("creditNote", input.creditNoteNumber, input.issueDate);
+      // Не смее да се одобри повеќе отколку што е фактурирано (збирно со претходните одобренија)
+      const o: any = orig[0];
+      if (o.invoiceType !== "standard" || ["draft", "cancelled"].includes(o.status))
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Книжно одобрување се издава само на издадена фактура" });
+      const prev = (await getPool().query(`SELECT COALESCE(SUM(ABS(subtotal)),0) s, COALESCE(SUM(ABS(total_amount)),0) t FROM invoices
+        WHERE invoice_type = 'credit_note' AND original_invoice_id = $1 AND status <> 'cancelled'`, [input.originalInvoiceId])).rows[0];
+      const leftBase = Math.round((Math.abs(Number(o.subtotal)) - Number(prev.s)) * 100) / 100;
+      const leftTotal = Math.round((Math.abs(Number(o.totalAmount)) - Number(prev.t)) * 100) / 100;
+      if (Math.abs(Number(input.subtotal)) - leftBase > 0.005 || Math.abs(Number(input.totalAmount)) - leftTotal > 0.005)
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Може да се одобри најмногу ${leftBase.toLocaleString("mk-MK", { minimumFractionDigits: 2 })} без ДДВ (${leftTotal.toLocaleString("mk-MK", { minimumFractionDigits: 2 })} со ДДВ) — остатокот од фактурата ${o.invoiceNumber} по претходните одобренија` });
 
       const result = await db.insert(invoices).values({
         invoiceNumber: input.creditNoteNumber,
@@ -1141,9 +1206,9 @@ export const accountingRouter = createRouter({
     }),
 
   // ===== PRODUCTS & SERVICES FOR INVOICING =====
-  nextInvoiceNumber: publicQuery.query(async () => {
-    return await getNextDocNumber("invoice");
-  }),
+  // Само предлог (не троши број): најголемиот постоечки + 1
+  nextInvoiceNumber: publicQuery.query(async () => nextSequential("invoice", new Date().getFullYear())),
+  nextCreditNoteNumber: publicQuery.query(async () => nextSequential("creditNote", new Date().getFullYear())),
 
   productListForInvoice: publicQuery.query(async () => {
     const db = getDb();

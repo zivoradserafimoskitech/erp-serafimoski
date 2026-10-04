@@ -772,9 +772,11 @@ export const productionRouter = createRouter({
       const vatRate = quo ? Number(quo.vatRate ?? 18) : 18;
       const vat = Math.round(subtotal * vatRate) / 100;
 
-      const { getNextDocNumber } = await import("./counters-helper");
-      const invoiceNumber = await getNextDocNumber("invoice");
       const today = new Date().toISOString().slice(0, 10);
+      const { nextSequential } = await import("./invoice-numbering");
+      const { assertOpen } = await import("./period-lock");
+      await assertOpen(today, "Фактура");
+      const invoiceNumber = await nextSequential("invoice", Number(today.slice(0, 4)));
       const due = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
       const res = await db.insert(invoices).values({
         invoiceNumber, customerId, orderId: wo[0].orderId, workOrderId: input.workOrderId,

@@ -15,10 +15,30 @@ export type TrpcContext = {
 const actorCache = new Map<string, { actor: { id: number | null; name: string; role: Role }; at: number }>();
 const CACHE_MS = 60_000;
 
+/**
+ * Дали апликацијата бара најава. Затворена е ако е поставена APP_PASSWORD на серверот
+ * ИЛИ ако постои барем еден активен корисник администратор со код (Подесувања → Корисници).
+ * Без ниту едно од двете е отворена за секого (и интерфејсот предупредува).
+ */
+let gateCache: { on: boolean; at: number } | null = null;
+export async function gateActive(): Promise<boolean> {
+  if (process.env.APP_PASSWORD) return true;
+  if (process.env.DISABLE_USER_GATE === "true") return false;
+  if (gateCache && Date.now() - gateCache.at < 30_000) return gateCache.on;
+  let on = false;
+  try {
+    const { getPool } = await import("./queries/connection");
+    const r = await getPool().query(`SELECT 1 FROM app_users WHERE role = 'admin' AND is_active = 'active' AND COALESCE(passcode, '') <> '' LIMIT 1`);
+    on = (r.rowCount ?? 0) > 0;
+  } catch { on = false; }
+  gateCache = { on, at: Date.now() };
+  return on;
+}
+
 export async function resolveActor(key: string | null): Promise<TrpcContext["actor"]> {
   if (!key) {
-    // Нема лозинка воопшто поставена → системот е отворен, работи како администратор
-    return process.env.APP_PASSWORD ? undefined : { id: null, name: "Отворен пристап", role: "admin" };
+    // Без најава: отворено само ако апликацијата не бара најава
+    return (await gateActive()) ? undefined : { id: null, name: "Отворен пристап", role: "admin" };
   }
 
   // Главната лозинка од околината секогаш е администратор
@@ -50,6 +70,7 @@ export async function resolveActor(key: string | null): Promise<TrpcContext["act
 
 export function clearActorCache() {
   actorCache.clear();
+  gateCache = null;
 }
 
 export async function createContext(

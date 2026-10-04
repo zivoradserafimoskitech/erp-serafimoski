@@ -90,7 +90,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Подесувања</h1>
-      <Tabs defaultValue="company">
+      <Tabs defaultValue={new URLSearchParams(window.location.search).get("tab") || "company"}>
         <TabsList className="bg-emerald-50">
           <TabsTrigger value="company"><Building2 className="h-4 w-4 mr-1" /> Фирма</TabsTrigger>
           <TabsTrigger value="units"><Ruler className="h-4 w-4 mr-1" /> Единици</TabsTrigger>

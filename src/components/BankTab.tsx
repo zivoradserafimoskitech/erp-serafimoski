@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
+import BankPostDialog from "@/components/BankPostDialog";
 import { isStaleChunkError, reloadForNewVersion } from "@/lib/stale-chunk";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import {
   Upload, Search, Link2, Link2Off, EyeOff, Wand2, ArrowDownLeft,
-  ArrowUpRight, Landmark, AlertCircle, CheckCircle2,
+  ArrowUpRight, Landmark, AlertCircle, CheckCircle2, BookOpen,
 } from "lucide-react";
 
 const den = (v: any) =>
@@ -36,6 +37,8 @@ export default function BankTab() {
   const [alloc, setAlloc] = useState<Record<string, string>>({});
   const [docSearch, setDocSearch] = useState("");
   const [openSide, setOpenSide] = useState<"suppliers" | "customers" | null>(null);
+  const [postTx, setPostTx] = useState<any>(null);
+  const { data: recon } = trpc.bank.bankReconcile.useQuery();
 
   const { data: stats } = trpc.bank.bankStats.useQuery();
   const { data: openItems } = trpc.bank.openItemsByPartner.useQuery(
@@ -62,6 +65,7 @@ export default function BankTab() {
   }, [matchTx?.id, existingAlloc]);
 
   const refresh = () => {
+    utils.bank.bankReconcile.invalidate();
     utils.bank.bankTxList.invalidate();
     utils.bank.bankStats.invalidate();
     utils.bank.bankStatementList.invalidate();
@@ -247,6 +251,27 @@ export default function BankTab() {
         Ставките што веќе постојат нема да се дуплираат.
       </p>
 
+      {/* Усогласување: извод наспроти главна книга */}
+      {recon && (recon.rows.length > 0 || recon.unposted.count > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {recon.rows.map(r => (
+            <div key={r.currency} className={`rounded-lg border p-3 ${Math.abs(r.diff) < 0.5 ? "border-emerald-200 bg-emerald-50/50" : "border-amber-300 bg-amber-50"}`}>
+              <p className="text-xs text-gray-500">{r.currency === "MKD" ? "Денарска сметка" : "Девизни сметки (во денари)"} · конто {r.account} · на {r.date.split("-").reverse().join(".")}</p>
+              <p className="text-sm mt-1">Извод <b>{den(r.statement)}</b> · Главна книга <b>{den(r.ledger)}</b></p>
+              <p className={`text-xs mt-0.5 ${Math.abs(r.diff) < 0.5 ? "text-emerald-700" : "text-amber-800"}`}>
+                {Math.abs(r.diff) < 0.5 ? "Усогласено" : `Разлика ${den(r.diff)} — неокнижени ставки, или почетното салдо на сметката не е внесено (налог „Почетна состојба“)`}</p>
+            </div>
+          ))}
+          {recon.unposted.count > 0 && (
+            <button onClick={() => setStatus("open")} className="text-left rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="text-xs text-gray-500">Неокнижени ставки од изводите</p>
+              <p className="text-sm mt-1"><b>{recon.unposted.count}</b> ставки · {den(recon.unposted.amount)} ден</p>
+              <p className="text-xs text-amber-800 mt-0.5">Секоја ставка мора да има налог: поврзи ја со фактура или „Книжи на конто“.</p>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Ставки */}
       <Card>
         <CardContent className="p-0">
@@ -269,7 +294,7 @@ export default function BankTab() {
                 </TableCell></TableRow>
               ) : rows.map((t: any) => (
                 <TableRow key={t.id} className={t.matchStatus === "ignored" ? "opacity-50" : ""}>
-                  <TableCell className="text-sm">{String(t.txDate)}</TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">{String(t.txDate).slice(0, 10).split("-").reverse().join(".")}</TableCell>
                   <TableCell>
                     <div className="text-sm font-medium leading-tight">{t.counterpartyName || "—"}</div>
                     <div className="text-[11px] text-gray-500 leading-snug">{t.purpose}</div>
@@ -304,10 +329,16 @@ export default function BankTab() {
                     <div className="flex gap-1">
                       {t.matchStatus === "matched" || t.matchStatus === "partial" ? (
                         <>
-                          <Button size="sm" variant="outline" title="Промени распределба"
-                            onClick={() => setMatchTx(t)}>
-                            <Link2 className="h-3.5 w-3.5" />
+                          <Button size="sm" variant="outline" title={t.accountCode ? "Промени конто" : "Промени распределба"}
+                            onClick={() => t.accountCode ? setPostTx(t) : setMatchTx(t)}>
+                            {t.accountCode ? <BookOpen className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
                           </Button>
+                          {t.matchStatus === "partial" && (
+                            <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" title="Остатокот книжи на конто"
+                              onClick={() => setPostTx(t)}>
+                              <BookOpen className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" title="Раскини"
                             onClick={() => unmatchMut.mutate({ txId: t.id })}>
                             <Link2Off className="h-3.5 w-3.5" />
@@ -320,9 +351,13 @@ export default function BankTab() {
                         </Button>
                       ) : (
                         <>
-                          <Button size="sm" variant="outline" title="Поврзи"
+                          <Button size="sm" variant="outline" title="Поврзи со фактура"
                             onClick={() => setMatchTx(t)}>
                             <Link2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" title="Книжи на конто (плата, ДДВ, провизија, кредит...)"
+                            onClick={() => setPostTx(t)}>
+                            <BookOpen className="h-3.5 w-3.5" />
                           </Button>
                           {t.matchStatus !== "ignored" && (
                             <Button size="sm" variant="outline" className="text-gray-400" title="Занемари"
@@ -340,6 +375,8 @@ export default function BankTab() {
           </Table>
         </CardContent>
       </Card>
+
+      <BankPostDialog tx={postTx} onClose={() => setPostTx(null)} onDone={refresh} />
 
       {/* Отворени ставки по партнер */}
       <Dialog open={!!openSide} onOpenChange={(v) => { if (!v) setOpenSide(null); }}>

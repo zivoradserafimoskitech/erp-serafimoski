@@ -1,7 +1,7 @@
 import { ErrorMessages } from "@contracts/constants";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import type { TrpcContext } from "./context";
+import { gateActive, type TrpcContext } from "./context";
 import { canRun, ROLES } from "@contracts/roles";
 
 const t = initTRPC.context<TrpcContext>().create({
@@ -13,8 +13,8 @@ export const createRouter = t.router;
 // ── Спроведување на дозволи ──
 // Ова е вистинската заштита. Криењето копчиња во интерфејсот е само удобност.
 const enforcePermissions = t.middleware(async ({ ctx, path, type, next }) => {
-  // Ако нема поставена лозинка воопшто, системот работи отворено (како порано)
-  if (!process.env.APP_PASSWORD) return next({ ctx });
+  // Ако апликацијата не бара најава (нема лозинка ни администратор со код), работи отворено
+  if (!(await gateActive())) return next({ ctx });
 
   const actor = ctx.actor;
   if (!actor) {
@@ -35,17 +35,20 @@ const enforcePermissions = t.middleware(async ({ ctx, path, type, next }) => {
 // за повеќе брзи зачувувања да се спојат во едно) се повикува синхронизацијата. Таа е идемпотентна.
 const LEDGER_ROUTERS = new Set(["accounting", "bank", "finance", "hr", "assets", "production", "quotation", "storage", "ops"]);
 let ledgerTimer: ReturnType<typeof setTimeout> | null = null;
-function scheduleLedgerSync() {
+let ledgerActor = "автоматски";
+function scheduleLedgerSync(actor?: string) {
+  if (actor) ledgerActor = actor;
   if (process.env.DISABLE_AUTO_LEDGER === "true") return;
   if (ledgerTimer) clearTimeout(ledgerTimer);
   ledgerTimer = setTimeout(() => {
     ledgerTimer = null;
-    import("./finance-router").then(m => m.syncLedger()).catch(e => console.error("[LEDGER]", e?.message ?? e));
+    const who = ledgerActor; ledgerActor = "автоматски";
+    import("./finance-router").then(m => m.syncLedger(who)).catch(e => console.error("[LEDGER]", e?.message ?? e));
   }, 1500);
 }
-const autoLedger = t.middleware(async ({ path, type, next }) => {
+const autoLedger = t.middleware(async ({ ctx, path, type, next }) => {
   const res = await next();
-  if (type === "mutation" && res.ok && LEDGER_ROUTERS.has(path.split(".")[0]) && path !== "finance.ledgerSync") scheduleLedgerSync();
+  if (type === "mutation" && res.ok && LEDGER_ROUTERS.has(path.split(".")[0]) && path !== "finance.ledgerSync") scheduleLedgerSync((ctx as any).actor?.name);
   return res;
 });
 

@@ -39,6 +39,10 @@ export const DEFAULT_ACCOUNTS: { code: string; name: string; type: AccountType }
   { code: "741", name: "Приходи од продажба во странство", type: "revenue" },
   { code: "770", name: "Позитивни курсни разлики", type: "revenue" },
   { code: "769", name: "Вишоци на залихи", type: "revenue" },
+  { code: "600", name: "Недовршено производство", type: "asset" },
+  { code: "630", name: "Готови производи", type: "asset" },
+  { code: "490", name: "Распоред на трошоци за залихи на недовршено производство и готови производи", type: "expense" },
+  { code: "800", name: "Резултат од работењето (добивка или загуба)", type: "equity" },
   { code: "900", name: "Капитал", type: "equity" },
 ];
 
@@ -68,6 +72,11 @@ export const POSTING_RULES: { key: string; label: string; defaultCode: string }[
   { key: "salary_net", label: "Плати — обврска за нето", defaultCode: "240" },
   { key: "salary_contrib", label: "Плати — обврска за придонеси", defaultCode: "241" },
   { key: "salary_tax", label: "Плати — обврска за персонален данок", defaultCode: "242" },
+  { key: "bank_fees", label: "Банкарска провизија (трошоци за платен промет)", defaultCode: "449" },
+  { key: "wip_inventory", label: "Залиха на недовршено производство", defaultCode: "600" },
+  { key: "fg_inventory", label: "Залиха на готови производи", defaultCode: "630" },
+  { key: "inventory_change", label: "Промена на залихите на производи (распоред на трошоци)", defaultCode: "490" },
+  { key: "year_result", label: "Затворање на година — резултат (добивка/загуба)", defaultCode: "800" },
 ];
 
 export type Rules = Record<string, string>;
@@ -144,13 +153,33 @@ export function incomingLines(p: {
   subtotalMkd: number; vatMkd: number; foreign: boolean; supplierId: number; number: string; rules: Rules;
   /** трошочно/залихово конто избрано на фактурата (струја -> 401, закупнина -> 412...); инаку „набавки“ */
   account?: string | null;
+  /** обратно оданочување (услуга од странски добавувач): ДДВ го пресметуваме ние — истовремено излезен и претходен */
+  reverseChargeVatMkd?: number;
 }): GlLine[] {
   const total = round2(p.subtotalMkd + p.vatMkd);
+  const rc = round2(p.reverseChargeVatMkd ?? 0);
   return fixRounding(normalizeLines([
     { account: p.account || p.rules.purchases, debit: p.subtotalMkd, credit: 0, description: `Влезна фактура ${p.number}` },
     { account: p.rules.vat_input, debit: p.vatMkd, credit: 0, description: `Претходен ДДВ ${p.number}` },
     { account: p.foreign ? p.rules.suppliers_foreign : p.rules.suppliers_domestic, debit: 0, credit: total, partnerType: "supplier", partnerId: p.supplierId, description: `Влезна фактура ${p.number}` },
+    ...(rc ? [
+      { account: p.rules.vat_input, debit: rc, credit: 0, description: `ДДВ — обратно оданочување ${p.number}` },
+      { account: p.rules.vat_output, debit: 0, credit: rc, description: `ДДВ — обратно оданочување ${p.number}` },
+    ] : []),
   ]));
+}
+
+/**
+ * Проверка: ДДВ = основица × стапка (по ставки ако има различни стапки).
+ * Толеранција: 1 денар + 0,5 по ставка (заокружување по ставка). Враќа null ако е во ред.
+ */
+export function vatMismatch(p: { base: number; rate: number; vat: number; items?: { total: number; rate: number }[] }): { expected: number } | null {
+  const items = (p.items ?? []).filter(i => Number.isFinite(i.total));
+  const expected = round2(items.length && items.some(i => i.rate !== p.rate)
+    ? items.reduce((a, i) => a + i.total * i.rate / 100, 0)
+    : p.base * p.rate / 100);
+  const tol = 1 + 0.5 * Math.max(0, items.length);
+  return Math.abs(round2(p.vat) - expected) > tol ? { expected } : null;
 }
 
 /**
@@ -338,3 +367,27 @@ export const PURCHASE_KINDS: { code: string; title: string; examples: string }[]
   { code: "413", title: "Услуги", examples: "телефон, интернет, сметководител, софтвер, адвокат" },
   { code: "449", title: "Нешто друго / не сум сигурен", examples: "сметководителот подоцна ќе го прегледа" },
 ];
+
+
+/**
+ * „Што е оваа ставка од изводот?“ — избор со обични зборови; позади секој одговор е конто.
+ * Предлогот (match) е само помош: ако не е сигурно, операторот избира.
+ */
+export const BANK_KINDS: { key: string; title: string; examples: string; rule?: string; code?: string; dir?: "in" | "out"; match: RegExp }[] = [
+  { key: "contrib", title: "Придонеси од плата", examples: "ПИОМ, здравство, вработување", rule: "salary_contrib", dir: "out", match: /придонес|пиом|фзо|здравствено|вработување/i },
+  { key: "pit", title: "Персонален данок", examples: "данок на личен доход", rule: "salary_tax", dir: "out", match: /персонален|данок на лич|пдд/i },
+  { key: "vat", title: "ДДВ (уплата или поврат)", examples: "уплата по ДДВ пријава, поврат од УЈП", rule: "vat_output", match: /ддв|данок на додадена|(?<![a-z])vat(?![a-z])/i },
+  { key: "fee", title: "Банкарска провизија", examples: "провизија, одржување сметка, е-банкарство", rule: "bank_fees", dir: "out", match: /провизи|надомест|одржување|е-банк|трошоци на банка|fee/i },
+  { key: "cash", title: "Подигање / полагање готовина", examples: "од сметка во благајна и обратно", rule: "cash", match: /готовин|подигање|полагање|благајн/i },
+  // (?<![а-ш…]) = почеток на збор: „уплата“ не е „плата“
+  { key: "salary", title: "Исплата на плати", examples: "нето плата на вработени", rule: "salary_net", dir: "out", match: /(?<![а-шѓѕјљњќџ])плат[аиу]|нето плат|salary/i },
+  { key: "other", title: "Нешто друго", examples: "кредит, камата, капитал… — избери конто", match: /^$/ },
+];
+
+export function suggestBankKind(text: string, direction: "in" | "out"): { key: string; sure: boolean } | null {
+  // поконкретните (придонеси, данок, ДДВ...) се пред „плати“: „придонеси од плата“ е придонес
+  const hits = BANK_KINDS.filter(k => k.match.test(text) && (!k.dir || k.dir === direction));
+  if (!hits.length) return null;
+  const sure = hits.length === 1 || hits.slice(1).every(h => h.key === "salary");
+  return { key: hits[0].key, sure };
+}

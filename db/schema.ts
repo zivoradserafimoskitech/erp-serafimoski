@@ -161,6 +161,7 @@ export const bankTransactions = pgTable("bank_transactions", {
   matchedRef: varchar("matched_ref", { length: 120 }),
   partnerId: bigint("partner_id", { mode: "number", unsigned: true }),
   partnerType: varchar("partner_type", { length: 20 }),
+  accountCode: varchar("account_code", { length: 10 }),
   note: text("note"),
   dedupeKey: varchar("dedupe_key", { length: 180 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -824,6 +825,9 @@ export const invoices = pgTable("invoices", {
   language: varchar("language", { length: 5 }).default("mk"), // mk | en — јазик на печатење
   paymentSchedule: text("payment_schedule"), // JSON рати на плаќање (од понудата / про-фактурата)
   createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  // извоз (0% ДДВ): број и датум на царинската декларација (ЕЦД) — доказ за ослободувањето
+  customsDeclaration: varchar("customs_declaration", { length: 60 }),
+  customsDate: date("customs_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -850,6 +854,8 @@ export const incomingInvoices = pgTable("incoming_invoices", {
   totalAmount: decimal("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   currency: varchar("currency", { length: 10 }).notNull().default("MKD"),
   notes: text("notes"),
+  vatDate: date("vat_date"),
+  reverseCharge: boolean("reverse_charge").notNull().default(false),
   fileUrl: text("file_url"),
   createdBy: bigint("created_by", { mode: "number", unsigned: true }),
   createdAt: timestamp("created_at").defaultNow().notNull(),

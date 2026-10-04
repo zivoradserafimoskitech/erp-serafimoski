@@ -76,11 +76,17 @@ const trpcClient = trpc.createClient({
       },
       url: API_URL,
       transformer: superjson,
-      fetch(input, init) {
-        return globalThis.fetch(input, {
+      async fetch(input, init) {
+        const res = await globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
         });
+        // Кодот повеќе не важи (или апликацијата штотуку почна да бара најава) → прозорецот за најава
+        if (res.status === 401 && !(window as any).__authReload) {
+          (window as any).__authReload = true;
+          setTimeout(() => window.location.reload(), 400);
+        }
+        return res;
       },
     }),
   ],

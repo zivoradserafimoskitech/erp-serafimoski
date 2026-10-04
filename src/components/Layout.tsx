@@ -2,7 +2,7 @@ import { trpc } from "@/providers/trpc";
 import { ROLES, canSeeMenu, type Role } from "@contracts/roles";
 import { useEffect, useState } from "react";
 import GlobalSearch from "@/components/GlobalSearch";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,7 @@ import {
   Search,
   Workflow,
   Contact,
+  ShieldAlert,
 } from "lucide-react";
 
 const navItems = [
@@ -50,6 +51,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   // Ctrl+K / Cmd+K од било каде
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -182,6 +184,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Page content */}
         <main className="flex-1 overflow-auto p-4 lg:p-6">
+          {me && me.gate === false && me.role === "admin" && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+              <ShieldAlert className="h-4 w-4 shrink-0" />
+              <span className="flex-1 min-w-[12rem]">Апликацијата е <b>отворена за секој што ја има адресата</b> — без најава, сите се администратори. Додај корисник администратор со код и таа ќе бара најава.</span>
+              <button className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium hover:bg-red-100" onClick={() => navigate("/podesuvanja?tab=users")}>Додај администратор</button>
+            </div>
+          )}
           {children}
         </main>
       </div>

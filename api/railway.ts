@@ -13,31 +13,29 @@ const app = new Hono();
 // Сервисни адреси (миграција, seed, debug): кога е поставена APP_PASSWORD, бараат ?key=... или x-app-key
 const ADMIN_PATHS = ["/api/init-db", "/api/debug", "/api/test-db", "/api/seed-services", "/api/seed-materials"];
 app.use("/api/*", async (c, next) => {
-  const pw = process.env.APP_PASSWORD;
-  if (!pw || !ADMIN_PATHS.includes(c.req.path)) return await next();
+  if (!ADMIN_PATHS.includes(c.req.path)) return await next();
+  const { resolveActor, gateActive } = await import("./context");
+  if (!(await gateActive())) return await next();
   const key = c.req.header("x-app-key") ?? c.req.query("key") ?? "";
-  const { resolveActor } = await import("./context");
   const actor = await resolveActor(key);
   if (!actor || actor.role !== "admin") return c.json({ error: "Потребна е администраторска лозинка (?key=...)" }, 401);
   await next();
 });
 
-// ── Заштита со лозинка (точка 5): активна само ако APP_PASSWORD е поставена ──
+// ── Заштита со лозинка: активна ако е поставена APP_PASSWORD или постои администратор со код ──
 app.post("/api/auth-check", async (c) => {
-  const pw = process.env.APP_PASSWORD;
-  if (!pw) return c.json({ ok: true, gate: false, name: "Отворен пристап", role: "admin" });
+  const { resolveActor, gateActive } = await import("./context");
+  if (!(await gateActive())) return c.json({ ok: true, gate: false, name: "Отворен пристап", role: "admin" });
   const body = await c.req.json().catch(() => ({}));
   const provided = body?.password ?? c.req.header("x-app-key") ?? "";
-  const { resolveActor } = await import("./context");
   const actor = await resolveActor(provided);
   if (!actor) return c.json({ ok: false, gate: true });
   return c.json({ ok: true, gate: true, name: actor.name, role: actor.role });
 });
 app.use("/api/trpc/*", async (c, next) => {
-  const pw = process.env.APP_PASSWORD;
-  if (!pw) return await next();
+  const { resolveActor, gateActive } = await import("./context");
+  if (!(await gateActive())) return await next();
   const key = c.req.header("x-app-key") ?? "";
-  const { resolveActor } = await import("./context");
   const actor = await resolveActor(key);
   if (!actor) {
     return c.json({ error: { json: { message: "Најави се повторно (погрешен код)", code: -32001, data: { code: "UNAUTHORIZED", httpStatus: 401 } } } }, 401);
