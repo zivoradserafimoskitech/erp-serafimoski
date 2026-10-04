@@ -113,6 +113,12 @@ export default function ProcurementNeeds() {
         </div>
       )}
 
+      {(data?.totals as any)?.urgent > 0 && (
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {(data?.totals as any).urgent} материјали треба да се нарачаат веднаш — со рокот на испорака на добавувачот нема да стигнат до кога се потребни.
+        </p>
+      )}
+      <p className="text-xs text-gray-500">Потребите се од отворените работни налози и од потврдените нарачки што уште немаат налог (по нормативот, со подсклоповите). „Нарачај до“ = кога е потребно минус рокот на испорака на добавувачот (се внесува кај добавувачот).</p>
       <div className="flex flex-wrap gap-3 items-center">
         <label className="flex items-center gap-1.5 text-sm text-gray-600">
           <input type="checkbox" checked={includeMinStock}
@@ -135,6 +141,8 @@ export default function ProcurementNeeds() {
                 <TableHead>Материјал</TableHead>
                 <TableHead className="text-right w-24">На залиха</TableHead>
                 <TableHead className="text-right w-28">Бараат налози</TableHead>
+                <TableHead className="text-right w-28" title="Нарачки што уште немаат налог — по нормативот на производите">Бараат нарачки</TableHead>
+                <TableHead className="w-28">Нарачај до</TableHead>
                 <TableHead className="text-right w-28">Веќе нарачано</TableHead>
                 <TableHead className="text-right w-28">Недостига</TableHead>
                 <TableHead className="w-44">Добавувач</TableHead>
@@ -143,7 +151,7 @@ export default function ProcurementNeeds() {
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-12 text-gray-400">
+                <TableRow><TableCell colSpan={10} className="text-center py-12 text-gray-400">
                   Нема материјали што недостигаат. Залихите ги покриваат отворените налози.
                 </TableCell></TableRow>
               ) : rows.map((r: any) => {
@@ -176,6 +184,18 @@ export default function ProcurementNeeds() {
                       {r.reservedQty > 0 ? (
                         <span className="font-medium text-amber-700">{r.reservedQty.toLocaleString("mk-MK")}</span>
                       ) : <span className="text-gray-300">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right text-sm">
+                      {r.orderQty > 0 ? (
+                        <span className="font-medium text-violet-700" title={r.orders.join(", ")}>{r.orderQty.toLocaleString("mk-MK")}</span>
+                      ) : <span className="text-gray-300">—</span>}
+                      {r.orders?.length > 0 && <div className="text-[11px] text-violet-600">{r.orders.slice(0, 2).join(", ")}{r.orders.length > 2 ? ` +${r.orders.length - 2}` : ""}</div>}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {r.orderBy ? (
+                        <span className={r.urgent ? "font-semibold text-red-600" : "text-gray-700"}>{r.urgent ? "итно" : `${r.orderBy.slice(8, 10)}.${r.orderBy.slice(5, 7)}.`}</span>
+                      ) : <span className="text-gray-300">—</span>}
+                      {r.needDate && <div className="text-[11px] text-gray-400">потребно {r.needDate.slice(8, 10)}.{r.needDate.slice(5, 7)} · рок {r.leadTimeDays} д.</div>}
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {r.incoming > 0 ? (

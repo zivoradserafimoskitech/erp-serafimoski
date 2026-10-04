@@ -66,6 +66,8 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   assets: "manager",
   finance: "manager",
   settle: "manager",
+  // застои и мерења ги внесува и операторот; постапки, планови, инструменти — менаџер (подолу)
+  mfg: "operator",
   ops: "operator",
   hr: "admin",
   mail: "manager",
@@ -141,6 +143,9 @@ export function canRun(role: string | undefined | null, path: string, type?: "qu
 
   // Сметководителот пишува само во финансиските делови
   if (role === "accountant") return ACCOUNTANT_ROUTERS.includes(router);
+
+  // во производството операторот смее само застои, мерења и издавање по нестинг
+  if (router === "mfg" && !/^(downtime|inspectionRecord)/.test(procedure)) return atLeast(role, "manager");
 
   const min = WRITE_ROLE_BY_ROUTER[router] ?? "manager";
   return atLeast(role, min);

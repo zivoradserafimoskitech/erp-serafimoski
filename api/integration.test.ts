@@ -726,4 +726,103 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(d.fileName).toBe("deo.dxf");
     expect(d.stats.cutLength).toBe(1);
   });
+
+  it("производство: постапка, повеќестепен норматив, MRP, застои/OEE, квалитет, нестинг", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    await caller.catalog.machineCreate({ name: "Ласер Тест", code: "LT-1", type: "laser", costPerHour: "3000" });
+    const machineId = Number((await pool.query(`SELECT id FROM machines WHERE code = 'LT-1'`)).rows[0].id);
+    await caller.quotation.productCreate({ name: "Носач", code: "SUB-1", category: "other", unit: "pcs", basis: "pcs", totalCost: "500" });
+    await caller.quotation.productCreate({ name: "Рамка", code: "TOP-1", category: "other", unit: "pcs", basis: "pcs" });
+    const sub = Number((await pool.query(`SELECT id FROM products WHERE code = 'SUB-1'`)).rows[0].id);
+    const top = Number((await pool.query(`SELECT id FROM products WHERE code = 'TOP-1'`)).rows[0].id);
+    // норматив: рамка = 2 носачи + 10 кг лим; носач = 3 кг лим (+10% отпад)
+    await caller.catalog.bomCreate({ productId: sub, kind: "material", refId: ids.mat, perUnit: "3", wastePct: "10", scale: "fixed" });
+    await caller.catalog.bomCreate({ productId: top, kind: "product", refId: sub, perUnit: "2", wastePct: "0", scale: "fixed" });
+    await caller.catalog.bomCreate({ productId: top, kind: "material", refId: ids.mat, perUnit: "10", wastePct: "0", scale: "fixed" });
+    // круг не смее
+    await expect(caller.catalog.bomCreate({ productId: sub, kind: "product", refId: top, perUnit: "1", scale: "fixed" })).rejects.toThrow(/круг/);
+    await expect(caller.catalog.bomCreate({ productId: top, kind: "product", refId: top, perUnit: "1", scale: "fixed" })).rejects.toThrow(/круг/);
+    const ex: any[] = await caller.mfg.bomExplode({ productId: top, quantity: 5 });
+    expect(ex.find((x) => x.materialId === ids.mat).quantity).toBeCloseTo(5 * (10 + 2 * 3.3), 3);
+    const rc: any = await caller.catalog.productRecalc({ productId: top });
+    expect(Number(rc.materialCost)).toBeGreaterThan(1000); // 2 × 500 (подсклоп) + лим
+
+    // постапка → операциите на налогот се прават сами
+    await caller.mfg.routingSave({ productId: top, steps: [
+      { operation: "cutting_laser", description: "Сечење", machineId, setupMin: 15, runMin: 3 },
+      { operation: "welding_mig", description: "Заварување", setupMin: 0, runMin: 12 },
+    ] });
+    expect((await caller.mfg.routingList({ productId: top })).length).toBe(2);
+    await pool.query(`INSERT INTO suppliers (name, lead_time_days) VALUES ('Челичана', 10)`);
+    const supL = Number((await pool.query(`SELECT id FROM suppliers WHERE name = 'Челичана'`)).rows[0].id);
+    await pool.query(`UPDATE materials SET default_supplier_id = $1 WHERE id = $2`, [supL, ids.mat]);
+    const ord = (await pool.query(`INSERT INTO orders (order_number, customer_id, status, total_amount, delivery_date) VALUES ('НАР-MRP/2026', $1, 'confirmed', 0, CURRENT_DATE + 5) RETURNING id`, [ids.cust])).rows[0].id;
+    await pool.query(`INSERT INTO order_items (order_id, product_id, description, quantity, unit_price, total_price) VALUES ($1,$2,'Рамка',100,0,0)`, [ord, top]);
+    // MRP: нарачка без налог → потреба по нормативот; „нарачај до“ = испорака − 10 дена (веќе поминато → итно)
+    const needs: any = await caller.procurement.procurementNeeds({ includeMinStock: false });
+    const row = needs.rows.find((r: any) => r.id === ids.mat);
+    expect(row.orderQty).toBeCloseTo(100 * 16.6, 1);
+    expect(row.orders).toContain("НАР-MRP/2026");
+    expect(row.leadTimeDays).toBe(10);
+    expect(row.urgent).toBe(true);
+    // налог за нарачката → операции од постапката, потребата веќе не се брои двојно
+    const wo = await caller.production.workOrderCreate({ woNumber: "РН-MRP-1", orderId: ord, description: "Рамки" });
+    expect(wo.opsAdded).toBe(2);
+    const ops = (await pool.query(`SELECT operation, estimated_time, machine_id, cost_rate FROM work_order_operations WHERE work_order_id = $1 ORDER BY sequence`, [wo.id])).rows;
+    expect(Number(ops[0].estimated_time)).toBeCloseTo((15 + 3 * 100) / 60, 2);
+    expect(Number(ops[0].machine_id)).toBe(machineId);
+    expect(Number(ops[0].cost_rate)).toBe(3000);
+    expect((await caller.mfg.woApplyRouting({ workOrderId: wo.id })).added).toBe(0); // не се дуплира
+    const needs2: any = await caller.procurement.procurementNeeds({ includeMinStock: false });
+    expect(needs2.rows.find((r: any) => r.id === ids.mat)?.orderQty ?? 0).toBe(0);
+
+    // застои и OEE
+    const today = new Date().toISOString().slice(0, 10);
+    const st = new Date(); st.setHours(8, 0, 0, 0); const en = new Date(st.getTime() + 2 * 3600_000);
+    await caller.mfg.downtimeStart({ machineId, reason: "breakdown", note: "лазер", startAt: st.toISOString(), endAt: en.toISOString() });
+    await caller.mfg.downtimeStart({ machineId, reason: "maintenance", startAt: new Date(en.getTime() + 60_000).toISOString(), endAt: new Date(en.getTime() + 3600_000).toISOString() });
+    const dt = await caller.mfg.downtimeStart({ machineId, reason: "no_material" });
+    await expect(caller.mfg.downtimeStart({ machineId, reason: "other" })).rejects.toThrow(/веќе тече/);
+    await caller.mfg.downtimeEnd({ id: dt.id });
+    await pool.query(`UPDATE work_order_operations SET status = 'completed', actual_time = estimated_time * 1.25 WHERE work_order_id = $1`, [wo.id]);
+    await pool.query(`UPDATE work_orders SET actual_end = now() WHERE id = $1`, [wo.id]);
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const oee: any[] = await caller.mfg.oee({ from: weekAgo, to: today });
+    const m = oee.find((x) => x.machineId === machineId);
+    expect(m.downtimeHours).toBeCloseTo(2, 1);
+    expect(m.excludedHours).toBeCloseTo(1, 1);
+    expect(m.performance).toBeCloseTo(0.8, 2);
+    expect(m.oee).toBeGreaterThan(0);
+
+    // инструмент: неважечка калибрација блокира мерење; толеранција одлучува OK/NOK
+    const ins = await caller.mfg.instrumentSave({ name: "Шублер 150", code: "SH-1", intervalMonths: 12, lastCalibration: "2024-01-10" });
+    await caller.mfg.inspectionPlanSave({ productId: top, items: [{ characteristic: "Должина", nominal: 500, tolPlus: 1, tolMinus: 1, instrumentId: ins.id }] });
+    const plan: any = await caller.mfg.inspectionForWorkOrder({ workOrderId: wo.id });
+    expect(plan.plan.length).toBe(1);
+    await expect(caller.mfg.inspectionRecord({ workOrderId: wo.id, characteristic: "Должина", nominal: 500, tolPlus: 1, tolMinus: 1, measured: 500.5, instrumentId: ins.id })).rejects.toThrow(/калибриран/);
+    await caller.mfg.calibrationAdd({ instrumentId: ins.id, date: today, result: "pass", certificateNo: "К-1" });
+    expect((await caller.mfg.instrumentList()).find((x: any) => x.id === ins.id).nextDue > today).toBe(true);
+    expect((await caller.mfg.inspectionRecord({ workOrderId: wo.id, characteristic: "Должина", nominal: 500, tolPlus: 1, tolMinus: 1, measured: 500.5, instrumentId: ins.id })).result).toBe("ok");
+    expect((await caller.mfg.inspectionRecord({ workOrderId: wo.id, characteristic: "Должина", nominal: 500, tolPlus: 1, tolMinus: 1, measured: 498.7, instrumentId: ins.id })).result).toBe("nok");
+    await caller.mfg.calibrationAdd({ instrumentId: ins.id, date: today, result: "fail" });
+    expect((await caller.mfg.instrumentList()).find((x: any) => x.id === ins.id).status).toBe("out");
+
+    // 8D на неусогласеност
+    const qi = (await pool.query(`INSERT INTO quality_issues (issue_number, issue_date, kind, title, supplier_id) VALUES ('НУ-8D', CURRENT_DATE, 'supplier', 'Лош лим', $1) RETURNING id`, [supL])).rows[0].id;
+    await caller.mfg.eightDSave({ issueId: qi, d: { d2: "Рѓа на лимот", d4: "Складирање на отворено", d5: "Покриено складиште" } });
+    expect((await pool.query(`SELECT root_cause FROM quality_issues WHERE id = $1`, [qi])).rows[0].root_cause).toBe("Складирање на отворено");
+    expect((await caller.mfg.eightDGet({ issueId: qi })).d2).toBe("Рѓа на лимот");
+    const rating: any[] = await caller.mfg.supplierRating({ from: "2026-01-01", to: "2026-12-31" });
+    expect(rating.find((r) => r.supplierId === supL)?.issues).toBe(1);
+
+    // нестинг: увоз → материјалот се издава на налогот (кг од таблите), остатокот се внесува
+    await pool.query(`UPDATE materials SET current_stock = current_stock + 1000 WHERE id = $1`, [ids.mat]);
+    await pool.query(`UPDATE material_stock SET quantity = quantity + 1000 WHERE material_id = $1`, [ids.mat]);
+    const res: any = await caller.mfg.nestingImport({ workOrderId: wo.id, sheets: [{ materialId: ids.mat, sheets: 2, thicknessMm: 3, widthMm: 1500, lengthMm: 3000, utilization: 78,
+      remnants: [{ widthMm: 400, lengthMm: 1500, quantity: 1 }] }] });
+    expect(res.issued[0].quantity).toBeCloseTo(2 * 3 * 1500 * 3000 / 1e9 * 7850, 2);
+    expect(res.remnants.length).toBe(1);
+    expect(Number((await pool.query(`SELECT width_mm FROM material_remnants WHERE code = $1`, [res.remnants[0]])).rows[0].width_mm)).toBe(400);
+  });
 });

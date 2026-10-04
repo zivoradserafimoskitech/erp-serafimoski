@@ -206,6 +206,22 @@ export const quotationRouter = createRouter({
             totalCost: totalCost.toFixed(2),
             sortOrder: c.sortOrder,
           });
+        } else if (c.kind === "product") {
+          // подсклоп: по неговата цена на чинење
+          const sp = await db.select().from(products).where(eq(products.id, c.refId));
+          const unitCost = parseFloat(sp[0]?.totalCost ?? "0") || 0;
+          const totalCost = totalQty * unitCost;
+          materialCost += totalCost;
+          lineItems.push({
+            itemType: "product" as const,
+            referenceId: c.refId,
+            description: `${sp[0]?.name ?? "Подсклоп"} (подсклоп)`,
+            quantity: totalQty.toFixed(3),
+            unit: sp[0]?.unit ?? "pcs",
+            unitCost: unitCost.toFixed(2),
+            totalCost: totalCost.toFixed(2),
+            sortOrder: c.sortOrder,
+          } as any);
         } else {
           const s = await db.select().from(services).where(eq(services.id, c.refId));
           const unitCost = parseFloat(s[0]?.costRate ?? "0");
@@ -272,11 +288,15 @@ export const quotationRouter = createRouter({
           } catch { /* не е JSON — прескокни */ }
         }
       }
+      let opsAdded = 0;
       if (woId) {
         const { recalcWorkOrderCost } = await import("./wo-cost-helper");
         await recalcWorkOrderCost(woId).catch(() => {});
+        // операциите од технолошката постапка на производите во понудата
+        const { applyRoutingToWorkOrder } = await import("./mfg-router");
+        opsAdded = (await applyRoutingToWorkOrder(woId).catch(() => ({ added: 0 }))).added;
       }
-      return { success: true, woNumber, materialsCopied: mats };
+      return { success: true, woNumber, materialsCopied: mats, opsAdded };
     }),
 
   // Про-фактура од понуда (МК или EN, во валута на понудата или конвертирана со курс)

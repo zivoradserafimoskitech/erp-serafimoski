@@ -1,4 +1,5 @@
 import { useState } from "react";
+import RoutingEditor from "@/components/mfg/RoutingEditor";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -281,14 +282,16 @@ export default function CatalogPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <Select value={bomForm.kind} onValueChange={v => setBomForm({ ...bomForm, kind: v })}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="material">Материјал</SelectItem><SelectItem value="service">Услуга</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="material">Материјал</SelectItem><SelectItem value="service">Услуга</SelectItem><SelectItem value="product">Подсклоп (друг производ)</SelectItem></SelectContent>
                       </Select>
                       <Select value={bomForm.refId} onValueChange={v => setBomForm({ ...bomForm, refId: v })}>
-                        <SelectTrigger><SelectValue placeholder={bomForm.kind === "material" ? "Материјал" : "Услуга"} /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder={bomForm.kind === "material" ? "Материјал" : bomForm.kind === "product" ? "Подсклоп" : "Услуга"} /></SelectTrigger>
                         <SelectContent>
                           {bomForm.kind === "material"
                             ? materialsData?.map((m: any) => <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>)
-                            : servicesData?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
+                            : bomForm.kind === "product"
+                              ? productsData?.filter((p: any) => p.id !== activeProduct).map((p: any) => <SelectItem key={p.id} value={p.id.toString()}>{p.name} ({p.code})</SelectItem>)
+                              : servicesData?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -304,6 +307,7 @@ export default function CatalogPage() {
                       </Select>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => bomCreate.mutate({ ...bomForm, productId: activeProduct, refId: parseInt(bomForm.refId), sortOrder: bomForm.sortOrder } as any)}>Додади во норматив</Button>
+                    {bomForm.kind === "product" && <p className="text-[11px] text-gray-500">Подсклоп: делот со свој норматив (на пр. носач во рамка). Се пресметува по неговата цена на чинење, а за набавка се разложува до материјали.</p>}
                   </div>
                 )}
               </CardContent>
@@ -336,7 +340,7 @@ export default function CatalogPage() {
                     <TableBody>
                       {bomData.map((c: any) => (
                         <TableRow key={c.id}>
-                          <TableCell><Badge className={c.kind === "material" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}>{c.kind === "material" ? "Мат" : "Усл"}</Badge></TableCell>
+                          <TableCell><Badge className={c.kind === "material" ? "bg-blue-100 text-blue-800" : c.kind === "product" ? "bg-violet-100 text-violet-800" : "bg-amber-100 text-amber-800"}>{c.kind === "material" ? "Мат" : c.kind === "product" ? "Подск." : "Усл"}</Badge></TableCell>
                           <TableCell className="text-xs">{c.refName}</TableCell><TableCell>{c.perUnit}</TableCell><TableCell>{c.wastePct}%</TableCell>
                           <TableCell className="text-xs">{c.scale === "area" ? "m2" : c.scale === "perimeter" ? "перим." : c.scale === "length" ? "долж." : "фикс"}</TableCell>
                           <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) bomDelete.mutate({ id: c.id }); }}>Избриши</Button></TableCell>
@@ -345,11 +349,31 @@ export default function CatalogPage() {
                     </TableBody>
                   </Table>
                 ) : <p className="text-gray-500 text-sm text-center py-4">{activeProduct ? "Нема компоненти" : "Избери производ"}</p>}
+                {activeProduct && <ExplodedBom productId={activeProduct} />}
               </CardContent>
             </Card>
           </div>
+          {activeProduct && <Card><CardContent className="p-4"><RoutingEditor productId={activeProduct} /></CardContent></Card>}
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/** Нормативот разложен до материјали низ сите подсклопови — тоа е она што MRP го бара за набавка. */
+function ExplodedBom({ productId }: { productId: number }) {
+  const [qty, setQty] = useState("1");
+  const { data } = trpc.mfg.bomExplode.useQuery({ productId, quantity: Math.max(0.001, parseFloat(qty) || 1) });
+  if (!data?.length) return null;
+  return (
+    <div className="mt-4 border-t pt-3 text-xs space-y-1">
+      <div className="flex items-center gap-2"><span className="font-semibold text-gray-600">Вкупно материјал за</span><Input className="h-7 w-20 text-xs" value={qty} onChange={(e) => setQty(e.target.value)} /><span className="text-gray-500">единици (со подсклоповите и отпадот)</span></div>
+      {data.map((m) => (
+        <div key={m.materialId} className="flex justify-between gap-2">
+          <span>{m.name}</span>
+          <span className={m.quantity > m.stock ? "text-red-600" : "text-gray-600"}>{m.quantity.toLocaleString("mk-MK")} {m.unit} · залиха {m.stock.toLocaleString("mk-MK")} · {m.cost.toLocaleString("mk-MK")} ден</span>
+        </div>
+      ))}
     </div>
   );
 }

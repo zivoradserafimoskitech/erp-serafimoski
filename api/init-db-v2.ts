@@ -194,6 +194,100 @@ export function getExtraSql(): string[] {
       "payment_code" varchar(10)
     )`,
     `CREATE INDEX IF NOT EXISTS "payment_order_items_inc_idx" ON "payment_order_items" ("incoming_invoice_id")`,
+    // Технолошка постапка по производ, рок на испорака кај добавувач
+    `CREATE TABLE IF NOT EXISTS "product_routings" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "product_id" integer NOT NULL,
+      "sequence" integer NOT NULL,
+      "operation" varchar(50) NOT NULL,
+      "description" varchar(500),
+      "machine_id" integer,
+      "setup_min" numeric(10, 2) DEFAULT '0' NOT NULL,
+      "run_min" numeric(10, 3) DEFAULT '0' NOT NULL,
+      "notes" text
+    )`,
+    `CREATE INDEX IF NOT EXISTS "product_routings_product_idx" ON "product_routings" ("product_id")`,
+    `ALTER TABLE "suppliers" ADD COLUMN IF NOT EXISTS "lead_time_days" integer`,
+    // Застои на машини (за OEE)
+    `CREATE TABLE IF NOT EXISTS "machine_downtime" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "machine_id" integer NOT NULL,
+      "start_at" timestamp NOT NULL,
+      "end_at" timestamp,
+      "reason" varchar(30) NOT NULL,
+      "note" text,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "machine_downtime_machine_idx" ON "machine_downtime" ("machine_id", "start_at")`,
+    // Квалитет: план на контрола, записи од мерење, мерни инструменти и калибрации, 8D
+    `CREATE TABLE IF NOT EXISTS "instruments" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "name" varchar(255) NOT NULL,
+      "code" varchar(60),
+      "serial_no" varchar(120),
+      "range_text" varchar(120),
+      "location" varchar(160),
+      "interval_months" integer DEFAULT 12 NOT NULL,
+      "last_calibration" date,
+      "next_due" date,
+      "status" varchar(20) DEFAULT 'active' NOT NULL,
+      "notes" text,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "instrument_calibrations" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "instrument_id" integer NOT NULL REFERENCES "instruments"("id") ON DELETE CASCADE,
+      "cal_date" date NOT NULL,
+      "result" varchar(10) NOT NULL,
+      "certificate_no" varchar(120),
+      "provider" varchar(255),
+      "next_due" date,
+      "notes" text,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "inspection_plans" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "product_id" integer,
+      "operation" varchar(50),
+      "characteristic" varchar(255) NOT NULL,
+      "nominal" numeric(14, 4),
+      "tol_plus" numeric(14, 4),
+      "tol_minus" numeric(14, 4),
+      "unit" varchar(20) DEFAULT 'mm',
+      "instrument_id" integer,
+      "frequency" varchar(120),
+      "sort_order" integer DEFAULT 0 NOT NULL,
+      "notes" text
+    )`,
+    `CREATE TABLE IF NOT EXISTS "inspection_records" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "work_order_id" integer NOT NULL,
+      "plan_id" integer,
+      "characteristic" varchar(255) NOT NULL,
+      "nominal" numeric(14, 4),
+      "tol_plus" numeric(14, 4),
+      "tol_minus" numeric(14, 4),
+      "measured" numeric(14, 4),
+      "result" varchar(10) NOT NULL,
+      "sample_no" integer DEFAULT 1 NOT NULL,
+      "instrument_id" integer,
+      "inspector" varchar(160),
+      "inspected_at" timestamp DEFAULT now() NOT NULL,
+      "notes" text
+    )`,
+    `CREATE INDEX IF NOT EXISTS "inspection_records_wo_idx" ON "inspection_records" ("work_order_id")`,
+    // Нестинг: извоз на делови и увоз на резултат (табли, искористеност, остатоци)
+    `CREATE TABLE IF NOT EXISTS "nesting_jobs" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "work_order_ids" integer[] NOT NULL,
+      "parts" jsonb,
+      "result" jsonb,
+      "status" varchar(20) DEFAULT 'exported' NOT NULL,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "imported_at" timestamp
+    )`,
     // DXF цртежи од калкулацијата за сечење (оригиналот се чува за налогот/машината)
     `CREATE TABLE IF NOT EXISTS "cad_drawings" (
       "id" serial PRIMARY KEY NOT NULL,
@@ -328,5 +422,8 @@ export function getExtraSql(): string[] {
     `CREATE INDEX IF NOT EXISTS "wo_materials_wo_idx" ON "work_order_materials" ("work_order_id")`,
     `CREATE INDEX IF NOT EXISTS "wo_ops_wo_idx" ON "work_order_operations" ("work_order_id")`,
     `CREATE INDEX IF NOT EXISTS "document_items_doc_idx" ON "document_items" ("document_type", "document_id")`,
+    // по табелите на квалитет и остатоци (се создаваат погоре)
+    `ALTER TABLE "quality_issues" ADD COLUMN IF NOT EXISTS "eight_d" jsonb`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "width_mm" numeric(12, 1)`,
   ];
 }

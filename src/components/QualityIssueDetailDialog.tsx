@@ -1,4 +1,5 @@
 import { useState } from "react";
+import EightDPanel from "@/components/mfg/EightDPanel";
 import { useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -118,6 +119,8 @@ export default function QualityIssueDetailDialog({ issue, onClose }: { issue: an
                   <SelectContent>{Object.entries(STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
             </div>
           </div>
+
+          {q.kind !== "internal" && <EightDPanel key={q.id} issueId={q.id} />}
 
           <div className="flex justify-between pt-1">
             <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { if (confirm("Да се избрише записот?")) del.mutate({ id: q.id }); }}><Trash2 className="h-3.5 w-3.5 mr-1" />Избриши</Button>

@@ -176,7 +176,10 @@ export const productionRouter = createRouter({
       const result = await db.insert(workOrders).values(insertData);
       const insertId = Number(result[0].insertId);
       await logAudit({ action: "CREATE", entityType: "work_order", entityId: insertId, description: `Креиран налог ${input.woNumber}` });
-      return { success: true, id: insertId };
+      // налог за нарачка: операциите од технолошката постапка на производите
+      let opsAdded = 0;
+      if (orderId) { const { applyRoutingToWorkOrder } = await import("./mfg-router"); opsAdded = (await applyRoutingToWorkOrder(insertId).catch(() => ({ added: 0 }))).added; }
+      return { success: true, id: insertId, opsAdded };
     }),
 
   workOrderUpdate: publicQuery
