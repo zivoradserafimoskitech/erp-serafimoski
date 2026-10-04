@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Cog, Users, Percent, Layers, Calculator, Zap, Wrench, Fuel, Clock, ArrowRight } from "lucide-react";
+import { Cog, Users, Percent, Layers, Calculator, Zap, Wrench, Fuel, Clock } from "lucide-react";
 
 const machineTypes: Record<string, string> = { laser: "Ласер", plasma: "Плазма", bending: "Апкант", welding: "Заварување", painting: "Фарбање", grinding: "Брусење", drilling: "Бушило", cnc: "ЦНЦ", other: "Друго" };
 const rateTypes: Record<string, string> = { pct_of_labor: "% од труд", per_hour: "по час", per_m2: "по m2", fixed: "фиксен" };
@@ -105,7 +105,7 @@ export default function CatalogPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Код</TableHead><TableHead>Назив</TableHead><TableHead>Тип</TableHead><TableHead>Цена/час</TableHead><TableHead>Амортизација</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {machinesData?.map(m => (
+                  {machinesData?.map((m: any) => (
                     <TableRow key={m.id}><TableCell className="font-medium">{m.code}</TableCell><TableCell>{m.name}</TableCell><TableCell>{machineTypes[m.type]}</TableCell>
                       <TableCell>{m.costPerHour} ден.</TableCell><TableCell>{m.annualAmortization} ден/год</TableCell>
                       <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) machDelete.mutate({ id: m.id }); }}>Избриши</Button></TableCell>
@@ -129,7 +129,7 @@ export default function CatalogPage() {
                     <Label className="text-xs">Машина *</Label>
                     <Select value={calcMachineId} onValueChange={(v) => {
                       setCalcMachineId(v);
-                      const m = machinesData?.find(x => x.id.toString() === v);
+                      const m = machinesData?.find((x: any) => x.id.toString() === v);
                       if (m) {
                         setCalcForm({
                           annualAmortization: m.annualAmortization ?? "",
@@ -142,7 +142,7 @@ export default function CatalogPage() {
                       }
                     }}>
                       <SelectTrigger><SelectValue placeholder="Избери машина..." /></SelectTrigger>
-                      <SelectContent>{machinesData?.map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name} ({m.code})</SelectItem>)}</SelectContent>
+                      <SelectContent>{machinesData?.map((m: any) => <SelectItem key={m.id} value={m.id.toString()}>{m.name} ({m.code})</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
@@ -226,7 +226,7 @@ export default function CatalogPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Улога</TableHead><TableHead>Код</TableHead><TableHead>Цена/час</TableHead><TableHead>Бруто плата</TableHead><TableHead>Придонеси %</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {laborData?.map(l => (
+                  {laborData?.map((l: any) => (
                     <TableRow key={l.id}><TableCell className="font-medium">{l.role}</TableCell><TableCell>{l.roleCode}</TableCell><TableCell>{l.costPerHour} ден.</TableCell>
                       <TableCell>{l.grossSalary} ден.</TableCell><TableCell>{l.contributionsPct}%</TableCell>
                       <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) laborDelete.mutate({ id: l.id }); }}>Избриши</Button></TableCell>
@@ -255,7 +255,7 @@ export default function CatalogPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Назив</TableHead><TableHead>Тип</TableHead><TableHead>Вредност</TableHead><TableHead>Годишно</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {overheadData?.map(o => (
+                  {overheadData?.map((o: any) => (
                     <TableRow key={o.id}><TableCell className="font-medium">{o.name}</TableCell><TableCell>{rateTypes[o.rateType]}</TableCell>
                       <TableCell>{o.rateValue}</TableCell><TableCell>{o.annualAmount} ден.</TableCell>
                       <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) ohDelete.mutate({ id: o.id }); }}>Избриши</Button></TableCell>
@@ -274,7 +274,7 @@ export default function CatalogPage() {
               <CardContent className="space-y-2">
                 <Select value={activeProduct?.toString() ?? ""} onValueChange={v => setActiveProduct(parseInt(v))}>
                   <SelectTrigger><SelectValue placeholder="Избери производ" /></SelectTrigger>
-                  <SelectContent>{productsData?.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.name} ({p.code})</SelectItem>)}</SelectContent>
+                  <SelectContent>{productsData?.map((p: any) => <SelectItem key={p.id} value={p.id.toString()}>{p.name} ({p.code})</SelectItem>)}</SelectContent>
                 </Select>
                 {activeProduct && (
                   <div className="space-y-2 pt-2">
@@ -287,8 +287,8 @@ export default function CatalogPage() {
                         <SelectTrigger><SelectValue placeholder={bomForm.kind === "material" ? "Материјал" : "Услуга"} /></SelectTrigger>
                         <SelectContent>
                           {bomForm.kind === "material"
-                            ? materialsData?.map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>)
-                            : servicesData?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
+                            ? materialsData?.map((m: any) => <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>)
+                            : servicesData?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -321,7 +321,7 @@ export default function CatalogPage() {
               </CardHeader>
               <CardContent>
                 {activeProduct && (() => {
-                  const p = productsData?.find(x => x.id === activeProduct);
+                  const p = productsData?.find((x: any) => x.id === activeProduct);
                   return p ? (
                     <div className="text-xs text-gray-500 mb-3 flex gap-4">
                       <span>Материјал: <b className="text-gray-800">{p.materialCost} ден.</b></span>

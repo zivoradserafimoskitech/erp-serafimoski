@@ -213,11 +213,11 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
       lines: [{ account: "412", side: "D", note: "закупнина" }, { account: "130", side: "D", note: "ДДВ 18%" }, { account: "220", side: "P" }] });
     await expect(caller.finance.terkSave({ name: "закупнина", lines: [{ account: "412", side: "D" }, { account: "220", side: "P" }] })).rejects.toThrow(/Веќе постои/);
     const list = await caller.finance.terkList();
-    const t = list.find(x => x.id === id)!;
-    expect(t.lines.map(l => `${l.account}${l.side}`)).toEqual(["412D", "130D", "220P"]);
+    const t = list.find((x: any) => x.id === id)!;
+    expect(t.lines.map((l: any) => `${l.account}${l.side}`)).toEqual(["412D", "130D", "220P"]);
     // измена: редоследот и страните се зачувуваат точно
     await caller.finance.terkSave({ id, name: "Закупнина", lines: [{ account: "220", side: "P" }, { account: "412", side: "D" }] });
-    expect((await caller.finance.terkList()).find(x => x.id === id)!.lines.map(l => l.account)).toEqual(["220", "412"]);
+    expect((await caller.finance.terkList()).find((x: any) => x.id === id)!.lines.map((l: any) => l.account)).toEqual(["220", "412"]);
     const r = await caller.finance.manualEntryCreate({ date: "2026-09-30", description: "Закупнина 09", templateName: "Закупнина",
       lines: [{ account: "412", debit: 10000, credit: 0 }, { account: "220", debit: 0, credit: 10000, partnerType: "supplier", partnerId: ids.sup }] });
     const j = await caller.finance.journalList({ from: "2026-09-30", to: "2026-09-30", search: r.number, limit: 5, offset: 0 });
@@ -236,7 +236,7 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     const jl = await caller.finance.journalList({ from: "2026-09-30", to: "2026-09-30", search: r2.number, limit: 5, offset: 0 });
     expect(jl.entries[0].lines.find((l: any) => l.account === "220")?.partner).toBeTruthy();
     await caller.finance.terkRemove({ id });
-    expect((await caller.finance.terkList()).some(x => x.id === id)).toBe(false);
+    expect((await caller.finance.terkList()).some((x: any) => x.id === id)).toBe(false);
     // налогот останува и по бришење на теркот
     expect((await caller.finance.journalList({ from: "2026-09-30", to: "2026-09-30", search: r.number, limit: 5, offset: 0 })).total).toBe(1);
   });
@@ -696,5 +696,21 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(after2.domestic.find((r: any) => r.id === inc.id).inBatch.amount).toBe(5900);
     const listed: any = await caller.settle.paymentOrderList();
     expect(listed.batches[0].items[0].payee).toBe("Двострана ДОО");
+  });
+
+  it("книжење се прескокнува кога ништо не е сменето", async () => {
+    const fin = await import("./finance-router");
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    const a = await fin.ledgerFingerprint();
+    expect(await fin.ledgerFingerprint()).toBe(a);
+    await fin.syncLedgerIfChanged("тест");
+    expect((await fin.syncLedgerIfChanged("тест") as any).skipped).toBe(true);
+    // прилогот не влијае; сменет износ влијае
+    await pool.query(`UPDATE incoming_invoices SET file_url = 'abc' WHERE id = (SELECT MIN(id) FROM incoming_invoices)`);
+    expect(await fin.ledgerFingerprint()).toBe(a);
+    await pool.query(`UPDATE cash_transactions SET description = COALESCE(description, '') || ' ' WHERE id = (SELECT MIN(id) FROM cash_transactions)`);
+    expect(await fin.ledgerFingerprint()).not.toBe(a);
+    expect((await fin.syncLedgerIfChanged("тест") as any).skipped).toBeUndefined();
   });
 });

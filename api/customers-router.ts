@@ -127,15 +127,15 @@ export const customersRouter = createRouter({
       let filtered = result;
 
       if (input?.status) {
-        filtered = filtered.filter((r) => r.status === input.status);
+        filtered = filtered.filter((r: any) => r.status === input.status);
       }
       if (input?.customerId) {
-        filtered = filtered.filter((r) => r.customerId === input.customerId);
+        filtered = filtered.filter((r: any) => r.customerId === input.customerId);
       }
       if (input?.search) {
         const s = input.search.toLowerCase();
         filtered = filtered.filter(
-          (r) =>
+          (r: any) =>
             r.orderNumber.toLowerCase().includes(s) ||
             r.customerName?.toLowerCase().includes(s)
         );

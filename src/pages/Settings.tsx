@@ -200,12 +200,12 @@ export default function SettingsPage() {
                     <SelectItem value="other">Друго</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" disabled={!unitForm.code.trim() || !unitForm.name.trim() || unitCreate.isPending} title="Внеси шифра и назив" onClick={() => unitCreate.mutate(unitForm)}>Додади</Button>
+                <Button variant="outline" disabled={!unitForm.code.trim() || !unitForm.name.trim() || unitCreate.isPending} title="Внеси шифра и назив" onClick={() => unitCreate.mutate(unitForm as any)}>Додади</Button>
               </div>
               <Table>
                 <TableHeader><TableRow><TableHead>Код</TableHead><TableHead>Назив</TableHead><TableHead>Категорија</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {unitsData?.map(u => (
+                  {unitsData?.map((u: any) => (
                     <TableRow key={u.id}><TableCell className="font-medium">{u.code}</TableCell><TableCell>{u.name}</TableCell><TableCell>{u.category}</TableCell>
                       <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) unitDelete.mutate({ id: u.id }); }}>Избриши</Button></TableCell>
                     </TableRow>
@@ -223,11 +223,11 @@ export default function SettingsPage() {
               <div className="grid grid-cols-5 gap-2">
                 <Select value={convForm.fromUnitId} onValueChange={v => setConvForm({ ...convForm, fromUnitId: v })}>
                   <SelectTrigger><SelectValue placeholder="Од" /></SelectTrigger>
-                  <SelectContent>{unitsData?.map(u => <SelectItem key={u.id} value={u.id.toString()}>{u.code}</SelectItem>)}</SelectContent>
+                  <SelectContent>{unitsData?.map((u: any) => <SelectItem key={u.id} value={u.id.toString()}>{u.code}</SelectItem>)}</SelectContent>
                 </Select>
                 <Select value={convForm.toUnitId} onValueChange={v => setConvForm({ ...convForm, toUnitId: v })}>
                   <SelectTrigger><SelectValue placeholder="Во" /></SelectTrigger>
-                  <SelectContent>{unitsData?.map(u => <SelectItem key={u.id} value={u.id.toString()}>{u.code}</SelectItem>)}</SelectContent>
+                  <SelectContent>{unitsData?.map((u: any) => <SelectItem key={u.id} value={u.id.toString()}>{u.code}</SelectItem>)}</SelectContent>
                 </Select>
                 <Input placeholder="Фактор" value={convForm.factor} onChange={e => setConvForm({ ...convForm, factor: e.target.value })} />
                 <Input placeholder="Тип материјал" value={convForm.materialType} onChange={e => setConvForm({ ...convForm, materialType: e.target.value })} />
@@ -236,9 +236,9 @@ export default function SettingsPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Од</TableHead><TableHead>Во</TableHead><TableHead>Фактор</TableHead><TableHead>Материјал</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {conversionsData?.map(c => {
-                    const fromU = unitsData?.find(u => u.id === c.fromUnitId);
-                    const toU = unitsData?.find(u => u.id === c.toUnitId);
+                  {conversionsData?.map((c: any) => {
+                    const fromU = unitsData?.find((u: any) => u.id === c.fromUnitId);
+                    const toU = unitsData?.find((u: any) => u.id === c.toUnitId);
                     return <TableRow key={c.id}><TableCell>{fromU?.code ?? c.fromUnitId}</TableCell><TableCell>{toU?.code ?? c.toUnitId}</TableCell><TableCell>{c.factor}</TableCell><TableCell>{c.materialType ?? "-"}</TableCell>
                       <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) convDelete.mutate({ id: c.id }); }}>Избриши</Button></TableCell>
                     </TableRow>;

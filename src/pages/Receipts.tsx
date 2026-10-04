@@ -55,7 +55,6 @@ export default function Receipts() {
   const [isUploading, setIsUploading] = useState(false);
   const [isParsingText, setIsParsingText] = useState(false);
   const [ocrText, setOcrText] = useState("");
-  const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
@@ -260,7 +259,7 @@ export default function Receipts() {
 
   const addItem = () => {
     if (!itemForm.materialId || !itemForm.quantity || !itemForm.unitPrice) return;
-    const mat = materialsData?.find(m => m.id.toString() === itemForm.materialId);
+    const mat = materialsData?.find((m: any) => m.id.toString() === itemForm.materialId);
     const qty = parseFloat(itemForm.quantity);
     const price = parseFloat(itemForm.unitPrice);
     setItems([...items, {
@@ -388,7 +387,7 @@ export default function Receipts() {
 
     // Set supplier if matched
     if (parsedDoc.supplierName && suppliersData) {
-      const matchedSupplier = suppliersData.find(s =>
+      const matchedSupplier = suppliersData.find((s: any) =>
         parsedDoc.supplierName && s.name.toLowerCase().includes(parsedDoc.supplierName.toLowerCase())
       );
       if (matchedSupplier) {
@@ -519,7 +518,7 @@ export default function Receipts() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {parsedDocsData.map((doc) => (
+                      {parsedDocsData.map((doc: any) => (
                         <TableRow key={doc.id}>
                           <TableCell className="text-xs font-medium">{doc.originalFileName}</TableCell>
                           <TableCell className="text-xs">{doc.supplierName ?? "-"}</TableCell>
@@ -598,13 +597,13 @@ export default function Receipts() {
                     <div className="space-y-1"><Label>Магацин *</Label>
                       <Select value={form.warehouseId} onValueChange={v => setForm({ ...form, warehouseId: v })}>
                         <SelectTrigger><SelectValue placeholder="Избери магацин" /></SelectTrigger>
-                        <SelectContent>{warehousesData?.map(w => <SelectItem key={w.id} value={w.id.toString()}>{w.name}</SelectItem>)}</SelectContent>
+                        <SelectContent>{warehousesData?.map((w: any) => <SelectItem key={w.id} value={w.id.toString()}>{w.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1"><Label>Добавувач</Label>
                       <Select value={form.supplierId} onValueChange={v => setForm({ ...form, supplierId: v })}>
                         <SelectTrigger><SelectValue placeholder="Избери добавувач" /></SelectTrigger>
-                        <SelectContent>{suppliersData?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
+                        <SelectContent>{suppliersData?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                   </div>
@@ -683,7 +682,7 @@ export default function Receipts() {
                           <span>Материјал</span><span>Кол.</span><span>Цена</span><span className="text-right">Вкупно</span><span></span>
                         </div>
                         {items.map((it, idx) => {
-                          const m = materialsData?.find(x => x.id.toString() === it.materialId);
+                          const m = materialsData?.find((x: any) => x.id.toString() === it.materialId);
                           return (
                             <div key={idx} className="grid grid-cols-[1fr_7rem_6rem_6.5rem_2rem] gap-2 items-center bg-white border rounded-md px-2 py-1.5">
                               <span className="text-xs truncate">
@@ -745,12 +744,12 @@ export default function Receipts() {
               <Table>
                 <TableHeader><TableRow><TableHead>Број</TableHead><TableHead>Добавувач</TableHead><TableHead>Магацин</TableHead><TableHead>Датум</TableHead><TableHead className="text-right">Износ</TableHead><TableHead>Трошоци</TableHead><TableHead>Статус</TableHead><TableHead className="text-right">Акции</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {receiptsData?.map(r => (
+                  {receiptsData?.map((r: any) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium"><button className="hover:underline text-left" onClick={() => r.status === "draft" ? openEdit(r) : openPrint(r)}>{r.receiptNumber}</button></TableCell>
                       <TableCell>{r.supplierName ?? "-"}</TableCell>
                       <TableCell>
-                        {warehousesData?.find(w => w.id === r.warehouseId)?.name ?? "—"}
+                        {warehousesData?.find((w: any) => w.id === r.warehouseId)?.name ?? "—"}
                         {r.poId && <div className="text-[11px] text-emerald-700">по {poListData?.find((p: any) => p.id === r.poId)?.poNumber ?? "нарачка"}</div>}
                       </TableCell>
                       <TableCell>{formatDate(r.receiptDate)}</TableCell>
@@ -839,7 +838,7 @@ export default function Receipts() {
                                   >
                                     <SelectTrigger className="h-6 text-xs mt-1"><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                      {matchMaterialsData?.map(m => (
+                                      {matchMaterialsData?.map((m: any) => (
                                         <SelectItem key={m.id} value={m.id.toString()}>{m.name} ({m.code})</SelectItem>
                                       ))}
                                     </SelectContent>
@@ -855,7 +854,7 @@ export default function Receipts() {
                                 >
                                   <SelectTrigger className="h-6 text-xs mt-1"><SelectValue placeholder="Избери материјал" /></SelectTrigger>
                                   <SelectContent>
-                                    {matchMaterialsData?.map(m => (
+                                    {matchMaterialsData?.map((m: any) => (
                                       <SelectItem key={m.id} value={m.id.toString()}>{m.name} ({m.code})</SelectItem>
                                     ))}
                                   </SelectContent>

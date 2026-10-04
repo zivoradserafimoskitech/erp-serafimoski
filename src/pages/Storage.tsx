@@ -45,7 +45,6 @@ export default function Storage() {
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
-  const [warehouseFilter, setWarehouseFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [txDialogOpen, setTxDialogOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<number | null>(null);
@@ -71,7 +70,6 @@ export default function Storage() {
 
   const { data: stats } = trpc.storage.storageStats.useQuery();
   const { data: finishedGoods } = trpc.accounting.finishedGoodsList.useQuery();
-  const { data: warehousesData } = trpc.warehouse.warehouseList.useQuery();
   const { data: suppliersData } = trpc.procurement.supplierList.useQuery({});
 
   const createMutation = trpc.storage.materialCreate.useMutation({
@@ -275,7 +273,7 @@ export default function Storage() {
           <div>
             <p className="text-sm text-gray-500">Тежина на залиха</p>
             <p className="text-xl font-bold">
-              {(materials ?? []).reduce((a, m: any) => a + lineWeightKg(m.weightPerUnit, m.currentStock), 0)
+              {(materials ?? []).reduce((a: any, m: any) => a + lineWeightKg(m.weightPerUnit, m.currentStock), 0)
                 .toLocaleString("mk-MK", { maximumFractionDigits: 0 })} <span className="text-sm font-semibold text-gray-400">кг</span>
             </p>
           </div>
@@ -315,7 +313,7 @@ export default function Storage() {
               ) : !materials || materials.length === 0 ? (
                 <TableRow><TableCell colSpan={9} className="text-center py-8 text-gray-400">Нема материјали</TableCell></TableRow>
               ) : (
-                materials.map((m) => {
+                materials.map((m: any) => {
                   const isLow = parseFloat(m.currentStock) <= parseFloat(m.minStock);
                   return (
                     <TableRow key={m.id} className={isLow ? "bg-red-50" : ""}>

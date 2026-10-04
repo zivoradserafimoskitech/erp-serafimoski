@@ -234,7 +234,7 @@ export default function ScheduleBoard() {
                         className={`text-xs rounded-full px-2.5 py-1 border ${on ? "bg-amber-100 border-amber-300 text-amber-900" : auto ? "bg-amber-50 border-dashed border-amber-300 text-amber-800" : "bg-white text-gray-500"}`}
                         onClick={() => {
                           const base = m.operations.length ? m.operations : Object.keys(OPS).filter(x => machineDoes(m, x));
-                          const next = base.includes(k) ? base.filter(x => x !== k) : [...base, k];
+                          const next = base.includes(k) ? base.filter((x: any) => x !== k) : [...base, k];
                           saveMachine.mutate({ id: m.id, hoursPerDay: m.hoursPerDay, operations: next });
                         }}>{v}</button>
                     );

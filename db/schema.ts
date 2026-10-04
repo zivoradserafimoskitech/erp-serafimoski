@@ -65,9 +65,9 @@ export type CompanySetting = typeof companySettings.$inferSelect;
 // и една фактура може да се плати од повеќе уплати.
 export const paymentAllocations = pgTable("payment_allocations", {
   id: serial("id").primaryKey(),
-  txId: bigint("tx_id", { mode: "number", unsigned: true }).notNull(),
+  txId: bigint("tx_id", { mode: "number" }).notNull(),
   docType: varchar("doc_type", { length: 30 }).notNull(), // invoice | incoming_invoice
-  docId: bigint("doc_id", { mode: "number", unsigned: true }).notNull(),
+  docId: bigint("doc_id", { mode: "number" }).notNull(),
   docRef: varchar("doc_ref", { length: 120 }),
   amount: decimal("amount", { precision: 16, scale: 2 }).notNull().default("0"),
   note: text("note"),
@@ -84,7 +84,7 @@ export const fixedAssets = pgTable("fixed_assets", {
   category: varchar("category", { length: 60 }).notNull().default("machine"),
   description: text("description"),
   location: varchar("location", { length: 150 }),
-  supplierId: bigint("supplier_id", { mode: "number", unsigned: true }),
+  supplierId: bigint("supplier_id", { mode: "number" }),
   invoiceRef: varchar("invoice_ref", { length: 80 }),
   // Набавка
   acquisitionDate: date("acquisition_date").notNull(),
@@ -109,7 +109,7 @@ export type FixedAsset = typeof fixedAssets.$inferSelect;
 // Пресметана амортизација по година — се запишува кога ќе се затвори годината
 export const depreciationEntries = pgTable("depreciation_entries", {
   id: serial("id").primaryKey(),
-  assetId: bigint("asset_id", { mode: "number", unsigned: true }).notNull(),
+  assetId: bigint("asset_id", { mode: "number" }).notNull(),
   year: integer("year").notNull(),
   months: integer("months").notNull().default(12),
   amount: decimal("amount", { precision: 16, scale: 2 }).notNull().default("0"),
@@ -141,7 +141,7 @@ export type BankStatement = typeof bankStatements.$inferSelect;
 
 export const bankTransactions = pgTable("bank_transactions", {
   id: serial("id").primaryKey(),
-  statementId: bigint("statement_id", { mode: "number", unsigned: true }),
+  statementId: bigint("statement_id", { mode: "number" }),
   accountNumber: varchar("account_number", { length: 40 }),
   txDate: date("tx_date").notNull(),
   direction: varchar("direction", { length: 10 }).notNull(), // in | out
@@ -157,9 +157,9 @@ export const bankTransactions = pgTable("bank_transactions", {
   // Поврзување со документ
   matchStatus: varchar("match_status", { length: 20 }).notNull().default("unmatched"),
   matchedType: varchar("matched_type", { length: 30 }),
-  matchedId: bigint("matched_id", { mode: "number", unsigned: true }),
+  matchedId: bigint("matched_id", { mode: "number" }),
   matchedRef: varchar("matched_ref", { length: 120 }),
-  partnerId: bigint("partner_id", { mode: "number", unsigned: true }),
+  partnerId: bigint("partner_id", { mode: "number" }),
   partnerType: varchar("partner_type", { length: 20 }),
   accountCode: varchar("account_code", { length: 10 }),
   note: text("note"),
@@ -208,11 +208,11 @@ export type InsertUser = typeof users.$inferInsert;
 // ============= AUDIT LOG =============
 export const auditLog = pgTable("audit_log", {
   id: serial("id").primaryKey(),
-  userId: bigint("user_id", { mode: "number", unsigned: true }),
+  userId: bigint("user_id", { mode: "number" }),
   userName: varchar("user_name", { length: 255 }),
   action: varchar("action", { length: 50 }).notNull(), // CREATE, UPDATE, DELETE, CONFIRM
   entityType: varchar("entity_type", { length: 50 }).notNull(), // material, receipt, invoice, etc.
-  entityId: bigint("entity_id", { mode: "number", unsigned: true }),
+  entityId: bigint("entity_id", { mode: "number" }),
   oldValue: text("old_value"),
   newValue: text("new_value"),
   description: text("description"),
@@ -237,8 +237,8 @@ export type Unit = typeof units.$inferSelect;
 // ============= UNIT CONVERSIONS =============
 export const unitConversions = pgTable("unit_conversions", {
   id: serial("id").primaryKey(),
-  fromUnitId: bigint("from_unit_id", { mode: "number", unsigned: true }).notNull(),
-  toUnitId: bigint("to_unit_id", { mode: "number", unsigned: true }).notNull(),
+  fromUnitId: bigint("from_unit_id", { mode: "number" }).notNull(),
+  toUnitId: bigint("to_unit_id", { mode: "number" }).notNull(),
   factor: decimal("factor", { precision: 18, scale: 8 }).notNull().default("0"), // multiply fromUnit by factor to get toUnit
   materialType: varchar("material_type", { length: 50 }), // e.g. "steel_sheet" for density-based conversions
   description: text("description"),
@@ -276,7 +276,7 @@ export const materials = pgTable("materials", {
   weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
   // Од кој материјал е: steel | stainless | aluminum | copper | brass
   densityKey: varchar("density_key", { length: 20 }).default("steel"),
-  defaultSupplierId: bigint("default_supplier_id", { mode: "number", unsigned: true }),
+  defaultSupplierId: bigint("default_supplier_id", { mode: "number" }),
   location: varchar("location", { length: 100 }),
   isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -289,8 +289,8 @@ export type InsertMaterial = typeof materials.$inferInsert;
 // ============= MATERIAL WAREHOUSE STOCK =============
 export const materialStock = pgTable("material_stock", {
   id: serial("id").primaryKey(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
-  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   avgCost: decimal("avg_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -302,9 +302,9 @@ export type MaterialStock = typeof materialStock.$inferSelect;
 // ============= MATERIAL LOTS (for FIFO) =============
 export const materialLots = pgTable("material_lots", {
   id: serial("id").primaryKey(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
-  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
-  receiptId: bigint("receipt_id", { mode: "number", unsigned: true }),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull(),
+  receiptId: bigint("receipt_id", { mode: "number" }),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   remainingQty: decimal("remaining_qty", { precision: 12, scale: 3 }).notNull().default("0"),
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -315,7 +315,7 @@ export const materialLots = pgTable("material_lots", {
   certNumber: varchar("cert_number", { length: 80 }),
   certStandard: varchar("cert_standard", { length: 60 }),
   certUrl: text("cert_url"),
-  supplierId: bigint("supplier_id", { mode: "number", unsigned: true }),
+  supplierId: bigint("supplier_id", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -325,9 +325,9 @@ export type MaterialLot = typeof materialLots.$inferSelect;
 // Кои шаржи се вградени во конкретна испорака — основа за изјавата кон купувачот
 export const dnCertificates = pgTable("dn_certificates", {
   id: serial("id").primaryKey(),
-  deliveryNoteId: bigint("delivery_note_id", { mode: "number", unsigned: true }).notNull(),
-  lotId: bigint("lot_id", { mode: "number", unsigned: true }),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }),
+  deliveryNoteId: bigint("delivery_note_id", { mode: "number" }).notNull(),
+  lotId: bigint("lot_id", { mode: "number" }),
+  materialId: bigint("material_id", { mode: "number" }),
   materialName: varchar("material_name", { length: 255 }),
   heatNumber: varchar("heat_number", { length: 60 }),
   certNumber: varchar("cert_number", { length: 80 }),
@@ -346,13 +346,13 @@ export type DnCertificate = typeof dnCertificates.$inferSelect;
 export const materialRemnants = pgTable("material_remnants", {
   id: serial("id").primaryKey(),
   code: varchar("code", { length: 30 }).notNull().unique(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
-  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }),
   lengthMm: decimal("length_mm", { precision: 12, scale: 1 }).notNull().default("0"),
   quantity: integer("quantity").notNull().default(1),
   location: varchar("location", { length: 150 }),
-  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }),
-  sourceRemnantId: bigint("source_remnant_id", { mode: "number", unsigned: true }),
+  workOrderId: bigint("work_order_id", { mode: "number" }),
+  sourceRemnantId: bigint("source_remnant_id", { mode: "number" }),
   status: varchar("status", { length: 30 }).notNull().default("available"),
   usedInRef: varchar("used_in_ref", { length: 255 }),
   usedAt: timestamp("used_at"),
@@ -368,17 +368,17 @@ export type InsertMaterialRemnant = typeof materialRemnants.$inferInsert;
 // ============= INVENTORY TRANSACTIONS =============
 export const inventoryTransactions = pgTable("inventory_transactions", {
   id: serial("id").primaryKey(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
-  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull(),
   type: varchar("type", { length: 50 }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
   totalCost: decimal("total_cost", { precision: 12, scale: 2 }),
   reference: varchar("reference", { length: 255 }),
   sourceDocType: varchar("source_doc_type", { length: 50 }), // receipt, work_order, adjustment, transfer
-  sourceDocId: bigint("source_doc_id", { mode: "number", unsigned: true }),
+  sourceDocId: bigint("source_doc_id", { mode: "number" }),
   notes: text("notes"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -389,12 +389,12 @@ export type InsertInventoryTransaction = typeof inventoryTransactions.$inferInse
 export const stockTransfers = pgTable("stock_transfers", {
   id: serial("id").primaryKey(),
   transferNumber: varchar("transfer_number", { length: 50 }).notNull().unique(),
-  fromWarehouseId: bigint("from_warehouse_id", { mode: "number", unsigned: true }).notNull(),
-  toWarehouseId: bigint("to_warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  fromWarehouseId: bigint("from_warehouse_id", { mode: "number" }).notNull(),
+  toWarehouseId: bigint("to_warehouse_id", { mode: "number" }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   transferDate: date("transfer_date").notNull(),
   notes: text("notes"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -403,8 +403,8 @@ export type StockTransfer = typeof stockTransfers.$inferSelect;
 // ============= STOCK TRANSFER ITEMS =============
 export const stockTransferItems = pgTable("stock_transfer_items", {
   id: serial("id").primaryKey(),
-  transferId: bigint("transfer_id", { mode: "number", unsigned: true }).notNull(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
+  transferId: bigint("transfer_id", { mode: "number" }).notNull(),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
   notes: text("notes"),
@@ -417,11 +417,11 @@ export type StockTransferItem = typeof stockTransferItems.$inferSelect;
 export const inventoryCounts = pgTable("inventory_counts", {
   id: serial("id").primaryKey(),
   countNumber: varchar("count_number", { length: 50 }).notNull().unique(),
-  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   countDate: date("count_date").notNull(),
   notes: text("notes"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -430,8 +430,8 @@ export type InventoryCount = typeof inventoryCounts.$inferSelect;
 // ============= INVENTORY COUNT ITEMS =============
 export const inventoryCountItems = pgTable("inventory_count_items", {
   id: serial("id").primaryKey(),
-  countId: bigint("count_id", { mode: "number", unsigned: true }).notNull(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
+  countId: bigint("count_id", { mode: "number" }).notNull(),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
   systemQty: decimal("system_qty", { precision: 12, scale: 3 }).notNull().default("0"),
   countedQty: decimal("counted_qty", { precision: 12, scale: 3 }),
   difference: decimal("difference", { precision: 12, scale: 3 }),
@@ -469,8 +469,8 @@ export type InsertCustomer = typeof customers.$inferInsert;
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
-  customerId: bigint("customer_id", { mode: "number", unsigned: true }).notNull(),
-  quoteId: bigint("quote_id", { mode: "number", unsigned: true }),
+  customerId: bigint("customer_id", { mode: "number" }).notNull(),
+  quoteId: bigint("quote_id", { mode: "number" }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   priority: varchar("priority", { length: 50 }).notNull().default("normal"),
   totalAmount: decimal("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
@@ -479,7 +479,7 @@ export const orders = pgTable("orders", {
   marginPercent: decimal("margin_percent", { precision: 5, scale: 2 }).notNull().default("0"),
   deliveryDate: date("delivery_date"),
   notes: text("notes"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -490,7 +490,7 @@ export type InsertOrder = typeof orders.$inferInsert;
 // ============= ORDER ITEMS =============
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
-  orderId: bigint("order_id", { mode: "number", unsigned: true }).notNull(),
+  orderId: bigint("order_id", { mode: "number" }).notNull(),
   description: varchar("description", { length: 500 }).notNull(),
   drawingNumber: varchar("drawing_number", { length: 100 }),
   quantity: integer("quantity").notNull(),
@@ -500,7 +500,7 @@ export const orderItems = pgTable("order_items", {
   marginAmount: decimal("margin_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   material: varchar("material", { length: 255 }),
   dimensions: varchar("dimensions", { length: 255 }),
-  productId: bigint("product_id", { mode: "number", unsigned: true }),
+  productId: bigint("product_id", { mode: "number" }),
   weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
   weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
   notes: text("notes"),
@@ -538,12 +538,12 @@ export type InsertSupplier = typeof suppliers.$inferInsert;
 export const purchaseOrders = pgTable("purchase_orders", {
   id: serial("id").primaryKey(),
   poNumber: varchar("po_number", { length: 50 }).notNull().unique(),
-  supplierId: bigint("supplier_id", { mode: "number", unsigned: true }).notNull(),
+  supplierId: bigint("supplier_id", { mode: "number" }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   totalAmount: decimal("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   expectedDate: date("expected_date"),
   notes: text("notes"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -554,8 +554,8 @@ export type InsertPurchaseOrder = typeof purchaseOrders.$inferInsert;
 // ============= PURCHASE ORDER ITEMS =============
 export const purchaseOrderItems = pgTable("purchase_order_items", {
   id: serial("id").primaryKey(),
-  purchaseOrderId: bigint("purchase_order_id", { mode: "number", unsigned: true }).notNull(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
+  purchaseOrderId: bigint("purchase_order_id", { mode: "number" }).notNull(),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
   description: varchar("description", { length: 500 }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -572,8 +572,8 @@ export type InsertPurchaseOrderItem = typeof purchaseOrderItems.$inferInsert;
 export const workOrders = pgTable("work_orders", {
   id: serial("id").primaryKey(),
   woNumber: varchar("wo_number", { length: 50 }).notNull().unique(),
-  orderId: bigint("order_id", { mode: "number", unsigned: true }),
-  quotationId: bigint("quotation_id", { mode: "number", unsigned: true }),
+  orderId: bigint("order_id", { mode: "number" }),
+  quotationId: bigint("quotation_id", { mode: "number" }),
   description: varchar("description", { length: 500 }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   priority: varchar("priority", { length: 50 }).notNull().default("normal"),
@@ -584,7 +584,7 @@ export const workOrders = pgTable("work_orders", {
   assignedTo: varchar("assigned_to", { length: 255 }),
   costAmount: decimal("cost_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   notes: text("notes"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -595,7 +595,7 @@ export type InsertWorkOrder = typeof workOrders.$inferInsert;
 // ============= WORK ORDER OPERATIONS =============
 export const workOrderOperations = pgTable("work_order_operations", {
   id: serial("id").primaryKey(),
-  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }).notNull(),
+  workOrderId: bigint("work_order_id", { mode: "number" }).notNull(),
   operation: varchar("operation", { length: 50 }).notNull(),
   sequence: integer("sequence").notNull(),
   description: varchar("description", { length: 500 }),
@@ -619,8 +619,8 @@ export type InsertWorkOrderOperation = typeof workOrderOperations.$inferInsert;
 // ============= ВРЕМЕ ПО ОПЕРАЦИЈА (скенирање на подот) =============
 export const operationTimeLogs = pgTable("operation_time_logs", {
   id: serial("id").primaryKey(),
-  operationId: bigint("operation_id", { mode: "number", unsigned: true }).notNull(),
-  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }).notNull(),
+  operationId: bigint("operation_id", { mode: "number" }).notNull(),
+  workOrderId: bigint("work_order_id", { mode: "number" }).notNull(),
   operator: varchar("operator", { length: 255 }),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
@@ -633,8 +633,8 @@ export type OperationTimeLog = typeof operationTimeLogs.$inferSelect;
 
 export const workOrderMaterials = pgTable("work_order_materials", {
   id: serial("id").primaryKey(),
-  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }).notNull(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
+  workOrderId: bigint("work_order_id", { mode: "number" }).notNull(),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   totalCost: decimal("total_cost", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -703,7 +703,7 @@ export const services = pgTable("services", {
   description: text("description"),
   costRate: decimal("cost_rate", { precision: 12, scale: 2 }).notNull().default("0"),
   saleRate: decimal("sale_rate", { precision: 12, scale: 2 }).notNull().default("0"),
-  machineId: bigint("machine_id", { mode: "number", unsigned: true }),
+  machineId: bigint("machine_id", { mode: "number" }),
   isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -736,9 +736,9 @@ export type InsertProduct = typeof products.$inferInsert;
 // ============= PRODUCT COMPONENTS (BOM / Normativi) =============
 export const productComponents = pgTable("product_components", {
   id: serial("id").primaryKey(),
-  productId: bigint("product_id", { mode: "number", unsigned: true }).notNull(),
+  productId: bigint("product_id", { mode: "number" }).notNull(),
   kind: varchar("kind", { length: 50 }).notNull(),
-  refId: bigint("ref_id", { mode: "number", unsigned: true }).notNull(),
+  refId: bigint("ref_id", { mode: "number" }).notNull(),
   perUnit: decimal("per_unit", { precision: 12, scale: 6 }).notNull().default("0"),
   wastePct: decimal("waste_pct", { precision: 5, scale: 2 }).notNull().default("0"),
   scale: varchar("scale", { length: 50 }).notNull(),
@@ -753,7 +753,7 @@ export type ProductComponent = typeof productComponents.$inferSelect;
 export const quotations = pgTable("quotations", {
   id: serial("id").primaryKey(),
   quoteNumber: varchar("quote_number", { length: 50 }).notNull().unique(),
-  customerId: bigint("customer_id", { mode: "number", unsigned: true }).notNull(),
+  customerId: bigint("customer_id", { mode: "number" }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   subtotal: decimal("subtotal", { precision: 14, scale: 2 }).notNull().default("0"),
   costAmount: decimal("cost_amount", { precision: 14, scale: 2 }).notNull().default("0"),
@@ -768,8 +768,8 @@ export const quotations = pgTable("quotations", {
   paymentTerms: varchar("payment_terms", { length: 255 }),
   paymentSchedule: text("payment_schedule"), // JSON: [{ percent, when, days? }] — види contracts/payment-terms.ts
   notes: text("notes"),
-  convertedOrderId: bigint("converted_order_id", { mode: "number", unsigned: true }),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  convertedOrderId: bigint("converted_order_id", { mode: "number" }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -780,9 +780,9 @@ export type InsertQuotation = typeof quotations.$inferInsert;
 // ============= QUOTATION ITEMS =============
 export const quotationItems = pgTable("quotation_items", {
   id: serial("id").primaryKey(),
-  quotationId: bigint("quotation_id", { mode: "number", unsigned: true }).notNull(),
+  quotationId: bigint("quotation_id", { mode: "number" }).notNull(),
   itemType: varchar("item_type", { length: 50 }).notNull(),
-  referenceId: bigint("reference_id", { mode: "number", unsigned: true }),
+  referenceId: bigint("reference_id", { mode: "number" }),
   description: varchar("description", { length: 500 }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unit: varchar("unit", { length: 20 }).notNull(),
@@ -808,9 +808,9 @@ export type InsertQuotationItem = typeof quotationItems.$inferInsert;
 export const invoices = pgTable("invoices", {
   id: serial("id").primaryKey(),
   invoiceNumber: varchar("invoice_number", { length: 50 }).notNull().unique(),
-  customerId: bigint("customer_id", { mode: "number", unsigned: true }).notNull(),
-  orderId: bigint("order_id", { mode: "number", unsigned: true }),
-  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }),
+  customerId: bigint("customer_id", { mode: "number" }).notNull(),
+  orderId: bigint("order_id", { mode: "number" }),
+  workOrderId: bigint("work_order_id", { mode: "number" }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   invoiceType: varchar("invoice_type", { length: 50 }).notNull(),
   issueDate: date("issue_date").notNull(),
@@ -822,11 +822,11 @@ export const invoices = pgTable("invoices", {
   currency: varchar("currency", { length: 10 }).notNull().default("MKD"),
   notes: text("notes"),
   eInvoiceId: varchar("e_invoice_id", { length: 255 }),
-  originalInvoiceId: bigint("original_invoice_id", { mode: "number", unsigned: true }), // for credit notes
-  quotationId: bigint("quotation_id", { mode: "number", unsigned: true }), // про-фактура креирана од понуда
+  originalInvoiceId: bigint("original_invoice_id", { mode: "number" }), // for credit notes
+  quotationId: bigint("quotation_id", { mode: "number" }), // про-фактура креирана од понуда
   language: varchar("language", { length: 5 }).default("mk"), // mk | en — јазик на печатење
   paymentSchedule: text("payment_schedule"), // JSON рати на плаќање (од понудата / про-фактурата)
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   // извоз (0% ДДВ): број и датум на царинската декларација (ЕЦД) — доказ за ослободувањето
   customsDeclaration: varchar("customs_declaration", { length: 60 }),
   customsDate: date("customs_date"),
@@ -841,9 +841,9 @@ export type InsertInvoice = typeof invoices.$inferInsert;
 export const incomingInvoices = pgTable("incoming_invoices", {
   id: serial("id").primaryKey(),
   supplierInvoiceNumber: varchar("supplier_invoice_number", { length: 50 }).notNull(),
-  supplierId: bigint("supplier_id", { mode: "number", unsigned: true }).notNull(),
-  poId: bigint("po_id", { mode: "number", unsigned: true }),
-  receiptId: bigint("receipt_id", { mode: "number", unsigned: true }),
+  supplierId: bigint("supplier_id", { mode: "number" }).notNull(),
+  poId: bigint("po_id", { mode: "number" }),
+  receiptId: bigint("receipt_id", { mode: "number" }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   expenseAccount: varchar("expense_account", { length: 10 }), // конто: 310 залиха, 401 енергија, 412 закупнина...
   accountConfirmed: boolean("account_confirmed").default(false), // човекот го избрал/потврдил контото
@@ -859,7 +859,7 @@ export const incomingInvoices = pgTable("incoming_invoices", {
   vatDate: date("vat_date"),
   reverseCharge: boolean("reverse_charge").notNull().default(false),
   fileUrl: text("file_url"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -869,7 +869,7 @@ export type InsertIncomingInvoice = typeof incomingInvoices.$inferInsert;
 // ============= DOCUMENT ITEMS =============
 export const documentItems = pgTable("document_items", {
   id: serial("id").primaryKey(),
-  documentId: bigint("document_id", { mode: "number", unsigned: true }).notNull(),
+  documentId: bigint("document_id", { mode: "number" }).notNull(),
   documentType: varchar("document_type", { length: 50 }).notNull(),
   description: varchar("description", { length: 500 }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
@@ -878,9 +878,9 @@ export const documentItems = pgTable("document_items", {
   discount: decimal("discount", { precision: 5, scale: 2 }).notNull().default("0"),
   totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default("0"),
   vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("0"),
-  productId: bigint("product_id", { mode: "number", unsigned: true }),
-  serviceId: bigint("service_id", { mode: "number", unsigned: true }),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }),
+  productId: bigint("product_id", { mode: "number" }),
+  serviceId: bigint("service_id", { mode: "number" }),
+  materialId: bigint("material_id", { mode: "number" }),
   weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
   itemType: varchar("item_type", { length: 50 }).notNull(),
   notes: text("notes"),
@@ -894,9 +894,9 @@ export type InsertDocumentItem = typeof documentItems.$inferInsert;
 export const receipts = pgTable("receipts", {
   id: serial("id").primaryKey(),
   receiptNumber: varchar("receipt_number", { length: 50 }).notNull().unique(),
-  supplierId: bigint("supplier_id", { mode: "number", unsigned: true }),
-  poId: bigint("po_id", { mode: "number", unsigned: true }),
-  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
+  supplierId: bigint("supplier_id", { mode: "number" }),
+  poId: bigint("po_id", { mode: "number" }),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   receiptDate: date("receipt_date").notNull(),
   supplierDocNumber: varchar("supplier_doc_number", { length: 100 }),
@@ -906,7 +906,7 @@ export const receipts = pgTable("receipts", {
   totalAmount: decimal("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   notes: text("notes"),
   fileUrl: text("file_url"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -916,8 +916,8 @@ export type InsertReceipt = typeof receipts.$inferInsert;
 // ============= RECEIPT ITEMS =============
 export const receiptItems = pgTable("receipt_items", {
   id: serial("id").primaryKey(),
-  receiptId: bigint("receipt_id", { mode: "number", unsigned: true }).notNull(),
-  materialId: bigint("material_id", { mode: "number", unsigned: true }).notNull(),
+  receiptId: bigint("receipt_id", { mode: "number" }).notNull(),
+  materialId: bigint("material_id", { mode: "number" }).notNull(),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unit: varchar("unit", { length: 20 }).notNull(),
   unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -939,14 +939,14 @@ export type ReceiptItem = typeof receiptItems.$inferSelect;
 export const deliveryNotes = pgTable("delivery_notes", {
   id: serial("id").primaryKey(),
   dnNumber: varchar("dn_number", { length: 50 }).notNull().unique(),
-  customerId: bigint("customer_id", { mode: "number", unsigned: true }).notNull(),
-  orderId: bigint("order_id", { mode: "number", unsigned: true }),
+  customerId: bigint("customer_id", { mode: "number" }).notNull(),
+  orderId: bigint("order_id", { mode: "number" }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   issueDate: date("issue_date").notNull(),
   deliveryDate: date("delivery_date"),
   totalItems: integer("total_items").default(0).notNull(),
   notes: text("notes"),
-  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -956,7 +956,7 @@ export type InsertDeliveryNote = typeof deliveryNotes.$inferInsert;
 // ============= E-INVOICES =============
 export const eInvoices = pgTable("e_invoices", {
   id: serial("id").primaryKey(),
-  invoiceId: bigint("invoice_id", { mode: "number", unsigned: true }).notNull(),
+  invoiceId: bigint("invoice_id", { mode: "number" }).notNull(),
   ujpInvoiceId: varchar("ujp_invoice_id", { length: 255 }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   xmlContent: text("xml_content"),
@@ -983,10 +983,10 @@ export const parsedInvoices = pgTable("parsed_invoices", {
   fileUrl: text("file_url"),
   documentType: varchar("document_type", { length: 50 }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
-  matchedInvoiceId: bigint("matched_invoice_id", { mode: "number", unsigned: true }),
+  matchedInvoiceId: bigint("matched_invoice_id", { mode: "number" }),
   // Резултат од читањето
   supplierTaxId: varchar("supplier_tax_id", { length: 20 }),
-  matchedSupplierId: bigint("matched_supplier_id", { mode: "number", unsigned: true }),
+  matchedSupplierId: bigint("matched_supplier_id", { mode: "number" }),
   baseAmount: decimal("base_amount", { precision: 14, scale: 2 }),
   confidence: integer("confidence").default(0),
   parseNotes: text("parse_notes"),
@@ -996,9 +996,9 @@ export const parsedInvoices = pgTable("parsed_invoices", {
 // ============= PARSED RECEIPT ITEMS (OCR results) =============
 export const parsedReceiptItems = pgTable("parsed_receipt_items", {
   id: serial("id").primaryKey(),
-  parsedInvoiceId: bigint("parsed_invoice_id", { mode: "number", unsigned: true }).notNull(),
+  parsedInvoiceId: bigint("parsed_invoice_id", { mode: "number" }).notNull(),
   rawDescription: text("raw_description").notNull(),
-  matchedMaterialId: bigint("matched_material_id", { mode: "number", unsigned: true }),
+  matchedMaterialId: bigint("matched_material_id", { mode: "number" }),
   matchedMaterialName: varchar("matched_material_name", { length: 255 }),
   matchConfidence: decimal("match_confidence", { precision: 5, scale: 2 }).notNull().default("0"),
   quantity: decimal("quantity", { precision: 12, scale: 3 }),
@@ -1015,9 +1015,9 @@ export type ParsedReceiptItem = typeof parsedReceiptItems.$inferSelect;
 // ============= FINISHED GOODS STOCK (for invoicing products)
 export const finishedGoodsStock = pgTable("finished_goods_stock", {
   id: serial("id").primaryKey(),
-  productId: bigint("product_id", { mode: "number", unsigned: true }).notNull(),
-  warehouseId: bigint("warehouse_id", { mode: "number", unsigned: true }).notNull(),
-  workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }),
+  productId: bigint("product_id", { mode: "number" }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull(),
+  workOrderId: bigint("work_order_id", { mode: "number" }),
   quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   notes: text("notes"),
@@ -1076,7 +1076,7 @@ export const emailInvoices = pgTable("email_invoices", {
   parsedInvoiceNumber: varchar("parsed_invoice_number", { length: 100 }),
   parsedTotalAmount: varchar("parsed_total_amount", { length: 50 }),
   parsedIssueDate: varchar("parsed_issue_date", { length: 20 }),
-  matchedSupplierId: bigint("matched_supplier_id", { mode: "number", unsigned: true }),
+  matchedSupplierId: bigint("matched_supplier_id", { mode: "number" }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   rawText: text("raw_text"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

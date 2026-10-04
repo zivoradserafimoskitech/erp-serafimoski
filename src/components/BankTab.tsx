@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
+import { formatDate } from "@/lib/utils";
 import BankPostDialog from "@/components/BankPostDialog";
 import { isStaleChunkError, reloadForNewVersion } from "@/lib/stale-chunk";
 import { Button } from "@/components/ui/button";
@@ -168,7 +169,7 @@ export default function BankTab() {
           <div>
             <p className="text-sm text-gray-500">Салдо по последен извод</p>
             <p className="text-xl font-bold">{den(stats?.lastBalance)} <span className="text-sm text-gray-400">ден</span></p>
-            {stats?.lastDate && <p className="text-[11px] text-gray-400">{String(stats.lastDate)}</p>}
+            {stats?.lastDate && <p className="text-[11px] text-gray-400">на {formatDate(stats.lastDate)}</p>}
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">

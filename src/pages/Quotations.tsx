@@ -57,12 +57,6 @@ const prodCats: Record<string, string> = {
 };
 const prodUnits: Record<string, string> = { m2: "м²", m: "м", kg: "кг", pcs: "ком", set: "комплет" };
 
-const matTypes: Record<string, string> = {
-  steel_sheet: "Челичен лим", steel_profile: "Челичен профил", steel_bar: "Челична прачка",
-  aluminum_sheet: "Алуминиумски лим", aluminum_profile: "Алуминиумски профил",
-  stainless_sheet: "Нерѓосувачки лим", pipe: "Цевка", angle: "Аголник",
-  channel: "Канал", screws: "Завртки", welding: "Заварување", paint: "Боја", other: "Други",
-};
 const matUnits: Record<string, string> = { kg: "кг", m: "м", m2: "м²", pcs: "ком", l: "л" };
 
 export default function Quotations() {
@@ -112,7 +106,7 @@ export default function Quotations() {
   const [qSchedule, setQSchedule] = useState<Installment[]>(DEFAULT_SCHEDULE);
   // Странство = клиент од друга држава или валута различна од денари -> извоз, без ДДВ
   const isForeign = (customerId: string | number, currency: string) =>
-    currency !== "MKD" || !isDomesticCountry(customers?.find(c => String(c.id) === String(customerId))?.country);
+    currency !== "MKD" || !isDomesticCountry(customers?.find((c: any) => String(c.id) === String(customerId))?.country);
   const [qForm, setQForm] = useState({
     quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14",
     paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18",
@@ -427,7 +421,7 @@ export default function Quotations() {
                   {/* Basic info */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-2"><Label>Број на понуда *</Label><Input value={qForm.quoteNumber} onChange={e => setQForm({ ...qForm, quoteNumber: e.target.value })} required disabled={!!editingId} placeholder="ПОН-2026-001" /></div>
-                    <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v, ...(isForeign(v, qForm.currency) ? { vatRate: "0" } : {}) })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v, ...(isForeign(v, qForm.currency) ? { vatRate: "0" } : {}) })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label>Важи до</Label><DateInput value={qForm.validUntil} onChange={e => setQForm({ ...qForm, validUntil: e.target.value })} /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -460,10 +454,10 @@ export default function Quotations() {
                       <MaterialPicker tile={{ icon: "🔩", label: "Материјал" }} title="Избери материјал" materials={materialsData as any} value={null}
                         onSelect={(m: any) => addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0"), String(m.weightPerUnit ?? "0"))} />
                       <MaterialPicker tile={{ icon: "⚙️", label: "Услуга" }} title="Избери услуга" value={null}
-                        materials={servicesData?.map(sv => ({ id: sv.id, code: sv.code, name: sv.name, unit: svcUnits[sv.unit] || sv.unit, lastPurchasePrice: sv.saleRate })) as any}
+                        materials={servicesData?.map((sv: any) => ({ id: sv.id, code: sv.code, name: sv.name, unit: svcUnits[sv.unit] || sv.unit, lastPurchasePrice: sv.saleRate })) as any}
                         onSelect={(sv: any) => addItem("service", sv.id, sv.name, sv.unit, String(sv.lastPurchasePrice ?? "0"))} />
                       <MaterialPicker tile={{ icon: "📦", label: "Производ (каталог)" }} title="Избери производ — ќе се отвори естиматор" value={null}
-                        materials={productsData?.map(p => ({ id: p.id, code: p.code, name: p.name, unit: prodUnits[p.unit] || p.unit, lastPurchasePrice: p.defaultPrice })) as any}
+                        materials={productsData?.map((p: any) => ({ id: p.id, code: p.code, name: p.name, unit: prodUnits[p.unit] || p.unit, lastPurchasePrice: p.defaultPrice })) as any}
                         onSelect={(p: any) => { setEstProduct(p.id); setEstForm({ area: "", perimeter: "", length: "", quantity: "1", width: "", height: "" }); setEstDialog(true); }} />
                       <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300"
                         onClick={() => { setCustomForm({ name: "", unit: "pcs", quantity: "1", salePrice: "" }); setEstMats([]); setEstSvcs([]); setCustomDialog(true); }}>
@@ -562,9 +556,9 @@ export default function Quotations() {
                         <div className="grid grid-cols-[1fr_6rem_auto] gap-2 items-end">
                           <MaterialPicker materials={materialsData as any} value={null} placeholder="+ материјал во естимација…"
                             onSelect={(m: any) => setEstMats([...estMats, { materialId: m.id, name: m.name, quantity: "1", price: Number(m.lastPurchasePrice ?? m.avgCost ?? 0) }])} />
-                          <Select onValueChange={v => { const s = servicesData?.find(x => x.id.toString() === v); if (s) setEstSvcs([...estSvcs, { serviceId: s.id, name: s.name, quantity: "1", rate: Number(s.costRate ?? s.saleRate ?? 0) }]); }}>
+                          <Select onValueChange={v => { const s = servicesData?.find((x: any) => x.id.toString() === v); if (s) setEstSvcs([...estSvcs, { serviceId: s.id, name: s.name, quantity: "1", rate: Number(s.costRate ?? s.saleRate ?? 0) }]); }}>
                             <SelectTrigger className="text-xs"><SelectValue placeholder="+ услуга" /></SelectTrigger>
-                            <SelectContent>{servicesData?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
+                            <SelectContent>{servicesData?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
                           </Select>
                           <span className="text-xs text-gray-500 pb-2">трошок: <b>{estCost.toLocaleString("mk-MK")}</b> ден</span>
                         </div>
@@ -679,7 +673,7 @@ export default function Quotations() {
               </TableHeader>
               <TableBody>
                 {!quotationsData?.length ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема понуди</TableCell></TableRow> :
-                  quotationsData.map(q => (
+                  quotationsData.map((q: any) => (
                     <TableRow key={q.id}>
                       <TableCell className="font-mono text-sm font-medium">{q.quoteNumber}</TableCell>
                       <TableCell>{q.customerName} {q.customerCompany ? `(${q.customerCompany})` : ""}</TableCell>
@@ -715,7 +709,7 @@ export default function Quotations() {
               </TableHeader>
               <TableBody>
                 {!servicesData?.length ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема услуги</TableCell></TableRow> :
-                  servicesData.map(s => (
+                  servicesData.map((s: any) => (
                     <TableRow key={s.id}>
                       <TableCell className="font-mono text-sm">{s.code}</TableCell>
                       <TableCell className="font-medium">{s.name}</TableCell>
@@ -741,7 +735,7 @@ export default function Quotations() {
               </TableHeader>
               <TableBody>
                 {!productsData?.length ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема производи</TableCell></TableRow> :
-                  productsData.map(p => (
+                  productsData.map((p: any) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-mono text-sm">{p.code}</TableCell>
                       <TableCell className="font-medium">{p.name}</TableCell>
@@ -878,7 +872,7 @@ export default function Quotations() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {qDetail.items.map(i => (
+                          {qDetail.items.map((i: any) => (
                             <TableRow key={i.id}>
                               <TableCell><Badge variant="outline" className="font-normal">{i.itemType === "material" ? "Мат" : i.itemType === "service" ? "Усл" : "Прд"}</Badge></TableCell>
                               <TableCell className="font-medium text-gray-800">{i.description}</TableCell>
@@ -1039,7 +1033,7 @@ export default function Quotations() {
       {/* BOM Estimator Dialog */}
       <Dialog open={estDialog} onOpenChange={setEstDialog}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Естиматор — {productsData?.find(x => x.id === estProduct)?.name ?? "производ"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Естиматор — {productsData?.find((x: any) => x.id === estProduct)?.name ?? "производ"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {estBom && estBom.length === 0 ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -1110,7 +1104,7 @@ export default function Quotations() {
                   </TableBody>
                 </Table>
                 <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => {
-                  const p = productsData?.find(x => x.id === estProduct);
+                  const p = productsData?.find((x: any) => x.id === estProduct);
                   if (p && estimateData) {
                     // Add product header item
                     addItem("product", p.id, `${p.name} (${estForm.area}m2)`, prodUnits[p.unit] || "m2", estimateData.totalCost);

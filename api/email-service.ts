@@ -76,7 +76,7 @@ export async function fetchInvoicesFromEmail(
     const invoices: FetchedInvoice[] = [];
 
     imap.once("ready", () => {
-      imap.openBox("INBOX", false, (err: any, box: any) => {
+      imap.openBox("INBOX", false, (err: any) => {
         if (err) {
           imap.end();
           reject(new Error(`Грешка при отворање на inbox: ${err.message}`));

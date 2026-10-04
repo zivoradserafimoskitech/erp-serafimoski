@@ -18,10 +18,10 @@ export const quotationRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       let result = await db.select().from(services).orderBy(services.name);
-      if (input?.type) result = result.filter(r => r.type === input.type);
+      if (input?.type) result = result.filter((r: any) => r.type === input.type);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
       }
       return result;
     }),
@@ -71,10 +71,10 @@ export const quotationRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       let result = await db.select().from(products).orderBy(products.name);
-      if (input?.category) result = result.filter(r => r.category === input.category);
+      if (input?.category) result = result.filter((r: any) => r.category === input.category);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
       }
       return result;
     }),
@@ -139,7 +139,7 @@ export const quotationRouter = createRouter({
       }).from(materials).where(eq(materials.isActive, "active")).orderBy(materials.name);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
       }
       return result;
     }),
@@ -294,14 +294,14 @@ export const quotationRouter = createRouter({
 
       const f = input.priceFactor;
       const vatR = parseFloat(input.vatRate) || 0;
-      const lines = items.map((it, idx) => {
+      const lines = items.map((it: any, idx: any) => {
         const qty = parseFloat(String(it.quantity)) || 0;
         const unitPrice = Math.round(parseFloat(String(it.unitPrice)) * f * 100) / 100;
         const totalPrice = f === 1 ? parseFloat(String(it.totalPrice)) : Math.round(qty * unitPrice * 100) / 100;
         const desc = input.descriptions?.[idx]?.trim() || it.description;
         return { desc, qty, unit: it.unit, unitPrice, totalPrice };
       });
-      const subtotal = lines.reduce((s, l) => s + l.totalPrice, 0);
+      const subtotal = lines.reduce((s: any, l: any) => s + l.totalPrice, 0);
       const vatAmount = Math.round(subtotal * vatR) / 100;
 
       const { getNextDocNumber } = await import("./counters-helper");
@@ -334,7 +334,7 @@ export const quotationRouter = createRouter({
       }
       if (!insertId) throw new Error("Не може да се додели број на про-фактура");
 
-      await db.insert(documentItems).values(lines.map(l => ({
+      await db.insert(documentItems).values(lines.map((l: any) => ({
         documentId: insertId,
         documentType: "invoice" as const,
         description: l.desc,
@@ -377,10 +377,10 @@ export const quotationRouter = createRouter({
         .orderBy(desc(quotations.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.quoteNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.quoteNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
       }
       return filtered;
     }),
@@ -552,8 +552,8 @@ export const quotationRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const items = await db.select().from(quotationItems).where(eq(quotationItems.quotationId, input.id));
-      const subtotal = items.reduce((s, i) => s + parseFloat(i.totalPrice), 0);
-      const costTotal = items.reduce((s, i) => s + parseFloat(i.totalCost), 0);
+      const subtotal = items.reduce((s: any, i: any) => s + parseFloat(i.totalPrice), 0);
+      const costTotal = items.reduce((s: any, i: any) => s + parseFloat(i.totalCost), 0);
       const margin = subtotal - costTotal;
       const marginPct = costTotal > 0 ? (margin / costTotal) * 100 : 0;
       const vat = subtotal * 0.18; // default
@@ -599,7 +599,7 @@ export const quotationRouter = createRouter({
       const orderId = Number(orderResult[0].insertId);
 
       if (items.length > 0) {
-        await db.insert(orderItems).values(items.map(i => ({
+        await db.insert(orderItems).values(items.map((i: any) => ({
           orderId,
           description: i.description,
           quantity: Number(i.quantity),

@@ -15,10 +15,10 @@ export const catalogRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       let result = await db.select().from(machines).orderBy(machines.name);
-      if (input?.type) result = result.filter(r => r.type === input.type);
+      if (input?.type) result = result.filter((r: any) => r.type === input.type);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s));
       }
       return result;
     }),

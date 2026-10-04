@@ -98,11 +98,11 @@ export const procurementRouter = createRouter({
         .orderBy(desc(purchaseOrders.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
-      if (input?.supplierId) filtered = filtered.filter(r => r.supplierId === input.supplierId);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
+      if (input?.supplierId) filtered = filtered.filter((r: any) => r.supplierId === input.supplierId);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.poNumber.toLowerCase().includes(s) || r.supplierName?.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.poNumber.toLowerCase().includes(s) || r.supplierName?.toLowerCase().includes(s));
       }
       return filtered;
     }),
@@ -384,7 +384,7 @@ export const procurementRouter = createRouter({
 
       // Check if all items received
       const allItems = await db.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.purchaseOrderId, item[0].purchaseOrderId));
-      const allReceived = allItems.every(i => parseFloat(i.receivedQuantity) >= parseFloat(i.quantity));
+      const allReceived = allItems.every((i: any) => parseFloat(i.receivedQuantity) >= parseFloat(i.quantity));
       if (allReceived) {
         await db.update(purchaseOrders).set({ status: "received" }).where(eq(purchaseOrders.id, item[0].purchaseOrderId));
       } else if (parseFloat(newReceived) > 0) {

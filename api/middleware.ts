@@ -43,7 +43,7 @@ function scheduleLedgerSync(actor?: string) {
   ledgerTimer = setTimeout(() => {
     ledgerTimer = null;
     const who = ledgerActor; ledgerActor = "автоматски";
-    import("./finance-router").then(m => m.syncLedger(who)).catch(e => console.error("[LEDGER]", e?.message ?? e));
+    import("./finance-router").then(m => m.syncLedgerIfChanged(who)).catch(e => console.error("[LEDGER]", e?.message ?? e));
   }, 1500);
 }
 const autoLedger = t.middleware(async ({ ctx, path, type, next }) => {

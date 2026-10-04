@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
@@ -57,12 +57,12 @@ export const accountingRouter = createRouter({
         .orderBy(desc(invoices.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
-      if (input?.type) filtered = filtered.filter(r => r.invoiceType === input.type);
-      if (input?.customerId) filtered = filtered.filter(r => r.customerId === input.customerId);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
+      if (input?.type) filtered = filtered.filter((r: any) => r.invoiceType === input.type);
+      if (input?.customerId) filtered = filtered.filter((r: any) => r.customerId === input.customerId);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.invoiceNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.invoiceNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
       }
       return filtered;
     }),
@@ -147,7 +147,7 @@ export const accountingRouter = createRouter({
         for (const item of items) {
           if (item.itemType === "product" && item.productId) {
             const stock = await db.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.productId, item.productId));
-            const totalStock = stock.reduce((sum, s) => sum + parseFloat(String(s.quantity)), 0);
+            const totalStock = stock.reduce((sum: any, s: any) => sum + parseFloat(String(s.quantity)), 0);
             const qty = parseFloat(item.quantity);
             if (totalStock < qty) {
               throw new Error(`Нема доволно залиха за ${item.description}. На залиха: ${totalStock.toFixed(3)}, потребно: ${qty.toFixed(3)}`);
@@ -268,7 +268,8 @@ export const accountingRouter = createRouter({
           subtotal: incomingInvoices.subtotal, vatRate: incomingInvoices.vatRate,
           vatAmount: incomingInvoices.vatAmount, totalAmount: incomingInvoices.totalAmount,
           currency: incomingInvoices.currency, notes: incomingInvoices.notes, expenseAccount: incomingInvoices.expenseAccount,
-          fileUrl: incomingInvoices.fileUrl, createdAt: incomingInvoices.createdAt,
+          // само дали има прилог — самата датотека се зема со documentFile кога се отвора
+          hasFile: sql<boolean>`COALESCE(${incomingInvoices.fileUrl}, '') <> ''`, createdAt: incomingInvoices.createdAt,
           supplierName: suppliers.name,
         })
         .from(incomingInvoices)
@@ -276,13 +277,25 @@ export const accountingRouter = createRouter({
         .orderBy(desc(incomingInvoices.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
-      if (input?.supplierId) filtered = filtered.filter(r => r.supplierId === input.supplierId);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
+      if (input?.supplierId) filtered = filtered.filter((r: any) => r.supplierId === input.supplierId);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.supplierInvoiceNumber.toLowerCase().includes(s) || r.supplierName?.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.supplierInvoiceNumber.toLowerCase().includes(s) || r.supplierName?.toLowerCase().includes(s));
       }
       return filtered;
+    }),
+
+  /** Прикачена датотека (PDF/слика) на документ — се зема само кога корисникот ја отвора. */
+  documentFile: publicQuery
+    .input(z.object({ kind: z.enum(["incoming_invoice", "receipt", "email_invoice", "parsed_invoice"]), id: z.number() }))
+    .query(async ({ input }) => {
+      const t = { incoming_invoice: ["incoming_invoices", "file_url"], receipt: ["receipts", "file_url"], email_invoice: ["email_invoices", "pdf_base64"], parsed_invoice: ["parsed_invoices", "file_url"] }[input.kind];
+      const r = (await getPool().query(`SELECT ${t[1]} AS f FROM ${t[0]} WHERE id = $1`, [input.id])).rows[0];
+      const raw = String(r?.f ?? "");
+      if (!raw) return null;
+      const m = raw.match(/^data:([^;]+);base64,(.*)$/s);
+      return m ? { mime: m[1], base64: m[2] } : { mime: "application/pdf", base64: raw };
     }),
 
   incomingInvoiceById: publicQuery
@@ -438,7 +451,7 @@ export const accountingRouter = createRouter({
           receiptDate: receipts.receiptDate, supplierDocNumber: receipts.supplierDocNumber,
           transportCost: receipts.transportCost, customsCost: receipts.customsCost,
           otherCost: receipts.otherCost, totalAmount: receipts.totalAmount,
-          notes: receipts.notes, fileUrl: receipts.fileUrl, createdAt: receipts.createdAt,
+          notes: receipts.notes, hasFile: sql<boolean>`COALESCE(${receipts.fileUrl}, '') <> ''`, createdAt: receipts.createdAt,
           supplierName: suppliers.name,
         })
         .from(receipts)
@@ -446,10 +459,10 @@ export const accountingRouter = createRouter({
         .orderBy(desc(receipts.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.receiptNumber.toLowerCase().includes(s) || r.supplierName?.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.receiptNumber.toLowerCase().includes(s) || r.supplierName?.toLowerCase().includes(s));
       }
       return filtered;
     }),
@@ -622,10 +635,10 @@ export const accountingRouter = createRouter({
         .orderBy(desc(deliveryNotes.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.dnNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.dnNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
       }
       return filtered;
     }),
@@ -677,7 +690,7 @@ export const accountingRouter = createRouter({
         for (const item of items) {
           if (item.itemType === "product" && item.productId) {
             const stock = await db.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.productId, item.productId));
-            const totalStock = stock.reduce((sum, s) => sum + parseFloat(String(s.quantity)), 0);
+            const totalStock = stock.reduce((sum: any, s: any) => sum + parseFloat(String(s.quantity)), 0);
             const qty = parseFloat(item.quantity) || 0;
             if (totalStock < qty) {
               throw new Error(`Нема доволно залиха на готов производ „${item.description}". На залиха: ${totalStock.toFixed(3)}, потребно: ${qty.toFixed(3)}`);
@@ -740,7 +753,7 @@ export const accountingRouter = createRouter({
               .where(eq(finishedGoodsStock.id, entry.id));
           } else {
             const allWh = await db.select().from(warehouses);
-            const fgWh = allWh.find(w => w.code === "GL-PROD") || allWh.find(w => w.type === "finished_goods");
+            const fgWh = allWh.find((w: any) => w.code === "GL-PROD") || allWh.find((w: any) => w.type === "finished_goods");
             if (fgWh) {
               await db.insert(finishedGoodsStock).values({
                 productId: item.productId, warehouseId: fgWh.id,
@@ -790,8 +803,8 @@ export const accountingRouter = createRouter({
         .sort((x: any, y: any) => String(x.vatDate ?? x.receivedDate).localeCompare(String(y.vatDate ?? y.receivedDate)));
 
       const sum = (rows: any[], f: string) => rows.reduce((a, r) => a + (Number(r[f]) || 0), 0);
-      const totalOutgoing = sum(filteredOutgoing, "totalMkd"), totalOutgoingVat = sum(filteredOutgoing, "vatMkd"), totalOutgoingBase = sum(filteredOutgoing, "baseMkd");
-      const totalIncoming = sum(filteredIncoming, "totalMkd"), totalIncomingVat = sum(filteredIncoming, "vatMkd"), totalIncomingBase = sum(filteredIncoming, "baseMkd");
+      const totalOutgoing = sum(filteredOutgoing, "totalMkd"), totalOutgoingBase = sum(filteredOutgoing, "baseMkd");
+      const totalIncoming = sum(filteredIncoming, "totalMkd"), totalIncomingBase = sum(filteredIncoming, "baseMkd");
       // ДДВ: од ДДВ книгите (вклучува ДДВ на аванси и обратно оданочување) — исто како ДДВ табот
       const { vatBooksData } = await import("./finance-router");
       const vb = await vatBooksData({ from: input.startDate, to: input.endDate });
@@ -987,7 +1000,7 @@ export const accountingRouter = createRouter({
         subtotal: parseFloat(inv[0].subtotal),
         vatAmount: parseFloat(inv[0].vatAmount),
         totalAmount: parseFloat(inv[0].totalAmount),
-        items: items.map((item, idx) => ({
+        items: items.map((item: any, idx: any) => ({
           lineNumber: idx + 1,
           description: item.description,
           quantity: parseFloat(item.quantity),
@@ -1071,7 +1084,7 @@ export const accountingRouter = createRouter({
         .orderBy(desc(invoices.createdAt));
       if (input?.search) {
         const s = input.search.toLowerCase();
-        return result.filter(r => r.invoiceNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
+        return result.filter((r: any) => r.invoiceNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
       }
       return result;
     }),
@@ -1081,8 +1094,10 @@ export const accountingRouter = createRouter({
     .input(z.object({ status: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      const result = await db.select().from(parsedInvoices).orderBy(desc(parsedInvoices.createdAt));
-      if (input?.status) return result.filter(r => r.status === input.status);
+      const rows = await db.select().from(parsedInvoices).orderBy(desc(parsedInvoices.createdAt));
+      // без самата датотека во листата
+      const result = rows.map(({ fileUrl, ...r }: any) => ({ ...r, hasFile: !!fileUrl }));
+      if (input?.status) return result.filter((r: any) => r.status === input.status);
       return result;
     }),
 

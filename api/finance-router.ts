@@ -356,6 +356,47 @@ async function insertLines(client: any, entryId: number, lines: GlLine[]) {
   }
 }
 
+// ── Побрзо автоматско книжење ──
+// Отпечаток од сите податоци од кои зависат налозите (без прилозите). Ако по зачувување не е сменет
+// (на пр. е зачуван работен налог што не книжи ништо), целото повторно пресметување се прескокнува.
+const FP_TABLES = ["invoices", "customers", "incoming_invoices", "suppliers", "payment_allocations", "bank_transactions", "bank_statements",
+  "cash_transactions", "depreciation_entries", "fixed_assets", "inventory_transactions", "inventory_valuations", "payroll_runs", "payroll_lines",
+  "quotations", "orders", "materials", "compensations", "compensation_items", "year_closes", "exchange_rates", "gl_posting_rules", "period_lock"];
+export async function ledgerFingerprint(): Promise<string> {
+  const parts = FP_TABLES.map((t) => `(SELECT COALESCE(string_agg(md5((row_to_json(x)::jsonb - 'file_url' - 'pdf_base64' - 'updated_at')::text), '' ORDER BY md5((row_to_json(x)::jsonb - 'file_url' - 'pdf_base64' - 'updated_at')::text)), '') FROM "${t}" x)`);
+  // рачните налози (влијаат на затворањето на годината) и месецот (месечна амортизација до тековниот месец)
+  parts.push(`(SELECT COUNT(*)::text || ':' || COALESCE(SUM(l.debit * 3 + l.credit * 7), 0)::text FROM gl_lines l JOIN gl_entries e ON e.id = l.entry_id WHERE e.source_type = 'manual')`);
+  parts.push(`to_char(now() AT TIME ZONE 'Europe/Skopje', 'YYYY-MM')`);
+  const r = await getPool().query(`SELECT md5(concat_ws('|', ${parts.join(", ")})) AS fp`);
+  return r.rows[0].fp as string;
+}
+let lastFingerprint: string | null = null;
+/** Книжи само ако нешто е сменето од последното книжење. */
+export async function syncLedgerIfChanged(actor = "автоматски") {
+  let fp: string | null = null;
+  try { fp = await ledgerFingerprint(); } catch { fp = null; }
+  if (fp && fp === lastFingerprint) return { skipped: true as const };
+  const r = await syncLedger(actor);
+  lastFingerprint = fp;
+  return r;
+}
+/** Ноќна целосна проверка (02–05 ч.): налозите се пресметуваат одново без разлика на отпечатокот. */
+export function startLedgerNightly() {
+  const tick = async () => {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Skopje", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false }).formatToParts(new Date());
+    const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    const hour = Number(g("hour")) % 24, day = `${g("year")}-${g("month")}-${g("day")}`;
+    if (hour < 2 || hour > 5) return;
+    const done = (await q(`SELECT value FROM app_kv WHERE key = 'ledger:nightly'`).catch(() => []))[0]?.value;
+    if (done === day) return;
+    await q(`INSERT INTO app_kv (key, value, updated_at) VALUES ('ledger:nightly', $1, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [day]);
+    const r = await syncLedger("ноќна проверка");
+    lastFingerprint = await ledgerFingerprint().catch(() => null);
+    if (r.created || r.updated || r.removed) console.log(`[LEDGER] ноќна проверка: +${r.created} ~${r.updated} -${r.removed}`);
+  };
+  setInterval(() => { tick().catch((e) => console.error("[LEDGER] ноќна:", e?.message ?? e)); }, 30 * 60_000);
+}
+
 /** Усогласи ја главната книга со документите: ново -> книжи, сменето -> прекнижи, избришано -> тргни. */
 export async function syncLedger(actor = "автоматски") {
   await ensureChart();

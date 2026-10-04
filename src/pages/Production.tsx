@@ -139,7 +139,7 @@ export default function Production() {
   const handleMatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selWO || !matForm.materialId || !matForm.quantity) return;
-    const mat = materialsData?.find(m => m.id.toString() === matForm.materialId);
+    const mat = materialsData?.find((m: any) => m.id.toString() === matForm.materialId);
     const qty = parseFloat(matForm.quantity);
     const avail = parseFloat(String((mat as any)?.availableQty ?? "NaN"));
     if (Number.isFinite(avail) && qty > avail) {
@@ -213,7 +213,7 @@ export default function Production() {
             <TableBody>
               {isLoading ? (<TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>)
                 : !workOrders || workOrders.length === 0 ? (<TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема работни налози</TableCell></TableRow>)
-                : workOrders.map((wo) => {
+                : workOrders.map((wo: any) => {
                     const st = statusCfg[wo.status] || statusCfg.pending;
                     const pr = priorityCfg[wo.priority] || priorityCfg.normal;
                     return (

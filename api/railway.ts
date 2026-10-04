@@ -375,6 +375,7 @@ serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   if (process.env.DATABASE_URL && process.env.DISABLE_REMINDERS !== "true") {
     import("./reminders").then(m => m.startReminderScheduler()).catch(e => console.error("[REMINDERS]", e));
     import("./backup").then(m => m.startBackupScheduler()).catch(e => console.error("[BACKUP]", e));
+    if (process.env.DISABLE_AUTO_LEDGER !== "true") import("./finance-router").then(m => m.startLedgerNightly()).catch(e => console.error("[LEDGER]", e));
   }
 
   // Шемата се усогласува сама при секое подигање.

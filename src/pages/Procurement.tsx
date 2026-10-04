@@ -238,7 +238,7 @@ export default function Procurement() {
                   {suppliers?.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема добавувачи</TableCell></TableRow>
                   ) : (
-                    suppliers?.map((s) => (
+                    suppliers?.map((s: any) => (
                       <TableRow key={s.id}>
                         <TableCell className="font-medium">{s.name}</TableCell>
                         <TableCell>{s.contactPerson || "-"}</TableCell>
@@ -277,7 +277,7 @@ export default function Procurement() {
                   {purchaseOrders?.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема набавни нарачки</TableCell></TableRow>
                   ) : (
-                    purchaseOrders?.map((po) => {
+                    purchaseOrders?.map((po: any) => {
                       const st = poStatusConfig[po.status] || poStatusConfig.draft;
                       return (
                         <TableRow key={po.id} className="cursor-pointer hover:bg-amber-50/40" onClick={() => { setSelectedPO(po.id); setDetailOpen(true); }}>

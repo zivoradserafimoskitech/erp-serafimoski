@@ -1,10 +1,5 @@
 import { createRouter, publicQuery } from "./middleware";
-import { getDb, getPool } from "./queries/connection";
-import {
-  orders, workOrders, materials, purchaseOrders, customers,
-  invoices, incomingInvoices, warehouses, materialStock,
-  quotations,
-} from "@db/schema";
+import { getPool } from "./queries/connection";
 import { isLowStock } from "@contracts/stock";
 import { openDocs, manualPartnerBalances } from "./payment-status";
 import { loadRates, iso } from "./rates-helper";
@@ -12,45 +7,45 @@ import { toMkd } from "@contracts/finance";
 
 export const dashboardRouter = createRouter({
   stats: publicQuery.query(async () => {
-    const db = getDb();
-
-    const allOrders = await db.select().from(orders);
-    const allWorkOrders = await db.select().from(workOrders);
-    const allMaterials = await db.select().from(materials);
-    const allPOs = await db.select().from(purchaseOrders);
-    const allCustomers = await db.select().from(customers);
-    const allInvoices = await db.select().from(invoices);
-    const allIncoming = await db.select().from(incomingInvoices);
-    const allWarehouses = await db.select().from(warehouses);
-    const allStock = await db.select().from(materialStock);
-    const allQuotes = await db.select().from(quotations);
+    // Само потребните колони (без прилози/датотеки) и бројки пресметани во базата
+    const q = async (sql: string) => (await getPool().query(sql)).rows as any[];
+    const camel = (rows: any[]) => rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.replace(/_([a-z])/g, (_m, c) => c.toUpperCase()), v])));
+    const [allOrders, allWorkOrders, allMaterials, poCounts, custCounts, allInvoices, allIncoming, whCount, stockValue, allQuotes] = await Promise.all([
+      q(`SELECT id, status, total_amount, cost_amount, margin_amount, quote_id, created_at FROM orders`).then(camel),
+      q(`SELECT id, status, order_id FROM work_orders`).then(camel),
+      q(`SELECT current_stock, min_stock FROM materials`).then(camel),
+      q(`SELECT status, COUNT(*)::int AS n FROM purchase_orders GROUP BY status`),
+      q(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_active = 'active')::int AS active FROM customers`),
+      q(`SELECT invoice_type, status, currency, issue_date, subtotal, vat_amount, total_amount FROM invoices WHERE invoice_type IN ('standard','credit_note') AND status NOT IN ('draft','cancelled')`).then(camel),
+      q(`SELECT vat_amount, currency, received_date FROM incoming_invoices WHERE status <> 'cancelled'`).then(camel),
+      q(`SELECT COUNT(*)::int AS n FROM warehouses`),
+      q(`SELECT COALESCE(SUM(quantity * avg_cost), 0) AS v FROM material_stock`),
+      q(`SELECT id, status, currency FROM quotations`).then(camel),
+    ]);
+    const poBy = (st: string) => Number(poCounts.find((r) => r.status === st)?.n ?? 0);
 
     // Orders
-    const pendingOrders = allOrders.filter((o) => o.status === "pending").length;
-    const confirmedOrders = allOrders.filter((o) => o.status === "confirmed").length;
-    const inProductionOrders = allOrders.filter((o) => o.status === "in_production").length;
-    const readyOrders = allOrders.filter((o) => o.status === "ready").length;
-    const deliveredOrders = allOrders.filter((o) => o.status === "delivered").length;
+    const pendingOrders = allOrders.filter((o: any) => o.status === "pending").length;
+    const confirmedOrders = allOrders.filter((o: any) => o.status === "confirmed").length;
+    const inProductionOrders = allOrders.filter((o: any) => o.status === "in_production").length;
+    const readyOrders = allOrders.filter((o: any) => o.status === "ready").length;
+    const deliveredOrders = allOrders.filter((o: any) => o.status === "delivered").length;
 
     // Work orders
-    const pendingWO = allWorkOrders.filter((w) => w.status === "pending").length;
-    const inProgressWO = allWorkOrders.filter((w) => w.status === "in_progress").length;
-    const completedWO = allWorkOrders.filter((w) => w.status === "completed").length;
-    const onHoldWO = allWorkOrders.filter((w) => w.status === "on_hold").length;
+    const pendingWO = allWorkOrders.filter((w: any) => w.status === "pending").length;
+    const inProgressWO = allWorkOrders.filter((w: any) => w.status === "in_progress").length;
+    const completedWO = allWorkOrders.filter((w: any) => w.status === "completed").length;
+    const onHoldWO = allWorkOrders.filter((w: any) => w.status === "on_hold").length;
 
     // Storage
     const totalMaterials = allMaterials.length;
-    const lowStockCount = allMaterials.filter(isLowStock).length;
+    const lowStockCount = allMaterials.filter((m: any) => isLowStock(m)).length;
     // Материјали без поставен минимум — не се аларм, но вреди да се знае колку се
-    const noMinStock = allMaterials.filter((m) => (parseFloat(m.minStock) || 0) <= 0).length;
-    const totalInventoryValue = allStock.reduce(
-      (sum, s) => sum + parseFloat(s.quantity) * parseFloat(s.avgCost), 0
-    );
+    const noMinStock = allMaterials.filter((m: any) => (parseFloat(m.minStock) || 0) <= 0).length;
+    const totalInventoryValue = Number(stockValue[0]?.v ?? 0);
 
     // Procurement
-    const draftPO = allPOs.filter((p) => p.status === "draft").length;
-    const sentPO = allPOs.filter((p) => p.status === "sent").length;
-    const partialPO = allPOs.filter((p) => p.status === "partial").length;
+    const draftPO = poBy("draft"), sentPO = poBy("sent"), partialPO = poBy("partial");
 
     // Revenue & Profit
     // Сè во денари: нарачката е во валутата на понудата, фактурите во својата валута
@@ -63,7 +58,7 @@ export const dashboardRouter = createRouter({
     const totalCost = liveOrders.reduce((sum: number, o: any) => sum + oMkd(o, "costAmount"), 0);
     const totalMargin = liveOrders.reduce((sum: number, o: any) => sum + oMkd(o, "marginAmount"), 0);
     // Само книжени фактури (како во главната книга и ДДВ книгите); книжното одобрување се одзема
-    const booked = allInvoices.filter((i: any) => ["standard", "credit_note"].includes(i.invoiceType) && !["draft", "cancelled"].includes(i.status));
+    const booked = allInvoices;
     const iSign = (i: any) => i.invoiceType === "credit_note" ? -1 : 1;
     const iCur = (i: any) => String(i.currency || "MKD").toUpperCase();
     const totalInvoiced = booked.reduce((sum: number, i: any) => sum + iSign(i) * Math.abs(mkd(i.totalAmount, iCur(i), i.issueDate)), 0);
@@ -77,17 +72,17 @@ export const dashboardRouter = createRouter({
     const totalReceivables = open.filter(d => d.docType === "invoice").reduce((s, d) => s + d.openMkd, 0) + manualReceivables;
 
     // Customers
-    const activeCustomers = allCustomers.filter((c) => c.isActive === "active").length;
+    const activeCustomers = Number(custCounts[0]?.active ?? 0);
 
     // Quotes
-    const pendingQuotes = allQuotes.filter(q => q.status === "draft" || q.status === "sent").length;
+    const pendingQuotes = allQuotes.filter((q: any) => q.status === "draft" || q.status === "sent").length;
 
     // Warehouses
-    const warehouseCount = allWarehouses.length;
+    const warehouseCount = Number(whCount[0]?.n ?? 0);
 
     // VAT
     const outgoingVat = booked.reduce((sum: number, i: any) => sum + iSign(i) * Math.abs(mkd(i.vatAmount, iCur(i), i.issueDate)), 0);
-    const incomingVat = allIncoming.filter((i: any) => i.status !== "cancelled")
+    const incomingVat = allIncoming
       .reduce((sum: number, i: any) => sum + mkd(i.vatAmount, String(i.currency || "MKD").toUpperCase(), i.receivedDate), 0);
 
     // ── Показатели со јасен извор ──
@@ -131,7 +126,7 @@ export const dashboardRouter = createRouter({
         inProduction: inProductionOrders,
         ready: readyOrders,
         delivered: deliveredOrders,
-        cancelled: allOrders.filter((o) => o.status === "cancelled").length,
+        cancelled: allOrders.filter((o: any) => o.status === "cancelled").length,
         inProductionNoWo,
       },
       production: {
@@ -149,7 +144,7 @@ export const dashboardRouter = createRouter({
         warehouseCount,
       },
       procurement: {
-        total: allPOs.length,
+        total: poCounts.reduce((a, r) => a + Number(r.n), 0),
         draft: draftPO,
         sent: sentPO,
         partial: partialPO,
@@ -167,7 +162,7 @@ export const dashboardRouter = createRouter({
         vatBalance: (outgoingVat - incomingVat).toFixed(2),
       },
       customers: {
-        total: allCustomers.length,
+        total: Number(custCounts[0]?.total ?? 0),
         active: activeCustomers,
       },
       quotes: {

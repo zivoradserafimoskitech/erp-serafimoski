@@ -310,7 +310,7 @@ export default function Customers() {
                     <Select value={orderForm.customerId} onValueChange={(v) => setOrderForm({ ...orderForm, customerId: v })}>
                       <SelectTrigger><SelectValue placeholder="Избери клиент" /></SelectTrigger>
                       <SelectContent>
-                        {customers?.map((c) => (
+                        {customers?.map((c: any) => (
                           <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>
                         ))}
                       </SelectContent>
@@ -423,7 +423,7 @@ export default function Customers() {
                   {customers?.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема клиенти</TableCell></TableRow>
                   ) : (
-                    customers?.map((c) => (
+                    customers?.map((c: any) => (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">{c.name}</TableCell>
                         <TableCell>{c.company || "-"}</TableCell>
@@ -471,7 +471,7 @@ export default function Customers() {
                   {orders?.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема нарачки</TableCell></TableRow>
                   ) : (
-                    orders?.map((o) => {
+                    orders?.map((o: any) => {
                       const st = orderStatusConfig[o.status] || orderStatusConfig.pending;
                       const pr = priorityConfig[o.priority] || priorityConfig.normal;
                       return (
@@ -536,7 +536,7 @@ export default function Customers() {
                 <div className="border-t pt-3">
                   <h4 className="font-semibold mb-2">Ставки</h4>
                   <div className="space-y-2">
-                    {orderDetail.items.map((item) => (
+                    {orderDetail.items.map((item: any) => (
                       <div key={item.id} className="bg-gray-50 p-2 rounded text-sm">
                         <div className="font-medium">{item.description}</div>
                         <div className="text-gray-500 flex gap-3 mt-1">
