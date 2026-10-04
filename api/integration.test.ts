@@ -511,4 +511,97 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(vb.warnings.some((w: string) => w.includes(next) && /ЕЦД/.test(w))).toBe(false);
     await pool.query(`UPDATE customers SET country = NULL WHERE id = $1`, [ids.cust]);
   });
+
+  it("безбедност: кодот само како хеш, сесии со рок, нов код ги одјавува уредите", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    const auth = await import("./auth");
+    const { resolveActor, clearActorCache } = await import("./context");
+    // стар корисник со чист код (пред миграцијата) → се хешира при подигање
+    await pool.query(`INSERT INTO app_users (name, passcode, role) VALUES ('Стар', '445566', 'operator')`);
+    auth.resetAuth();
+    await auth.ensureAuthReady();
+    const stored = (await pool.query(`SELECT passcode, passcode_hint FROM app_users WHERE name = 'Стар'`)).rows[0];
+    expect(stored.passcode.startsWith("s2$")).toBe(true);
+    expect(stored.passcode).not.toContain("445566");
+    expect(stored.passcode_hint).toBe("••••66");
+    clearActorCache();
+    expect((await resolveActor("445566"))?.name).toBe("Стар");
+
+    // нов корисник: во базата нема чист код; листата не го враќа
+    const u: any = await caller.appUsers.appUsersCreate({ name: "Магационер", passcode: "778899", role: "operator" });
+    const raw = (await pool.query(`SELECT passcode FROM app_users WHERE id = $1`, [u.id])).rows[0].passcode;
+    expect(raw).not.toBe("778899");
+    const list: any[] = await caller.appUsers.appUsersList();
+    expect(JSON.stringify(list)).not.toContain("778899");
+    expect(list.find((x) => x.id === u.id).passcodeHint).toBe("••••99");
+    await expect(caller.appUsers.appUsersCreate({ name: "Дупликат", passcode: "778899" })).rejects.toThrow(/друг корисник/);
+
+    // сесија: токен (не кодот), во базата само хеш на токенот
+    const actor = await auth.actorFromCode("778899");
+    const token = await auth.createSession(actor!, { ip: "1.2.3.4" });
+    expect(token.startsWith("st_")).toBe(true);
+    expect((await pool.query(`SELECT COUNT(*)::int AS n FROM app_sessions WHERE token_hash = $1`, [token])).rows[0].n).toBe(0);
+    clearActorCache();
+    expect((await resolveActor(token))?.name).toBe("Магационер");
+    // истечена сесија не важи
+    await pool.query(`UPDATE app_sessions SET expires_at = now() - interval '1 minute' WHERE user_id = $1`, [u.id]);
+    clearActorCache();
+    expect(await resolveActor(token)).toBeUndefined();
+    // нов код → стариот не важи, сесиите се бришат
+    const t2 = await auth.createSession(actor!, {});
+    const r: any = await caller.appUsers.appUsersResetCode({ id: u.id });
+    expect(r.code).toMatch(/^\d{6}$/);
+    clearActorCache();
+    expect(await resolveActor(t2)).toBeUndefined();
+    expect(await resolveActor("778899")).toBeUndefined();
+    expect((await resolveActor(r.code))?.name).toBe("Магационер");
+    // одјава
+    const t3 = await auth.createSession({ id: u.id, name: "Магационер", role: "operator" }, {});
+    await auth.deleteSession(t3);
+    clearActorCache();
+    expect(await resolveActor(t3)).toBeUndefined();
+    // погрешни обиди → пауза
+    auth._resetLoginLimits();
+    for (let i = 0; i < 5; i++) auth.loginFailed("9.9.9.9");
+    expect(auth.loginWait("9.9.9.9")).toBeGreaterThan(0);
+    expect(auth.loginWait("8.8.8.8")).toBe(0);
+  });
+
+  it("бекап: доследна копија, проверка во привремена шема, враќање", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    const bk = await import("./backup");
+    const before = Number((await pool.query(`SELECT COUNT(*)::int AS n FROM invoices`)).rows[0].n);
+    const custName = (await pool.query(`SELECT name FROM customers WHERE id = $1`, [ids.cust])).rows[0].name;
+    const { gz, summary } = await bk.backupToBuffer();
+    expect(summary.tables).toBeGreaterThan(30);
+    expect(gz[0]).toBe(0x1f);
+    const { header, data } = bk.parseBackup(gz);
+    expect(header.tables.find((t) => t.name === "invoices")!.rows).toBe(before);
+    expect(data.has("app_sessions")).toBe(false);
+
+    const chk = await bk.checkRestore(gz);
+    expect(chk.problems).toEqual([]);
+    expect(chk.ok).toBe(true);
+    expect(chk.rows).toBe(summary.rows);
+    // проверката не остава траги
+    expect((await pool.query(`SELECT COUNT(*)::int AS n FROM information_schema.schemata WHERE schema_name LIKE 'bk_check_%'`)).rows[0].n).toBe(0);
+    await expect(bk.checkRestore(Buffer.from("не е бекап"))).rejects.toThrow(/бекап/);
+
+    // промени по бекапот → враќање ги поништува; броевите продолжуваат
+    await pool.query(`UPDATE customers SET name = 'ИЗМЕНЕТО' WHERE id = $1`, [ids.cust]);
+    await pool.query(`DELETE FROM gl_audit`);
+    const r = await bk.restoreBackup(gz);
+    expect(r.ok).toBe(true);
+    expect((await pool.query(`SELECT name FROM customers WHERE id = $1`, [ids.cust])).rows[0].name).toBe(custName);
+    expect(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM invoices`)).rows[0].n)).toBe(before);
+    const maxId = Number((await pool.query(`SELECT MAX(id) AS m FROM customers`)).rows[0].m);
+    const ins = await pool.query(`INSERT INTO customers (name) VALUES ('По враќање') RETURNING id`);
+    expect(Number(ins.rows[0].id)).toBeGreaterThan(maxId);
+    // кодовите важат и по враќањето
+    const { resolveActor, clearActorCache } = await import("./context");
+    clearActorCache();
+    expect((await resolveActor("445566"))?.name).toBe("Стар");
+  });
 });

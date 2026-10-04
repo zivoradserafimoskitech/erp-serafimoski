@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -480,7 +480,7 @@ export default function Production() {
                             <span className="font-medium min-w-[130px]">{op ? (opList[op.operation] || op.operation) : `Операција #${l.operationId}`}</span>
                             <span className="text-gray-600 text-xs">{l.operator || "—"}</span>
                             <span className="text-gray-400 text-xs">
-                              {new Date(l.startedAt).toLocaleString("mk-MK", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              {formatDateTime(l.startedAt)}
                               {l.endedAt && ` → ${new Date(l.endedAt).toLocaleTimeString("mk-MK", { hour: "2-digit", minute: "2-digit" })}`}
                             </span>
                             <span className="ml-auto font-semibold">

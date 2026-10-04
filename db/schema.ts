@@ -176,6 +176,7 @@ export const appUsers = pgTable("app_users", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   passcode: varchar("passcode", { length: 120 }).notNull().unique(),
+  passcodeHint: varchar("passcode_hint", { length: 8 }),
   role: varchar("role", { length: 20 }).notNull().default("operator"),
   isActive: varchar("is_active", { length: 20 }).notNull().default("active"),
   note: text("note"),

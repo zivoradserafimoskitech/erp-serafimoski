@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { login } from "@/lib/auth";
 
-// Заштита со лозинка — активна само ако серверот има APP_PASSWORD поставена.
-// Клучот се чува во localStorage и се праќа како x-app-key header (види providers/trpc.tsx).
+// Најава — активна ако серверот има APP_PASSWORD или постои администратор со код.
+// Кодот се праќа само при најава; во localStorage се чува сесијата (токен со рок), што се праќа
+// како x-app-key header (види providers/trpc.tsx). Стар зачуван код се заменува со сесија сам.
 export function PasswordGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<"checking" | "locked" | "open">("checking");
   const [pw, setPw] = useState("");
@@ -9,19 +11,9 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
 
   const verify = async (candidate: string | null) => {
     try {
-      const res = await fetch("/api/auth-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: candidate ?? "" }),
-      });
-      const d = await res.json();
-      if (!d.gate || d.ok) {
-        if (candidate) window.localStorage.setItem("appKey", candidate);
-        if (d.name) window.localStorage.setItem("appUserName", d.name);
-        if (d.role) window.localStorage.setItem("appUserRole", d.role);
-        setState("open");
-        return true;
-      }
+      const d = await login(candidate ?? "");
+      if (!d.gate || d.ok) { setState("open"); return true; }
+      if (d.message) setErr(d.message);
       return false;
     } catch {
       // сервер недостапен — не заклучувај, апликацијата ионака нема да работи
@@ -46,8 +38,9 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
         onSubmit={async (e) => {
           e.preventDefault();
           setErr("");
-          const ok = await verify(pw);
-          if (!ok) setErr("Погрешен код — провери со администраторот");
+          const d = await login(pw).catch(() => null);
+          if (d && (d.ok || !d.gate)) { setState("open"); return; }
+          setErr(d?.message ?? "Погрешен код — провери со администраторот");
         }}
       >
         <div className="text-center">

@@ -73,6 +73,7 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   // Подесувања — само администратор
   settings: "admin",
   appUsers: "admin",
+  backup: "admin",
 };
 
 /** Каде сметководителот смее да пишува. */
@@ -128,7 +129,7 @@ export function canRun(role: string | undefined | null, path: string, type?: "qu
   if (path === "appUsers.appUsersMe") return true;
 
   // Корисниците и платите се доверливи и за читање
-  if (router === "appUsers" || router === "hr") return atLeast(role, "admin");
+  if (router === "appUsers" || router === "hr" || router === "backup") return atLeast(role, "admin");
 
   // Читањето е отворено за сите: секое tRPC query е читање (ниту едно не запишува),
   // а за повици без тип се препознава по името

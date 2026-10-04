@@ -1,4 +1,5 @@
 import { trpc } from "@/providers/trpc";
+import { logout as appLogout } from "@/lib/auth";
 import { ROLES, canSeeMenu, type Role } from "@contracts/roles";
 import { useEffect, useState } from "react";
 import GlobalSearch from "@/components/GlobalSearch";
@@ -106,12 +107,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {me?.gate && (
               <button
                 className="text-slate-400 hover:text-amber-400 underline"
-                onClick={() => {
-                  window.localStorage.removeItem("appKey");
-                  window.localStorage.removeItem("appUserName");
-                  window.localStorage.removeItem("appUserRole");
-                  window.location.reload();
-                }}
+                onClick={() => { void appLogout(); }}
               >
                 одјави
               </button>
@@ -152,7 +148,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-800"
-            onClick={logout}
+            onClick={() => { if (me?.gate) void appLogout(); else logout(); }}
           >
             <LogOut className="h-5 w-5 mr-2" />
             Одјава

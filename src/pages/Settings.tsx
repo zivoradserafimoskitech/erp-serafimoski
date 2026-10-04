@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Building2, Ruler, ArrowRightLeft, Save, Shield, Upload, KeyRound, Users } from "lucide-react";
+import { Building2, Ruler, ArrowRightLeft, Save, Shield, Upload, KeyRound, Users, DatabaseBackup } from "lucide-react";
+import BackupTab from "@/components/BackupTab";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import RemindersCard from "@/components/RemindersCard";
@@ -97,6 +98,7 @@ export default function SettingsPage() {
           <TabsTrigger value="conversions"><ArrowRightLeft className="h-4 w-4 mr-1" /> Конверзии</TabsTrigger>
           <TabsTrigger value="certificates"><Shield className="h-4 w-4 mr-1" /> Сертификати</TabsTrigger>
           <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Корисници</TabsTrigger>
+          <TabsTrigger value="backup"><DatabaseBackup className="h-4 w-4 mr-1" /> Бекап</TabsTrigger>
         </TabsList>
 
         <TabsContent value="company" className="space-y-4">
@@ -245,6 +247,10 @@ export default function SettingsPage() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="backup" className="space-y-4">
+          <BackupTab />
         </TabsContent>
 
         <TabsContent value="users" className="space-y-4">

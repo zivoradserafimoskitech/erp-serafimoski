@@ -123,6 +123,21 @@ export function getExtraSql(): string[] {
     `CREATE TABLE IF NOT EXISTS "year_closes" ("year" integer PRIMARY KEY, "closed_by" varchar(160), "closed_at" timestamp DEFAULT now() NOT NULL)`,
     `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "customs_declaration" varchar(60)`,
     `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "customs_date" date`,
+    // Најава: кодот само како хеш (+ последните две цифри за препознавање), сесии со рок
+    `ALTER TABLE "app_users" ADD COLUMN IF NOT EXISTS "passcode_hint" varchar(8)`,
+    `CREATE TABLE IF NOT EXISTS "app_sessions" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "token_hash" char(64) NOT NULL UNIQUE,
+      "user_id" integer,
+      "name" varchar(255) NOT NULL,
+      "role" varchar(20) NOT NULL,
+      "ip" varchar(64),
+      "user_agent" varchar(300),
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "last_seen_at" timestamp DEFAULT now() NOT NULL,
+      "expires_at" timestamp NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "app_sessions_user_idx" ON "app_sessions" ("user_id")`,
 
     // ===== РАСПОРЕД НА ПРОИЗВОДСТВО =====
     `ALTER TABLE "work_order_operations" ADD COLUMN IF NOT EXISTS "machine_id" bigint`,

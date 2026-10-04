@@ -15,3 +15,11 @@ export function formatDate(value: any): string {
   const yyyy = d.getFullYear();
   return `${dd}.${mm}.${yyyy}`;
 }
+
+/** Формат ДД.ММ.ГГГГ ЧЧ:ММ (24 часа). */
+export function formatDateTime(value: any): string {
+  if (!value) return "-";
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return `${formatDate(d)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
