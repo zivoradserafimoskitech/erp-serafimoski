@@ -65,7 +65,7 @@ export default function Procurement() {
   const [selectedPO, setSelectedPO] = useState<number | null>(null);
 
   const [supForm, setSupForm] = useState({
-    name: "", contactPerson: "", email: "", phone: "",
+    name: "", edb: "", bankAccount: "", contactPerson: "", email: "", phone: "",
     address: "", city: "", country: "Македонија", materials: "",
   });
 
@@ -84,7 +84,7 @@ export default function Procurement() {
     onSuccess: () => {
       utils.procurement.supplierList.invalidate();
       setSupplierDialog(false);
-      setSupForm({ name: "", contactPerson: "", email: "", phone: "", address: "", city: "", country: "Македонија", materials: "" });
+      setSupForm({ name: "", edb: "", bankAccount: "", contactPerson: "", email: "", phone: "", address: "", city: "", country: "Македонија", materials: "" });
     },
   });
 
@@ -136,6 +136,16 @@ export default function Procurement() {
                 <div className="space-y-2">
                   <Label>Назив *</Label>
                   <Input value={supForm.name} onChange={(e) => setSupForm({ ...supForm, name: e.target.value })} required />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>ЕДБ</Label>
+                    <Input value={supForm.edb} onChange={(e) => setSupForm({ ...supForm, edb: e.target.value })} placeholder="40..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Жиро-сметка</Label>
+                    <Input value={supForm.bankAccount} onChange={(e) => setSupForm({ ...supForm, bankAccount: e.target.value })} placeholder="300000000000000" />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">

@@ -528,6 +528,7 @@ export const suppliers = pgTable("suppliers", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   defaultExpenseAccount: varchar("default_expense_account", { length: 10 }), // последно користено конто кај влезни фактури
+  bankAccount: varchar("bank_account", { length: 40 }), // жиро-сметка — за налози за плаќање
 });
 
 export type Supplier = typeof suppliers.$inferSelect;

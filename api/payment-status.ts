@@ -8,8 +8,11 @@ import { convert, round2, type RateLookup } from "@contracts/finance";
 type DocType = "invoice" | "incoming_invoice";
 const q = async (sql: string, params: any[] = []) => (await getPool().query(sql, params)).rows as any[];
 
-/** Сите уплати по документи: {docType:docId -> износ во валута на документот}. */
-export async function paidByDoc(rate?: RateLookup, only?: { docType: DocType; id: number }): Promise<Map<string, number>> {
+/**
+ * Сите уплати по документи: {docType:docId -> износ во валута на документот}.
+ * Банка, благајна, книжно одобрување, аванс од про-фактура и компензација. `asOf` — само плаќањата до тој датум (за ИОС).
+ */
+export async function paidByDoc(rate?: RateLookup, only?: { docType: DocType; id: number }, asOf?: string): Promise<Map<string, number>> {
   const rt = rate ?? await loadRates();
   const docs = new Map<string, string>();
   const inv = !only || only.docType === "invoice", inc = !only || only.docType === "incoming_invoice";
@@ -24,24 +27,29 @@ export async function paidByDoc(rate?: RateLookup, only?: { docType: DocType; id
     const v = cur === docCur ? amount : (convert(amount, cur, docCur, date, rt) ?? amount);
     out.set(key, round2((out.get(key) ?? 0) + v));
   };
+  const until = (col: string) => (asOf ? ` AND ${col} <= '${asOf.replace(/[^0-9-]/g, "")}'` : "");
   const allocs = await q(`SELECT a.doc_type, a.doc_id, a.amount, t.tx_date, COALESCE(s.currency, 'MKD') AS cur
     FROM payment_allocations a JOIN bank_transactions t ON t.id = a.tx_id LEFT JOIN bank_statements s ON s.id = t.statement_id
-    ${only ? `WHERE a.doc_type = '${only.docType}' AND a.doc_id = ${Number(only.id)}` : ""}`);
+    WHERE true ${only ? `AND a.doc_type = '${only.docType}' AND a.doc_id = ${Number(only.id)}` : ""}${until("t.tx_date")}`);
   for (const a of allocs) add(`${a.doc_type}:${a.doc_id}`, Number(a.amount), String(a.cur).toUpperCase(), iso(a.tx_date));
   const cashWhere = !only ? "invoice_id IS NOT NULL OR incoming_invoice_id IS NOT NULL"
     : `${only.docType === "invoice" ? "invoice_id" : "incoming_invoice_id"} = ${Number(only.id)}`;
-  const cash = await q(`SELECT invoice_id, incoming_invoice_id, amount, tx_date FROM cash_transactions WHERE ${cashWhere}`);
+  const cash = await q(`SELECT invoice_id, incoming_invoice_id, amount, tx_date FROM cash_transactions WHERE (${cashWhere})${until("tx_date")}`);
   for (const c of cash) add(c.invoice_id ? `invoice:${c.invoice_id}` : `incoming_invoice:${c.incoming_invoice_id}`, Number(c.amount), "MKD", iso(c.tx_date));
   // Книжно одобрување поврзано со фактура ја намалува нејзината обврска (иста валута)
   const cn = await q(`SELECT original_invoice_id, total_amount, issue_date, currency FROM invoices
     WHERE invoice_type = 'credit_note' AND original_invoice_id IS NOT NULL AND status NOT IN ('draft','cancelled')
-    ${only ? (only.docType === "invoice" ? `AND original_invoice_id = ${Number(only.id)}` : "AND false") : ""}`);
+    ${only ? (only.docType === "invoice" ? `AND original_invoice_id = ${Number(only.id)}` : "AND false") : ""}${until("issue_date")}`);
   for (const c of cn) add(`invoice:${c.original_invoice_id}`, Math.abs(Number(c.total_amount)), String(c.currency || "MKD").toUpperCase(), iso(c.issue_date));
+  // Компензација (пребивање побарување со обврска кон истиот партнер)
+  const comp = await q(`SELECT ci.doc_type, ci.doc_id, ci.amount, c.comp_date FROM compensation_items ci JOIN compensations c ON c.id = ci.compensation_id
+    WHERE c.status = 'active' ${only ? `AND ci.doc_type = '${only.docType}' AND ci.doc_id = ${Number(only.id)}` : ""}${until("c.comp_date")}`).catch(() => [] as any[]);
+  for (const c of comp) add(`${c.doc_type}:${c.doc_id}`, Number(c.amount), docs.get(`${c.doc_type}:${c.doc_id}`) ?? "MKD", iso(c.comp_date));
   // Аванс платен по про-фактура се засметува во конечната фактура на нарачката (како затворањето на 235 во главната книга)
   if (!only || only.docType === "invoice") {
-    const links = await advanceLinks(only ? { invoiceId: only.id } : {});
+    const links = (await advanceLinks(only ? { invoiceId: only.id } : {})).filter((l) => !asOf || l.date <= asOf);
     for (const l of links) {
-      const pfPaid = only ? ((await paidByDoc(rt, { docType: "invoice", id: l.pfId })).get(`invoice:${l.pfId}`) ?? 0) : (out.get(`invoice:${l.pfId}`) ?? 0);
+      const pfPaid = only ? ((await paidByDoc(rt, { docType: "invoice", id: l.pfId }, asOf)).get(`invoice:${l.pfId}`) ?? 0) : (out.get(`invoice:${l.pfId}`) ?? 0);
       if (pfPaid > 0.005) add(`invoice:${l.invId}`, pfPaid, l.pfCur, l.date);
     }
   }
@@ -120,7 +128,8 @@ export async function assertNoPayments(docType: DocType, docId: number) {
   const bank = await q(`SELECT COUNT(*)::int n FROM payment_allocations WHERE doc_type = $1 AND doc_id = $2`, [docType, docId]);
   const cash = await q(`SELECT COUNT(*)::int n FROM cash_transactions WHERE ${docType === "invoice" ? "invoice_id" : "incoming_invoice_id"} = $1`, [docId]);
   const cn = docType === "invoice" ? await q(`SELECT COUNT(*)::int n FROM invoices WHERE original_invoice_id = $1`, [docId]) : [{ n: 0 }];
-  const parts = [bank[0].n && `${bank[0].n} банкарски уплати`, cash[0].n && `${cash[0].n} благајнички налози`, cn[0].n && `${cn[0].n} книжни одобренија`].filter(Boolean);
+  const comp = await q(`SELECT COUNT(*)::int n FROM compensation_items ci JOIN compensations c ON c.id = ci.compensation_id WHERE c.status = 'active' AND ci.doc_type = $1 AND ci.doc_id = $2`, [docType, docId]).catch(() => [{ n: 0 }]);
+  const parts = [bank[0].n && `${bank[0].n} банкарски уплати`, cash[0].n && `${cash[0].n} благајнички налози`, cn[0].n && `${cn[0].n} книжни одобренија`, comp[0].n && `${comp[0].n} компензации`].filter(Boolean);
   if (parts.length) throw new TRPCError({ code: "BAD_REQUEST", message: `Документот има ${parts.join(", ")} — прво избриши ги нив, или откажи го документот наместо да го бришеш.` });
 }
 

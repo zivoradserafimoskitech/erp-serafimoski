@@ -13,7 +13,7 @@ import { htmlToPdfBase64, type DocLang } from "@/lib/print-documents";
 export interface SendEmailProps {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  docType: "quotation" | "invoice" | "purchase_order" | "quality";
+  docType: "quotation" | "invoice" | "purchase_order" | "quality" | "ios" | "compensation";
   docId: number;
   docNumber: string;
   defaultTo?: string | null;
@@ -31,15 +31,19 @@ const TEXT = {
     invoice: (n: string, c: string) => ({ subject: `Фактура ${n} — ${c}`, body: `Почитувани,\n\nВо прилог ви ја праќаме фактурата ${n}.\n\nСо почит,\n${c}` }),
     quality: (n: string, c: string) => ({ subject: `Рекламација / неусогласеност ${n} — ${c}`, body: `Почитувани,\n\nВо прилог ви праќаме запис за неусогласеност ${n} со опис на проблемот.\nВе молиме за ваш одговор и предлог за решение.\n\nСо почит,\n${c}` }),
     purchase_order: (n: string, c: string) => ({ subject: `Набавна нарачка ${n} — ${c}`, body: `Почитувани,\n\nВо прилог ви ја праќаме набавната нарачка ${n}.\nВе молиме потврдете ја нарачката и рокот за испорака, и наведете го бројот на нарачката на фактурата.\n\nСо почит,\n${c}` }),
+    ios: (n: string, c: string) => ({ subject: `ИОС — извод на отворени ставки ${n} — ${c}`, body: `Почитувани,\n\nВо прилог ви праќаме извод на отворени ставки (ИОС) ${n}.\nВе молиме проверете ја состојбата и вратете го потпишан и заверен во рок од 8 дена — со „Потврдуваме“ или со образложение ако се разликува.\n\nСо почит,\n${c}` }),
+    compensation: (n: string, c: string) => ({ subject: `Изјава за компензација ${n} — ${c}`, body: `Почитувани,\n\nВо прилог ви праќаме изјава за компензација ${n}.\nВе молиме потпишете ја, заверете ја и вратете ни примерок.\n\nСо почит,\n${c}` }),
   },
   en: {
     quotation: (n: string, c: string) => ({ subject: `Quotation ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached our quotation ${n}.\nWe remain at your disposal for any questions.\n\nKind regards,\n${c}` }),
     invoice: (n: string, c: string) => ({ subject: `Invoice ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached invoice ${n}.\n\nKind regards,\n${c}` }),
     quality: (n: string, c: string) => ({ subject: `Non-conformance ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached non-conformance report ${n}.\nWe kindly ask for your reply and proposed solution.\n\nKind regards,\n${c}` }),
     purchase_order: (n: string, c: string) => ({ subject: `Purchase order ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached our purchase order ${n}.\nKindly confirm the order and the delivery date, and quote the order number on your invoice.\n\nKind regards,\n${c}` }),
+    ios: (n: string, c: string) => ({ subject: `Statement of open items ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached the statement of open items ${n}.\nKindly check the balance and return it signed within 8 days, confirming it or stating the differences.\n\nKind regards,\n${c}` }),
+    compensation: (n: string, c: string) => ({ subject: `Offset agreement ${n} — ${c}`, body: `Dear Sir or Madam,\n\nPlease find attached offset (compensation) agreement ${n}.\nKindly sign it and return a copy.\n\nKind regards,\n${c}` }),
   },
 };
-const latin = (s: string) => s.replace(/ПФ/g, "PF").replace(/ПО/g, "PO").replace(/КН/g, "CN").replace(/НН/g, "PO").replace(/НУ/g, "NC");
+const latin = (s: string) => s.replace(/КОМП/g, "KOMP").replace(/ИОС/g, "IOS").replace(/ПФ/g, "PF").replace(/ПО/g, "PO").replace(/КН/g, "CN").replace(/НН/g, "PO").replace(/НУ/g, "NC");
 
 export default function SendEmailDialog(p: SendEmailProps) {
   const { data: status } = trpc.mail.mailStatus.useQuery(undefined, { enabled: p.open });
@@ -70,7 +74,7 @@ export default function SendEmailDialog(p: SendEmailProps) {
   };
   const emails = (s: string) => s.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
   const valid = (s: string) => emails(s).every(e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
-  const kind = { quotation: ["Ponuda", "Quotation"], invoice: ["Faktura", "Invoice"], purchase_order: ["Narachka", "PurchaseOrder"], quality: ["Reklamacija", "NonConformance"] }[p.docType];
+  const kind = { quotation: ["Ponuda", "Quotation"], invoice: ["Faktura", "Invoice"], purchase_order: ["Narachka", "PurchaseOrder"], quality: ["Reklamacija", "NonConformance"], ios: ["IOS", "OpenItems"], compensation: ["Kompenzacija", "Offset"] }[p.docType];
   const filename = `${lang === "en" ? kind[1] : kind[0]}-${latin(p.docNumber).replace(/[^\w-]+/g, "-")}.pdf`;
 
   const onSend = async () => {

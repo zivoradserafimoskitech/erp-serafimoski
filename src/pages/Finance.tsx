@@ -19,8 +19,9 @@ import PeriodLockTab from "@/components/PeriodLockTab";
 import PeriodEndTab from "@/components/PeriodEndTab";
 import StatementsTab from "@/components/StatementsTab";
 import Vat04Card from "@/components/Vat04Card";
+import SettleTab from "@/components/SettleTab";
 import SearchPick from "@/components/SearchPick";
-import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks, Lock, Undo2, CalendarCheck, FileBarChart } from "lucide-react";
+import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks, Lock, Undo2, CalendarCheck, FileBarChart, Handshake } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -31,7 +32,7 @@ const fmtDate = (d: string) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slic
 
 const SOURCE_LBL: Record<string, string> = {
   invoice: "Излезна фактура", incoming_invoice: "Влезна фактура", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", depreciation: "Амортизација",
-  advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха", bank_other: "Банка", bank_fee: "Провизија", year_close: "Затворање година", inventory_value: "Залихи на производи",
+  advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха", bank_other: "Банка", bank_fee: "Провизија", year_close: "Затворање година", inventory_value: "Залихи на производи", compensation: "Компензација",
 };
 
 // Каде е документот од кој е направен налогот
@@ -42,6 +43,7 @@ const SOURCE_HREF: Record<string, ((id: number, src?: any) => string) | undefine
   bank_other: () => `/finansii?tab=bank`,
   bank_fee: () => `/finansii?tab=bank`,
   cash: () => `/finansii?tab=cash`,
+  compensation: () => `/finansii?tab=settle`,
   payroll: () => `/vraboteni`,
   depreciation: () => `/sredstva`,
   advance_settle: () => `/smetkovodstvo`,
@@ -845,7 +847,7 @@ function ProfitTab() {
 }
 
 const FIN_GROUPS = [
-  { label: "Пари", tabs: [{ key: "bank", label: "Банка", icon: Landmark }, { key: "cash", label: "Благајна", icon: Wallet }] },
+  { label: "Пари", tabs: [{ key: "bank", label: "Банка", icon: Landmark }, { key: "cash", label: "Благајна", icon: Wallet }, { key: "settle", label: "Плаќања и усогласување", icon: Handshake }] },
   { label: "Извештаи", tabs: [{ key: "vat", label: "ДДВ", icon: Receipt }, { key: "statements", label: "Биланси", icon: FileBarChart }, { key: "profit", label: "Добивка по нарачка", icon: TrendingUp }] },
   { label: "Главна книга", tabs: [{ key: "journal", label: "Налози", icon: BookOpen }, { key: "terk", label: "Терк", icon: ListChecks }, { key: "periodEnd", label: "Крај на период", icon: CalendarCheck }, { key: "trial", label: "Бруто биланс", icon: Scale }, { key: "card", label: "Картица", icon: FileSpreadsheet }] },
   { label: "Поставки", tabs: [{ key: "rates", label: "Курсна листа", icon: Coins }, { key: "lock", label: "Заклучување", icon: Lock }, { key: "chart", label: "Контен план", icon: ListTree }] },
@@ -885,6 +887,7 @@ export default function Finance() {
         <TabsContent value="card" className="mt-4"><AccountCardTab code={cardCode} setCode={setCardCode} /></TabsContent>
         <TabsContent value="vat" className="mt-4"><VatTab /></TabsContent>
         <TabsContent value="statements" className="mt-4"><StatementsTab /></TabsContent>
+        <TabsContent value="settle" className="mt-4"><SettleTab /></TabsContent>
         <TabsContent value="cash" className="mt-4"><CashTab presetInvoiceId={cashInvoice} /></TabsContent>
         <TabsContent value="rates" className="mt-4"><RatesTab /></TabsContent>
         <TabsContent value="chart" className="mt-4"><ChartTab /></TabsContent>

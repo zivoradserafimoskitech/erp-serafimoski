@@ -138,6 +138,62 @@ export function getExtraSql(): string[] {
       "expires_at" timestamp NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS "app_sessions_user_idx" ON "app_sessions" ("user_id")`,
+    // Компензации, ИОС, налози за плаќање
+    `ALTER TABLE "suppliers" ADD COLUMN IF NOT EXISTS "bank_account" varchar(40)`,
+    `CREATE TABLE IF NOT EXISTS "compensations" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "number" varchar(30) NOT NULL UNIQUE,
+      "comp_date" date NOT NULL,
+      "customer_id" integer,
+      "supplier_id" integer,
+      "amount" numeric(16, 2) NOT NULL,
+      "status" varchar(20) DEFAULT 'active' NOT NULL,
+      "note" text,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "compensation_items" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "compensation_id" integer NOT NULL REFERENCES "compensations"("id") ON DELETE CASCADE,
+      "doc_type" varchar(20) NOT NULL,
+      "doc_id" integer NOT NULL,
+      "amount" numeric(16, 2) NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "compensation_items_doc_idx" ON "compensation_items" ("doc_type", "doc_id")`,
+    `CREATE TABLE IF NOT EXISTS "ios_log" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "partner_type" varchar(10) NOT NULL,
+      "partner_id" integer NOT NULL,
+      "as_of" date NOT NULL,
+      "balance" numeric(16, 2) NOT NULL,
+      "sent_to" text,
+      "status" varchar(20) DEFAULT 'sent' NOT NULL,
+      "note" text,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "answered_at" timestamp
+    )`,
+    `CREATE TABLE IF NOT EXISTS "payment_order_batches" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "pay_date" date NOT NULL,
+      "total" numeric(16, 2) NOT NULL,
+      "count" integer NOT NULL,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "payment_order_items" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "batch_id" integer NOT NULL REFERENCES "payment_order_batches"("id") ON DELETE CASCADE,
+      "incoming_invoice_id" integer,
+      "supplier_id" integer,
+      "payee" varchar(255) NOT NULL,
+      "payee_account" varchar(40),
+      "amount" numeric(16, 2) NOT NULL,
+      "purpose" varchar(140),
+      "reference" varchar(40),
+      "payment_code" varchar(10)
+    )`,
+    `CREATE INDEX IF NOT EXISTS "payment_order_items_inc_idx" ON "payment_order_items" ("incoming_invoice_id")`,
 
     // ===== РАСПОРЕД НА ПРОИЗВОДСТВО =====
     `ALTER TABLE "work_order_operations" ADD COLUMN IF NOT EXISTS "machine_id" bigint`,

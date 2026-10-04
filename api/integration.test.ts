@@ -629,4 +629,72 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     await caller.finance.statementCodesSave({ kind: "vat04", codes: { o18: " 01 ", o10: "" } });
     expect((await caller.finance.vat04({ from: "2026-01-01", to: "2026-12-31" })).codes).toEqual({ o18: "01" });
   });
+
+  it("компензација, ИОС и налози за плаќање", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    const c = await caller.customers.customerCreate({ name: "Двострана ДОО", taxNumber: "4030999999999" });
+    const custId = Number((c as any).id ?? (await pool.query(`SELECT id FROM customers WHERE name = 'Двострана ДОО'`)).rows[0].id);
+    const sup = (await caller.procurement.supplierCreate({ name: "Двострана ДОО", edb: "4030999999999", bankAccount: "300 0000 1234 5678" }));
+    const supId = Number(sup.id || (await pool.query(`SELECT id FROM suppliers WHERE name = 'Двострана ДОО'`)).rows[0].id);
+    const num = await caller.accounting.nextInvoiceNumber();
+    const inv = await caller.accounting.invoiceCreate({ invoiceNumber: num, customerId: custId, issueDate: "2026-10-10", status: "issued", subtotal: "10000", vatRate: "18", vatAmount: "1800", totalAmount: "11800" });
+    const inc = await caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "DV-5", supplierId: supId, issueDate: "2026-10-11", receivedDate: "2026-10-11", dueDate: "2026-10-20",
+      subtotal: "5000", vatRate: "18", vatAmount: "900", totalAmount: "5900", expenseAccount: "413" });
+
+    // предлог: истиот ЕДБ
+    const cand: any = await caller.settle.compensationCandidates({ customerId: custId, supplierId: supId });
+    expect(cand.suggestions.map((x: any) => x.id)).toContain(supId);
+    expect(cand.receivables.find((r: any) => r.id === inv.id).open).toBe(11800);
+    // страните мора да се еднакви; не повеќе од отвореното
+    await expect(caller.settle.compensationCreate({ date: "2026-10-15", customerId: custId, supplierId: supId,
+      items: [{ docType: "invoice", docId: inv.id, amount: 5900 }, { docType: "incoming_invoice", docId: inc.id, amount: 5000 }] })).rejects.toThrow(/еднакви/);
+    await expect(caller.settle.compensationCreate({ date: "2026-10-15", customerId: custId, supplierId: supId,
+      items: [{ docType: "invoice", docId: inv.id, amount: 6000 }, { docType: "incoming_invoice", docId: inc.id, amount: 6000 }] })).rejects.toThrow(/останува/);
+    const comp: any = await caller.settle.compensationCreate({ date: "2026-10-15", customerId: custId, supplierId: supId,
+      items: [{ docType: "invoice", docId: inv.id, amount: 5900 }, { docType: "incoming_invoice", docId: inc.id, amount: 5900 }] });
+    expect(comp.number).toMatch(/^КОМП-001\/2026$/);
+    expect((await pool.query(`SELECT status FROM incoming_invoices WHERE id = $1`, [inc.id])).rows[0].status).toBe("paid");
+    expect((await pool.query(`SELECT status FROM invoices WHERE id = $1`, [inv.id])).rows[0].status).toBe("partial");
+    // книжење: Д 220 / П 120 по партнер
+    await caller.finance.ledgerSync();
+    const j = await caller.finance.journalList({ from: "2026-10-15", to: "2026-10-15", search: "КОМП-001", limit: 5, offset: 0 });
+    const lines = j.entries[0].lines as any[];
+    expect(lines.find((l) => l.account === "220" && l.debit === 5900)).toBeTruthy();
+    expect(lines.find((l) => l.account === "120" && l.credit === 5900)).toBeTruthy();
+    // фактура со компензација не се брише
+    await expect(caller.accounting.incomingInvoiceDelete({ id: inc.id })).rejects.toThrow(/компензации/);
+
+    // ИОС: на 14.10 (пред компензацијата) отворено е сè; на 31.10 — остатокот
+    const before: any = await caller.settle.iosData({ partnerType: "customer", partnerId: custId, asOf: "2026-10-14" });
+    expect(before.balance).toBe(11800);
+    const after: any = await caller.settle.iosData({ partnerType: "customer", partnerId: custId, asOf: "2026-10-31" });
+    expect(after.balance).toBe(5900);
+    const sIos: any = await caller.settle.iosData({ partnerType: "supplier", partnerId: supId, asOf: "2026-10-31" });
+    expect(sIos.balance).toBe(0);
+    const log = await caller.settle.iosRecord({ partnerType: "customer", partnerId: custId, asOf: "2026-10-31", balance: 5900, sentTo: "x@y.mk" });
+    await expect(caller.settle.iosAnswer({ id: log.id, status: "disputed" })).rejects.toThrow(/оспорува/);
+    await caller.settle.iosAnswer({ id: log.id, status: "confirmed" });
+    expect((await caller.settle.iosPartners()).find((p: any) => p.partnerType === "customer" && p.partnerId === custId).lastIos.status).toBe("confirmed");
+
+    // поништување: фактурите повторно отворени, книжењето се тргнува
+    await caller.settle.compensationCancel({ id: comp.id });
+    expect((await pool.query(`SELECT status FROM incoming_invoices WHERE id = $1`, [inc.id])).rows[0].status).toBe("received");
+    await caller.finance.ledgerSync();
+    expect((await caller.finance.journalList({ from: "2026-10-15", to: "2026-10-15", search: "КОМП-001", limit: 5, offset: 0 })).entries.length).toBe(0);
+
+    // налози за плаќање: жиро-сметката од картонот, сметка од 15 цифри, износ најмногу отвореното
+    const po: any = await caller.settle.paymentOrderCandidates({ dueBy: "2026-10-31" });
+    const row = po.domestic.find((r: any) => r.id === inc.id);
+    expect(row.account).toBe("300000012345678");
+    expect(row.accountOk).toBe(true);
+    await expect(caller.settle.paymentOrderCreate({ payDate: "2026-10-20", items: [{ incomingInvoiceId: inc.id, amount: 5900, payeeAccount: "123", purpose: "x" }] })).rejects.toThrow(/15 цифри/);
+    await expect(caller.settle.paymentOrderCreate({ payDate: "2026-10-20", items: [{ incomingInvoiceId: inc.id, amount: 9999, payeeAccount: row.account, purpose: "x" }] })).rejects.toThrow(/останува/);
+    const b: any = await caller.settle.paymentOrderCreate({ payDate: "2026-10-20", items: [{ incomingInvoiceId: inc.id, amount: 5900, payeeAccount: row.account, purpose: "Плаќање по фактура DV-5", reference: "DV-5" }] });
+    expect(b.total).toBe(5900);
+    const after2: any = await caller.settle.paymentOrderCandidates({ dueBy: "2026-10-31" });
+    expect(after2.domestic.find((r: any) => r.id === inc.id).inBatch.amount).toBe(5900);
+    const listed: any = await caller.settle.paymentOrderList();
+    expect(listed.batches[0].items[0].payee).toBe("Двострана ДОО");
+  });
 });

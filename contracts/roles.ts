@@ -65,6 +65,7 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   bank: "manager",
   assets: "manager",
   finance: "manager",
+  settle: "manager",
   ops: "operator",
   hr: "admin",
   mail: "manager",
@@ -77,7 +78,7 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
 };
 
 /** Каде сметководителот смее да пишува. */
-export const ACCOUNTANT_ROUTERS = ["accounting", "finance", "bank", "assets", "mail", "ocr", "email", "customers"];
+export const ACCOUNTANT_ROUTERS = ["accounting", "finance", "settle", "bank", "assets", "mail", "ocr", "email", "customers"];
 
 /** Мени по улога: патеки што ги гледа секоја улога (администраторот гледа сè). */
 export const MENU_BY_ROLE: Record<Role, string[] | "all"> = {

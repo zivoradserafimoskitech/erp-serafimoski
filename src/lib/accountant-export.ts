@@ -3,7 +3,8 @@ import { accountantReportHtml, htmlToPdfBlob, invoiceHtml } from "@/lib/print-do
 
 const SOURCE: Record<string, string> = {
   invoice: "Излезна фактура", incoming_invoice: "Влезна фактура", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати",
-  depreciation: "Амортизација", advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха",
+  depreciation: "Амортизација", depreciation_m: "Амортизација", advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха",
+  bank_other: "Банка", bank_fee: "Провизија", year_close: "Затворање година", inventory_value: "Залихи на производи", compensation: "Компензација",
 };
 const VAT_KEY: Record<string, string> = { "0-export": "0% извоз / странство", "0-exempt": "0% ослободено" };
 const STATUS: Record<string, string> = {

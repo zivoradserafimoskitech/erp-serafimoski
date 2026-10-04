@@ -39,10 +39,11 @@ export const procurementRouter = createRouter({
       paymentTerms: z.string().default("30 дена"),
       defaultCurrency: z.string().default("MKD"),
       materials: z.string().optional(),
+      bankAccount: z.string().max(40).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const r = await db.insert(suppliers).values(input);
+      const r = await db.insert(suppliers).values({ ...input, edb: input.edb || undefined, bankAccount: input.bankAccount?.replace(/\s+/g, "") || undefined });
       return { success: true, id: Number((r as any)[0]?.insertId) };
     }),
 
@@ -60,6 +61,7 @@ export const procurementRouter = createRouter({
       paymentTerms: z.string().optional(),
       defaultCurrency: z.string().optional(),
       materials: z.string().optional(),
+      bankAccount: z.string().max(40).optional(),
       isActive: z.enum(["active", "inactive"]).optional(),
     }))
     .mutation(async ({ input }) => {

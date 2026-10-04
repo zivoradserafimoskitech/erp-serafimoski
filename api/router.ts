@@ -23,6 +23,7 @@ import { mailRouter } from "./mail-router";
 import { searchRouter } from "./search-router";
 import { remindersRouter } from "./reminders";
 import { backupRouter } from "./backup";
+import { settleRouter } from "./settle-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -52,6 +53,7 @@ export const appRouter = createRouter({
   search: searchRouter,
   reminders: remindersRouter,
   backup: backupRouter,
+  settle: settleRouter,
 });
 
 export type AppRouter = typeof appRouter;

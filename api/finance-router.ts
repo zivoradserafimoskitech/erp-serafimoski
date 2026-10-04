@@ -260,6 +260,28 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
     }
   }
 
+  // 4б) Компензации: обврската кон добавувачот се пребива со побарувањето од купувачот
+  const { compensationPostings } = await import("./settle-router");
+  const compRows = await compensationPostings();
+  const compIds = [...new Set(compRows.map((r: any) => Number(r.id)))];
+  for (const cid of compIds) {
+    const items = compRows.filter((r: any) => Number(r.id) === cid);
+    const date = iso(items[0].comp_date), number = items[0].number;
+    const lines: GlLine[] = [];
+    let ok = true;
+    for (const it of items) {
+      const isInv = it.doc_type === "invoice";
+      const doc: any = isInv ? invInfo.get(Number(it.doc_id)) : incInfo.get(Number(it.doc_id));
+      if (!doc) { ok = false; problems.push({ sourceType: "compensation", sourceId: cid, ref: number, reason: "Фактурата во компензацијата не е книжена (нацрт/откажана)" }); break; }
+      const mkd = toMkd(Number(it.amount), doc.cur, doc.date, rate);
+      if (mkd === null) { ok = false; problems.push({ sourceType: "compensation", sourceId: cid, ref: number, reason: `Нема курс ${doc.cur}` }); break; }
+      lines.push(isInv
+        ? { account: doc.foreign ? rules.customers_foreign : rules.customers_domestic, debit: 0, credit: mkd, partnerType: "customer", partnerId: doc.customerId, description: `Компензација ${number} · ${doc.number}` }
+        : { account: doc.foreign ? rules.suppliers_foreign : rules.suppliers_domestic, debit: mkd, credit: 0, partnerType: "supplier", partnerId: doc.supplierId, description: `Компензација ${number} · ${doc.number}` });
+    }
+    if (ok) desired.push({ sourceType: "compensation", sourceId: cid, date, description: `Компензација ${number}`, lines: normalizeLines(lines) });
+  }
+
   // 5) Плати (само потврдени пресметки)
   const runs = await q(`SELECT r.id, r.period, SUM(l.gross) g, SUM(l.contributions) c, SUM(l.income_tax) t, SUM(l.net) n
     FROM payroll_runs r JOIN payroll_lines l ON l.run_id = r.id WHERE r.status = 'posted' GROUP BY r.id, r.period`);

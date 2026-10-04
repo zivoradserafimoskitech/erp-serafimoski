@@ -33,7 +33,7 @@ const enforcePermissions = t.middleware(async ({ ctx, path, type, next }) => {
 // ── Главната книга се ажурира сама ──
 // По секое успешно зачувување што може да ги смени документите/плаќањата, во позадина (со мала пауза,
 // за повеќе брзи зачувувања да се спојат во едно) се повикува синхронизацијата. Таа е идемпотентна.
-const LEDGER_ROUTERS = new Set(["accounting", "bank", "finance", "hr", "assets", "production", "quotation", "storage", "ops"]);
+const LEDGER_ROUTERS = new Set(["accounting", "bank", "finance", "hr", "assets", "production", "quotation", "storage", "ops", "settle"]);
 let ledgerTimer: ReturnType<typeof setTimeout> | null = null;
 let ledgerActor = "автоматски";
 function scheduleLedgerSync(actor?: string) {
