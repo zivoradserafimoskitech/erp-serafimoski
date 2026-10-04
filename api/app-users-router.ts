@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { appUsers } from "@db/schema";
-import { clearActorCache } from "./context";
+import { clearActorCache, gateActive } from "./context";
 import { logAudit } from "./audit-helper";
 
 const roleEnum = z.enum(["admin", "manager", "accountant", "operator", "viewer"]);
@@ -12,9 +12,10 @@ export const appUsersRouter = createRouter({
   /** Кој сум јас — интерфејсот го користи за да знае што да покаже */
   appUsersMe: publicQuery.query(async ({ ctx }) => {
     const a = (ctx as any).actor;
+    const gate = await gateActive();
     return a
-      ? { name: a.name, role: a.role, id: a.id, gate: !!process.env.APP_PASSWORD }
-      : { name: "Непознат", role: "viewer", id: null, gate: !!process.env.APP_PASSWORD };
+      ? { name: a.name, role: a.role, id: a.id, gate }
+      : { name: "Непознат", role: "viewer", id: null, gate };
   }),
 
   appUsersList: publicQuery.query(async () => {
@@ -52,6 +53,7 @@ export const appUsersRouter = createRouter({
     )
     .mutation(async ({ input }) => {
       const db = getDb();
+      const gateBefore = await gateActive();
       const existing = await db.select().from(appUsers).where(eq(appUsers.passcode, input.passcode));
       if (existing.length > 0) throw new Error("Овој код веќе го користи друг корисник");
       const res = await db.insert(appUsers).values({
@@ -66,7 +68,8 @@ export const appUsersRouter = createRouter({
         action: "CREATE", entityType: "app_user", entityId: res[0]?.id,
         description: `Нов корисник ${input.name} (${input.role})`,
       }).catch(() => {});
-      return { success: true, id: res[0]?.id };
+      // првиот администратор со код ја затвора апликацијата — интерфејсот го најавува креаторот со тој код
+      return { success: true, id: res[0]?.id, gateActivated: !gateBefore && (await gateActive()) };
     }),
 
   appUsersUpdate: publicQuery
@@ -83,6 +86,7 @@ export const appUsersRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...rest } = input;
+      const gateBefore = await gateActive();
 
       if (rest.passcode) {
         const clash = await db.select().from(appUsers).where(eq(appUsers.passcode, rest.passcode));
@@ -107,7 +111,7 @@ export const appUsersRouter = createRouter({
       for (const [k, v] of Object.entries(rest)) if (v !== undefined) patch[k] = v;
       await db.update(appUsers).set(patch).where(eq(appUsers.id, id));
       clearActorCache();
-      return { success: true };
+      return { success: true, gateActivated: !gateBefore && (await gateActive()) };
     }),
 
   appUsersDelete: publicQuery

@@ -9,6 +9,16 @@ import {
 import { detectAndParse, dedupeKey, type ParsedTx } from "./bank-parsers";
 import { logAudit } from "./audit-helper";
 import { refreshPaymentStatus } from "./payment-status";
+import { assertOpen } from "./period-lock";
+import { getPool } from "./queries/connection";
+import { BANK_KINDS, suggestBankKind } from "@contracts/finance";
+import { TRPCError } from "@trpc/server";
+
+/** Ставката мора да е во отворен период за да се менува нејзиното книжење. */
+async function assertTxOpen(txId: number) {
+  const r = (await getPool().query(`SELECT tx_date FROM bank_transactions WHERE id = $1`, [txId])).rows[0];
+  if (r) await assertOpen(r.tx_date, "Ставка од извод");
+}
 
 /** Извлекува броеви на фактури од целта на дознаката */
 export function extractInvoiceRefs(text: string): string[] {
@@ -51,8 +61,9 @@ async function refreshTxStatus(txId: number) {
   const rows = (await db.select().from(paymentAllocations).where(eq(paymentAllocations.txId, txId))) as any[];
   const allocated = r2(rows.reduce((s, a) => s + Number(a.amount), 0));
   const amount = Number(t.amount);
-  const status = allocated <= 0.005 ? "unmatched" : allocated >= amount - 0.005 ? "matched" : "partial";
-  const ref = rows.map((a) => a.docRef).filter(Boolean).join(", ").slice(0, 120);
+  // остатокот без документ е книжен на конто -> ставката е целосно книжена
+  const status = t.accountCode ? "matched" : allocated <= 0.005 ? "unmatched" : allocated >= amount - 0.005 ? "matched" : "partial";
+  const ref = [...rows.map((a) => a.docRef).filter(Boolean), ...(t.accountCode ? [`конто ${t.accountCode}`] : [])].join(", ").slice(0, 120);
   await db.update(bankTransactions).set({
     matchStatus: status,
     matchedRef: ref || null,
@@ -422,6 +433,7 @@ export const bankRouter = createRouter({
       const db = getDb();
       const t: any = (await db.select().from(bankTransactions).where(eq(bankTransactions.id, input.txId)))[0];
       if (!t) throw new Error("Ставката не постои");
+      await assertTxOpen(input.txId);
 
       const sum = r2(input.lines.reduce((s, l) => s + l.amount, 0));
       if (sum > Number(t.amount) + 0.005) {
@@ -461,6 +473,8 @@ export const bankRouter = createRouter({
     .input(z.object({ txId: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      await assertTxOpen(input.txId);
+      await getPool().query(`UPDATE bank_transactions SET account_code = NULL WHERE id = $1`, [input.txId]);
       const before = (await db.select().from(paymentAllocations).where(eq(paymentAllocations.txId, input.txId))) as any[];
       await db.delete(paymentAllocations).where(eq(paymentAllocations.txId, input.txId));
       for (const b of before) await refreshDocStatus(b.docType, b.docId);
@@ -472,11 +486,77 @@ export const bankRouter = createRouter({
     .input(z.object({ txId: z.number(), note: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      await assertTxOpen(input.txId);
       await db.update(bankTransactions).set({
         matchStatus: "ignored", note: input.note ?? null, updatedAt: new Date(),
       } as any).where(eq(bankTransactions.id, input.txId));
       return { success: true };
     }),
+
+  /** Ставка без фактура (или остаток по фактурите) се книжи на избрано конто: плати, ДДВ, провизии, кредити... */
+  bankPostToAccount: publicQuery
+    .input(z.object({ txId: z.number(), accountCode: z.string().min(1).max(10).nullable(), note: z.string().max(300).optional() }))
+    .mutation(async ({ input }) => {
+      await assertTxOpen(input.txId);
+      if (input.accountCode) {
+        const ok = (await getPool().query(`SELECT 1 FROM gl_accounts WHERE code = $1`, [input.accountCode])).rowCount;
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `Конто ${input.accountCode} не постои во контниот план` });
+      }
+      await getPool().query(`UPDATE bank_transactions SET account_code = $2, note = COALESCE($3, note), match_status = CASE WHEN match_status = 'ignored' THEN 'unmatched' ELSE match_status END, updated_at = now() WHERE id = $1`,
+        [input.txId, input.accountCode, input.note ?? null]);
+      await refreshTxStatus(input.txId);
+      await logAudit({ action: "UPDATE", entityType: "bank_transaction", entityId: input.txId,
+        description: input.accountCode ? `Ставка од извод книжена на конто ${input.accountCode}` : "Тргнато книжење на конто" }).catch(() => {});
+      return { success: true };
+    }),
+
+  /** Предлог „што е ова“ за ставка без фактура (операторот потврдува) */
+  bankKindSuggest: publicQuery
+    .input(z.object({ txId: z.number() }))
+    .query(async ({ input }) => {
+      const t = (await getPool().query(`SELECT direction, counterparty_name, purpose FROM bank_transactions WHERE id = $1`, [input.txId])).rows[0];
+      if (!t) return null;
+      const rules = Object.fromEntries((await getPool().query(`SELECT key, account_code FROM gl_posting_rules`)).rows.map((r: any) => [r.key, r.account_code]));
+      const { rulesWithDefaults } = await import("@contracts/finance");
+      const R = rulesWithDefaults(rules);
+      const sug = suggestBankKind(`${t.counterparty_name ?? ""} ${t.purpose ?? ""}`, t.direction === "in" ? "in" : "out");
+      return {
+        suggestion: sug,
+        kinds: BANK_KINDS.map(k => ({ key: k.key, title: k.title, examples: k.examples, accountCode: k.rule ? R[k.rule] : k.code ?? null })),
+      };
+    }),
+
+  /** Усогласување: салдо по последниот извод наспроти салдото на банката во главната книга */
+  bankReconcile: publicQuery.query(async () => {
+    const pool = getPool();
+    const R = Object.fromEntries((await pool.query(`SELECT key, account_code FROM gl_posting_rules`)).rows.map((r: any) => [r.key, r.account_code]));
+    const { rulesWithDefaults } = await import("@contracts/finance");
+    const rules = rulesWithDefaults(R);
+    const last = (await pool.query(`SELECT DISTINCT ON (account_number) account_number, currency, statement_date, new_balance
+      FROM bank_statements WHERE new_balance IS NOT NULL ORDER BY account_number, statement_date DESC, id DESC`)).rows;
+    const unposted = (await pool.query(`SELECT COUNT(*)::int n, COALESCE(SUM(amount),0) s FROM bank_transactions WHERE match_status IN ('unmatched','partial')`)).rows[0];
+    const out: any[] = [];
+    for (const cur of ["MKD", "FX"]) {
+      const st = last.filter((l: any) => (String(l.currency || "MKD").toUpperCase() === "MKD") === (cur === "MKD"));
+      if (!st.length) continue;
+      const { iso } = await import("./rates-helper");
+      const date = st.reduce((m: string, l: any) => (iso(l.statement_date) > m ? iso(l.statement_date) : m), "");
+      const code = cur === "MKD" ? rules.bank_mkd : rules.bank_fx;
+      const gl = Number((await pool.query(`SELECT COALESCE(SUM(l.debit - l.credit),0) b FROM gl_lines l JOIN gl_entries e ON e.id = l.entry_id
+        WHERE l.account_code = $1 AND e.entry_date <= $2`, [code, date])).rows[0].b);
+      // девизните салда во денари по курсот на датумот на изводот (главната книга е во денари)
+      const { loadRates } = await import("./rates-helper");
+      const { toMkd } = await import("@contracts/finance");
+      const rate = await loadRates();
+      const statement = st.reduce((a: number, l: any) => {
+        const c = String(l.currency || "MKD").toUpperCase();
+        const v = c === "MKD" ? Number(l.new_balance) : toMkd(Number(l.new_balance), c, iso(l.statement_date), rate);
+        return a + (v ?? 0);
+      }, 0);
+      out.push({ currency: cur, account: code, date, statement: r2(statement), ledger: r2(gl), diff: r2(statement - gl), accounts: st.map((l: any) => l.account_number) });
+    }
+    return { rows: out, unposted: { count: Number(unposted.n), amount: r2(Number(unposted.s)) } };
+  }),
 
   /** Отворени ставки по партнер — „колку му должиме на МЕТАЛ-НЕТ" */
   openItemsByPartner: publicQuery

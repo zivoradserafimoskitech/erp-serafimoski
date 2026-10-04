@@ -15,8 +15,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { downloadTableXlsx } from "@/lib/xlsx";
 import TerkTab, { TerkEditor, useAccountItems } from "@/components/TerkTab";
+import PeriodLockTab from "@/components/PeriodLockTab";
 import SearchPick from "@/components/SearchPick";
-import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks } from "lucide-react";
+import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks, Lock, Undo2 } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -27,7 +28,7 @@ const fmtDate = (d: string) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slic
 
 const SOURCE_LBL: Record<string, string> = {
   invoice: "Излезна фактура", incoming_invoice: "Влезна фактура", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати", depreciation: "Амортизација",
-  advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха",
+  advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха", bank_other: "Банка", bank_fee: "Провизија", year_close: "Затворање година", inventory_value: "Залихи на производи",
 };
 
 // Каде е документот од кој е направен налогот
@@ -35,6 +36,8 @@ const SOURCE_HREF: Record<string, ((id: number, src?: any) => string) | undefine
   invoice: (id) => `/smetkovodstvo?open=${id}`,
   incoming_invoice: (id) => `/smetkovodstvo?openIn=${id}`,
   bank_alloc: () => `/finansii?tab=bank`,
+  bank_other: () => `/finansii?tab=bank`,
+  bank_fee: () => `/finansii?tab=bank`,
   cash: () => `/finansii?tab=cash`,
   payroll: () => `/vraboteni`,
   depreciation: () => `/sredstva`,
@@ -90,6 +93,12 @@ function JournalTab() {
   const del = trpc.finance.manualEntryDelete.useMutation({ onSuccess: () => utils.finance.journalList.invalidate(), onError: (e) => toast.error(e.message) });
   const navigate = useNavigate();
   const isAdmin = !me || me.role === "admin";
+  const [stornoFor, setStornoFor] = useState<{ id: number; number: string } | null>(null);
+  const [stornoDate, setStornoDate] = useState(today());
+  const storno = trpc.finance.manualEntryStorno.useMutation({
+    onSuccess: (r) => { toast.success(`Сторно налог ${r.number}`); setStornoFor(null); utils.finance.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
   const removeOrphan = trpc.finance.orphanStockMoveDelete.useMutation({
     onSuccess: () => { toast.success("Движењето и налогот се отстранети"); utils.finance.invalidate(); },
     onError: (e) => toast.error(e.message),
@@ -171,8 +180,15 @@ function JournalTab() {
                 <span className="text-sm text-gray-700 flex-1 truncate">{e.description}</span>
                 {(() => { const href = e.sourceId != null ? SOURCE_HREF[e.sourceType]?.(e.sourceId, (e as any).source) : ""; return href ? (
                   <button className="text-xs text-amber-700 hover:underline whitespace-nowrap" onClick={() => navigate(href)}>Отвори документ →</button>) : null; })()}
-                {e.sourceType === "manual" && (
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" onClick={() => { if (confirm("Да се избрише рачниот налог?")) del.mutate({ id: e.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                {(e as any).locked && <span title="Заклучен период — не се менува"><Lock className="h-3.5 w-3.5 text-slate-500" /></span>}
+                {(e as any).stornoOf && <Badge variant="outline" className="text-[10px] font-normal border-violet-300 text-violet-700">сторно</Badge>}
+                {e.sourceType === "manual" && !(e as any).stornoOf && (
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-violet-700" title="Нов налог со обратни износи во тековниот период"
+                    onClick={() => { setStornoFor({ id: e.id, number: e.number }); setStornoDate(today()); }}>
+                    <Undo2 className="h-3.5 w-3.5 mr-1" />Сторно</Button>
+                )}
+                {e.sourceType === "manual" && !(e as any).locked && (
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" title="Избриши (само во отворен период)" onClick={() => { if (confirm("Да се избрише рачниот налог? Бришењето се бележи во дневникот; по заклучувањето може само сторно.")) del.mutate({ id: e.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 )}
               </div>
               {(e as any).source && (() => { const src = (e as any).source; return (
@@ -279,6 +295,17 @@ function JournalTab() {
                     ...(l.partnerId && partnerKind(l.account) ? { partnerType: partnerKind(l.account)!, partnerId: l.partnerId } : {}) })) })}>
               Внеси налог
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!stornoFor} onOpenChange={(o) => !o && setStornoFor(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Сторно на {stornoFor?.number}</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-600">Се прави нов налог со истите конта и обратни износи. Оригиналот останува — така се исправа и налог од заклучен период.</p>
+          <div className="space-y-1"><Label className="text-xs">Датум на сторно (отворен период)</Label><DateInput value={stornoDate} onChange={(e) => setStornoDate(e.target.value)} /></div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setStornoFor(null)}>Откажи</Button>
+            <Button className="bg-violet-600 hover:bg-violet-700" disabled={storno.isPending || !stornoDate} onClick={() => stornoFor && storno.mutate({ id: stornoFor.id, date: stornoDate })}>Сторнирај</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -446,6 +473,12 @@ function VatTab() {
             <p className="text-3xl font-bold tabular-nums">{fmt(Math.abs(data.summary.payable))} <span className="text-base">ден</span></p>
             <p className="text-xs text-gray-500 mt-2">Помош за ДДВ пријавата. Бројките провери ги со сметководителот пред поднесување.</p>
           </CardContent></Card>
+        </div>
+      )}
+      {data && (data as any).warnings?.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="font-medium flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />Провери пред ДДВ пријавата: ДДВ не одговара на стапката</p>
+          <ul className="mt-1 text-xs space-y-0.5">{(data as any).warnings.slice(0, 10).map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
         </div>
       )}
       {data && data.missingRates.length > 0 && (
@@ -811,7 +844,7 @@ const FIN_GROUPS = [
   { label: "Пари", tabs: [{ key: "bank", label: "Банка", icon: Landmark }, { key: "cash", label: "Благајна", icon: Wallet }] },
   { label: "Извештаи", tabs: [{ key: "vat", label: "ДДВ", icon: Receipt }, { key: "profit", label: "Добивка по нарачка", icon: TrendingUp }] },
   { label: "Главна книга", tabs: [{ key: "journal", label: "Налози", icon: BookOpen }, { key: "terk", label: "Терк", icon: ListChecks }, { key: "trial", label: "Бруто биланс", icon: Scale }, { key: "card", label: "Картица", icon: FileSpreadsheet }] },
-  { label: "Поставки", tabs: [{ key: "rates", label: "Курсна листа", icon: Coins }, { key: "chart", label: "Контен план", icon: ListTree }] },
+  { label: "Поставки", tabs: [{ key: "rates", label: "Курсна листа", icon: Coins }, { key: "lock", label: "Заклучување", icon: Lock }, { key: "chart", label: "Контен план", icon: ListTree }] },
 ];
 
 export default function Finance() {
@@ -842,6 +875,7 @@ export default function Finance() {
         <TabsContent value="profit" className="mt-4"><ProfitTab /></TabsContent>
         <TabsContent value="journal" className="mt-4"><JournalTab /></TabsContent>
         <TabsContent value="terk" className="mt-4"><TerkTab /></TabsContent>
+        <TabsContent value="lock" className="mt-4"><PeriodLockTab /></TabsContent>
         <TabsContent value="trial" className="mt-4"><TrialBalanceTab onOpenCard={(c) => { setCardCode(c); setTab("card"); }} /></TabsContent>
         <TabsContent value="card" className="mt-4"><AccountCardTab code={cardCode} setCode={setCardCode} /></TabsContent>
         <TabsContent value="vat" className="mt-4"><VatTab /></TabsContent>

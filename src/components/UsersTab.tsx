@@ -43,11 +43,23 @@ export default function UsersTab() {
     setErr(null);
   };
 
+  // Првиот администратор со код ја затвора апликацијата: тој што го внесува се најавува со тој код,
+  // за да не остане заклучен надвор
+  const afterGate = (r: any, vars: any) => {
+    if (!r?.gateActivated) return;
+    if (vars?.passcode && (vars.role ?? "admin") === "admin") {
+      window.localStorage.setItem("appKey", vars.passcode);
+      alert(`Апликацијата сега бара код за пристап. Најавен си како „${vars.name ?? "администратор"}“ со кодот што го внесе — запиши го.`);
+    } else {
+      alert("Апликацијата сега бара код за пристап. Најави се со кодот на администраторот.");
+    }
+    window.location.reload();
+  };
   const createMut = trpc.appUsers.appUsersCreate.useMutation({
-    onSuccess: onDone, onError: (e) => setErr(e.message),
+    onSuccess: (r, v) => { onDone(); afterGate(r, v); }, onError: (e) => setErr(e.message),
   });
   const updateMut = trpc.appUsers.appUsersUpdate.useMutation({
-    onSuccess: onDone, onError: (e) => setErr(e.message),
+    onSuccess: (r, v) => { onDone(); afterGate(r, v); }, onError: (e) => setErr(e.message),
   });
   const deleteMut = trpc.appUsers.appUsersDelete.useMutation({
     onSuccess: () => utils.appUsers.appUsersList.invalidate(),

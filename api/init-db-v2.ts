@@ -88,6 +88,28 @@ export function getExtraSql(): string[] {
     )`,
     `CREATE INDEX IF NOT EXISTS "gl_template_lines_tpl_idx" ON "gl_template_lines" ("template_id")`,
     `ALTER TABLE "gl_entries" ADD COLUMN IF NOT EXISTS "template_name" varchar(120)`,
+    // Заклучување на период и дневник на измени во главната книга
+    `CREATE TABLE IF NOT EXISTS "period_lock" ("id" integer PRIMARY KEY DEFAULT 1, "locked_until" date, "updated_at" timestamp DEFAULT now() NOT NULL, CHECK ("id" = 1))`,
+    `ALTER TABLE "gl_entries" ADD COLUMN IF NOT EXISTS "storno_of" integer`,
+    `CREATE TABLE IF NOT EXISTS "gl_audit" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "at" timestamp DEFAULT now() NOT NULL,
+      "actor" varchar(160) NOT NULL,
+      "action" varchar(20) NOT NULL,
+      "entry_number" varchar(30),
+      "entry_date" date,
+      "source_type" varchar(30),
+      "description" text,
+      "detail" jsonb
+    )`,
+    `CREATE INDEX IF NOT EXISTS "gl_audit_at_idx" ON "gl_audit" ("at" DESC)`,
+    // ДДВ период на влезна фактура (кога е примена) и обратно оданочување (услуга од странство)
+    `ALTER TABLE "incoming_invoices" ADD COLUMN IF NOT EXISTS "vat_date" date`,
+    `ALTER TABLE "incoming_invoices" ADD COLUMN IF NOT EXISTS "reverse_charge" boolean DEFAULT false NOT NULL`,
+    // постојните остануваат во периодот во кој веќе се пријавени (по датумот на издавање)
+    `UPDATE "incoming_invoices" SET "vat_date" = COALESCE("issue_date", "received_date") WHERE "vat_date" IS NULL`,
+    // Ставка од извод без фактура: се книжи на избрано конто (плати, ДДВ, провизии, кредити...)
+    `ALTER TABLE "bank_transactions" ADD COLUMN IF NOT EXISTS "account_code" varchar(10)`,
 
     // ===== РАСПОРЕД НА ПРОИЗВОДСТВО =====
     `ALTER TABLE "work_order_operations" ADD COLUMN IF NOT EXISTS "machine_id" bigint`,

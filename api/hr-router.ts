@@ -107,6 +107,11 @@ export const hrRouter = createRouter({
     .mutation(async ({ input }) => {
       const run = (await q(`SELECT * FROM payroll_runs WHERE period = $1`, [input.period]))[0];
       if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Нема пресметка за тој месец" });
+      {
+        const [y, m] = input.period.split("-").map(Number);
+        const { assertOpen } = await import("./period-lock");
+        await assertOpen(new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10), `Плати за ${input.period}`);
+      }
       await q(`UPDATE payroll_runs SET status = $2 WHERE id = $1`, [run.id, input.post ? "posted" : "draft"]);
       // главната книга се усогласува автоматски
       const { syncLedger } = await import("./finance-router");

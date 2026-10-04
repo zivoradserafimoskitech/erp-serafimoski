@@ -337,4 +337,132 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(Array.isArray(p.overdue)).toBe(true);
     expect(p.weekly.woDone).toBeGreaterThanOrEqual(1);
   });
+  // ───────── ревизија на финансиите ─────────
+  it("ревизија: непрекината нумерација, бришење само нацрт, лимит на книжно одобрување", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    const next = await caller.accounting.nextInvoiceNumber();
+    const y = next.slice(-4);
+    // предлогот не троши број (повеќе прашања = ист број)
+    expect(await caller.accounting.nextInvoiceNumber()).toBe(next);
+    await expect(caller.accounting.invoiceCreate({ invoiceNumber: "999/" + y, customerId: ids.cust, issueDate: `${y}-10-01`, subtotal: "100", vatAmount: "18", totalAmount: "118" })).rejects.toThrow(/по ред/);
+    const a = await caller.accounting.invoiceCreate({ invoiceNumber: next, customerId: ids.cust, issueDate: `${y}-10-01`, status: "issued", subtotal: "1000", vatRate: "18", vatAmount: "180", totalAmount: "1180" });
+    // издадена фактура не се брише
+    await expect(caller.accounting.invoiceDelete({ id: a.id })).rejects.toThrow(/не се брише/);
+    // книжно одобрување: не повеќе од фактурираното
+    const kn1 = await caller.accounting.nextCreditNoteNumber();
+    await expect(caller.accounting.creditNoteCreate({ originalInvoiceId: a.id, creditNoteNumber: kn1, issueDate: `${y}-10-02`, subtotal: "1500", vatAmount: "270", totalAmount: "1770" })).rejects.toThrow(/најмногу/);
+    await caller.accounting.creditNoteCreate({ originalInvoiceId: a.id, creditNoteNumber: kn1, issueDate: `${y}-10-02`, subtotal: "600", vatAmount: "108", totalAmount: "708" });
+    const kn2 = await caller.accounting.nextCreditNoteNumber();
+    expect(kn2).not.toBe(kn1);
+    await expect(caller.accounting.creditNoteCreate({ originalInvoiceId: a.id, creditNoteNumber: kn2, issueDate: `${y}-10-02`, subtotal: "500", vatAmount: "90", totalAmount: "590" })).rejects.toThrow(/најмногу 400/);
+    // нацрт што е последен број смее да се избрише; следниот број пак е истиот
+    const n2 = await caller.accounting.nextInvoiceNumber();
+    const d = await caller.accounting.invoiceCreate({ invoiceNumber: n2, customerId: ids.cust, issueDate: `${y}-10-03`, subtotal: "10", vatAmount: "1.8", totalAmount: "11.8" });
+    await caller.accounting.invoiceDelete({ id: d.id });
+    expect(await caller.accounting.nextInvoiceNumber()).toBe(n2);
+    void pool;
+  });
+
+  it("ревизија: ДДВ проверка, ДДВ период и обратно оданочување", async () => {
+    await expect(caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "MN-77", supplierId: ids.sup, receivedDate: "2026-10-01",
+      subtotal: "3000", vatRate: "0", vatAmount: "540", totalAmount: "3540" })).rejects.toThrow(/не одговара/);
+    // фактура од септември примена во октомври -> во октомвриската пријава
+    const inc = await caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "SEP-1", supplierId: ids.sup, issueDate: "2026-09-28", receivedDate: "2026-10-03",
+      subtotal: "1000", vatRate: "18", vatAmount: "180", totalAmount: "1180", expenseAccount: "413" });
+    const sep = await caller.finance.vatBooks({ from: "2026-09-01", to: "2026-09-30" });
+    const oct = await caller.finance.vatBooks({ from: "2026-10-01", to: "2026-10-31" });
+    expect(sep.incoming.some((r: any) => r.id === inc.id)).toBe(false);
+    expect(oct.incoming.some((r: any) => r.id === inc.id)).toBe(true);
+    // обратно оданочување: 18% и во КИФ и во КУФ, книжење 130/230
+    await expect(caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "RC-0", supplierId: ids.sup, receivedDate: "2026-10-04", reverseCharge: true,
+      subtotal: "1000", vatRate: "18", vatAmount: "180", totalAmount: "1180" })).rejects.toThrow(/нема ДДВ/);
+    const rc = await caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "RC-1", supplierId: ids.sup, receivedDate: "2026-10-04", reverseCharge: true,
+      subtotal: "1000", vatRate: "18", vatAmount: "0", totalAmount: "1000", expenseAccount: "413" });
+    const b = await caller.finance.vatBooks({ from: "2026-10-01", to: "2026-10-31" });
+    expect(b.incoming.find((r: any) => r.id === rc.id)?.vatMkd).toBe(180);
+    expect(b.outgoing.some((r: any) => r.reverseCharge && r.id === rc.id && r.vatMkd === 180)).toBe(true);
+    await caller.finance.ledgerSync();
+    const j = await caller.finance.journalList({ from: "2026-10-04", to: "2026-10-04", search: "RC-1", limit: 5, offset: 0 });
+    const lines = j.entries[0].lines as any[];
+    expect(lines.find(l => l.account === "130" && l.debit === 180)).toBeTruthy();
+    expect(lines.find(l => l.account === "230" && l.credit === 180)).toBeTruthy();
+  });
+
+  it("ревизија: банка — секоја ставка се книжи, провизија, усогласување", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    const st = (await pool.query(`INSERT INTO bank_statements (account_number, statement_no, statement_date, prev_balance, new_balance, currency)
+      VALUES ('300000000000001', '77', '2026-10-05', 0, -30150, 'MKD') RETURNING id`)).rows[0].id;
+    const tx = (await pool.query(`INSERT INTO bank_transactions (statement_id, account_number, tx_date, direction, amount, provision, counterparty_name, purpose, match_status, dedupe_key)
+      VALUES ($1, '300000000000001', '2026-10-05', 'out', 30000, 150, 'Вработени', 'исплата на плата за септември', 'unmatched', 'test-pl-1') RETURNING id`, [st])).rows[0].id;
+    const sug = await caller.bank.bankKindSuggest({ txId: tx });
+    expect(sug?.suggestion?.key).toBe("salary");
+    await caller.bank.bankPostToAccount({ txId: tx, accountCode: "240" });
+    await caller.finance.ledgerSync();
+    const j = await caller.finance.journalList({ from: "2026-10-05", to: "2026-10-05", limit: 20, offset: 0 });
+    expect(j.entries.some((e: any) => e.sourceType === "bank_other" && e.lines.some((l: any) => l.account === "240" && l.debit === 30000))).toBe(true);
+    expect(j.entries.some((e: any) => e.sourceType === "bank_fee" && e.lines.some((l: any) => l.account === "100" && l.credit === 150))).toBe(true);
+    const rec = await caller.bank.bankReconcile();
+    expect(rec.rows.find((r: any) => r.currency === "MKD")?.statement).toBe(-30150);
+  });
+
+  it("ревизија: аванс со ДДВ", async () => {
+    await caller.finance.ledgerSync();
+    const all = await caller.finance.journalList({ from: "2000-01-01", to: "2100-01-01", search: "Аванс по", limit: 50, offset: 0 });
+    const e: any = all.entries[0];
+    expect(e).toBeTruthy();
+    // уплатата по про-фактура (домашна, 18%) се дели на 235 и 230
+    expect(e.lines.some((l: any) => l.account === "230" && l.credit > 0)).toBe(true);
+    const settle = await caller.finance.journalList({ from: "2000-01-01", to: "2100-01-01", search: "Затворање аванс", limit: 5, offset: 0 });
+    if (settle.entries.length) expect((settle.entries[0] as any).lines.some((l: any) => l.account === "230" && l.debit > 0)).toBe(true);
+  });
+
+  it("ревизија: заклучен период — ништо не се менува, сторно, дневник", async () => {
+    const { getPool } = await import("./queries/connection");
+    const m = await caller.finance.manualEntryCreate({ date: "2026-09-20", description: "Проба за сторно", lines: [{ account: "449", debit: 100, credit: 0 }, { account: "103", debit: 0, credit: 100 }] });
+    const sepInc = await caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "SEP-LOCK", supplierId: ids.sup, receivedDate: "2026-09-25",
+      subtotal: "1000", vatRate: "18", vatAmount: "180", totalAmount: "1180", expenseAccount: "413" });
+    await caller.finance.ledgerSync();
+    await expect(caller.finance.periodLockSet({ date: "2099-01-01" })).rejects.toThrow(/иден/);
+    await caller.finance.periodLockSet({ date: "2026-09-30", reason: "ДДВ пријава за септември" });
+    await expect(caller.finance.manualEntryCreate({ date: "2026-09-15", description: "Во заклучен", lines: [{ account: "449", debit: 1, credit: 0 }, { account: "103", debit: 0, credit: 1 }] })).rejects.toThrow(/заклучен/);
+    await expect(caller.accounting.incomingInvoiceCreate({ supplierInvoiceNumber: "LOCK-1", supplierId: ids.sup, receivedDate: "2026-09-02", subtotal: "100", vatRate: "18", vatAmount: "18", totalAmount: "118" })).rejects.toThrow(/заклучен/);
+    await expect(caller.accounting.incomingInvoiceDelete({ id: sepInc.id })).rejects.toThrow(/заклучен/);
+    const j = await caller.finance.journalList({ from: "2026-09-20", to: "2026-09-20", search: m.number, limit: 5, offset: 0 });
+    const ent: any = j.entries[0];
+    expect(ent.locked).toBe(true);
+    await expect(caller.finance.manualEntryDelete({ id: ent.id })).rejects.toThrow(/заклучен/);
+    // документ сменет директно во базата по заклучувањето: налогот останува, проблемот се пријавува
+    await getPool().query(`UPDATE incoming_invoices SET subtotal = 2000, vat_amount = 360, total_amount = 2360 WHERE id = $1`, [sepInc.id]);
+    const sync = await caller.finance.ledgerSync();
+    expect(sync.problems.some((p: any) => /заклучувањето/.test(p.reason))).toBe(true);
+    const sj = await caller.finance.journalList({ from: "2026-09-25", to: "2026-09-25", search: "SEP-LOCK", limit: 5, offset: 0 });
+    expect((sj.entries[0] as any).lines.find((l: any) => l.account === "413")?.debit).toBe(1000);
+    // сторно во отворен период
+    const s = await caller.finance.manualEntryStorno({ id: ent.id, date: "2026-10-02" });
+    await expect(caller.finance.manualEntryStorno({ id: ent.id, date: "2026-10-02" })).rejects.toThrow(/веќе сторниран/);
+    const sl = await caller.finance.journalList({ from: "2026-10-02", to: "2026-10-02", search: s.number, limit: 5, offset: 0 });
+    expect((sl.entries[0] as any).lines.find((l: any) => l.account === "449")?.credit).toBe(100);
+    const log = await caller.finance.glAuditList({ search: s.number });
+    expect(log.rows.some((r: any) => r.action === "storno")).toBe(true);
+    expect((await caller.finance.glAuditList({})).rows.some((r: any) => r.action === "lock")).toBe(true);
+    await caller.finance.periodLockSet({ date: null });
+    await getPool().query(`UPDATE incoming_invoices SET subtotal = 1000, vat_amount = 180, total_amount = 1180 WHERE id = $1`, [sepInc.id]);
+    await caller.finance.ledgerSync();
+  });
+
+  it("ревизија: апликацијата бара најава штом постои администратор со код", async () => {
+    const { gateActive, clearActorCache, resolveActor } = await import("./context");
+    clearActorCache();
+    expect(await gateActive()).toBe(false);
+    expect((await resolveActor(null))?.role).toBe("admin");
+    const r: any = await caller.appUsers.appUsersCreate({ name: "Шеф", passcode: "tajna-1234", role: "admin" });
+    expect(r.gateActivated).toBe(true);
+    expect(await resolveActor(null)).toBeUndefined();
+    expect((await resolveActor("tajna-1234"))?.name).toBe("Шеф");
+    await caller.appUsers.appUsersUpdate({ id: r.id, isActive: "inactive" });
+    clearActorCache();
+    expect(await gateActive()).toBe(false);
+  });
 });

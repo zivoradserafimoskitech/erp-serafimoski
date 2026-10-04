@@ -26,7 +26,7 @@ import {
   Search, Plus, Trash2, Eye, FileText, Download, FileUp,
   Receipt, Truck, ArrowUpRight, ArrowDownLeft, Calculator,
   Radio, RefreshCw, Send, SearchIcon, Upload, Building2, Zap,
-  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck, Landmark,
+  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck, Landmark, Undo2,
 } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
@@ -105,6 +105,10 @@ export default function Accounting() {
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [mailOpen, setMailOpen] = useState(false);
   const { data: outDetail } = trpc.accounting.invoiceById.useQuery({ id: selId! }, { enabled: detailType === "out" && !!selId });
+  const stornoInv = trpc.accounting.creditNoteCreate.useMutation({
+    onSuccess: () => { toast.success("Издадено книжно одобрување"); utils.accounting.invoiceList.invalidate(); setDetailOpen(false); },
+    onError: (e) => toast.error(e.message),
+  });
   const { data: incDetail } = trpc.accounting.incomingInvoiceById.useQuery({ id: selId! }, { enabled: detailType === "inc" && !!selId });
   const updIncAccount = trpc.accounting.incomingInvoiceUpdate.useMutation({ onSuccess: () => { utils.accounting.incomingInvoiceById.invalidate(); utils.accounting.incomingInvoiceList.invalidate(); toast.success("Контото е сменето — книжењето ќе се ажурира само"); } });
 
@@ -125,7 +129,7 @@ export default function Accounting() {
     productId?: number; serviceId?: number; itemType: "product" | "service" | "manual";
   }>>([]);
   const [incNeedsKind, setIncNeedsKind] = useState(false);
-  const [incForm, setIncForm] = useState({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
+  const [incForm, setIncForm] = useState({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", vatDate: "", reverseCharge: false, subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
   const [incItems, setIncItems] = useState<Array<{
     description: string; quantity: string; unit: string; unitPrice: string;
     totalPrice: string; vatRate: string; notes: string;
@@ -202,7 +206,7 @@ export default function Accounting() {
     onError: (e) => alert(e.message),
   });
   const createInc = trpc.accounting.incomingInvoiceCreate.useMutation({
-    onSuccess: () => { utils.accounting.incomingInvoiceList.invalidate(); setIncDialog(false); setIncForm({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" }); setIncItems([]); },
+    onSuccess: () => { utils.accounting.incomingInvoiceList.invalidate(); setIncDialog(false); setIncForm({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", vatDate: "", reverseCharge: false, subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" }); setIncItems([]); },
   });
   const createRec = trpc.accounting.receiptCreate.useMutation({
     onSuccess: () => { utils.accounting.receiptList.invalidate(); setRecDialog(false); setRecForm({ receiptNumber: "", supplierId: "", receiptDate: "", totalAmount: "0", notes: "" }); },
@@ -323,6 +327,7 @@ export default function Accounting() {
                 const totalAmount = subtotal + vatAmount;
                 createOut.mutate({
                   ...outForm,
+                  invoiceNumber: outForm.invoiceNumber || nextInvoiceNum || "",
                   customerId: parseInt(outForm.customerId),
                   issueDate: outForm.issueDate,
                   dueDate: outForm.dueDate || undefined,
@@ -333,7 +338,7 @@ export default function Accounting() {
                 } as any);
               }} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2"><Label>Број *</Label><Input value={outForm.invoiceNumber} onChange={(e) => setOutForm({ ...outForm, invoiceNumber: e.target.value })} required /></div>
+                    <div className="space-y-2"><Label>Број (по ред)</Label><Input value={outForm.invoiceNumber || nextInvoiceNum || ""} readOnly className="bg-gray-50" title="Фактурите се нумерираат по ред, без празнини — бројот го дава програмата" /></div>
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={outForm.customerId} onValueChange={(v) => setOutForm({ ...outForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -411,7 +416,7 @@ export default function Accounting() {
               setIncDialog(open);
               if (!open) {
                 setIncItems([]);
-                setIncForm({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
+                setIncForm({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", vatDate: "", reverseCharge: false, subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
               }
             }}>
               <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нова влезна фактура</Button></DialogTrigger>
@@ -421,13 +426,17 @@ export default function Accounting() {
                   e.preventDefault();
                   if (incNeedsKind) { toast.error("Избери што е купено со оваа фактура"); return; }
                   const subtotal = incItems.reduce((s, i) => s + parseFloat(i.totalPrice || "0"), 0);
-                  const vatAmount = incItems.reduce((s, i) => s + (parseFloat(i.totalPrice || "0") * parseFloat(i.vatRate) / 100), 0);
+                  // обратно оданочување: странскиот добавувач не пресметува ДДВ — го пресметува програмата (18%)
+                  const vatAmount = incForm.reverseCharge ? 0 : incItems.reduce((s, i) => s + (parseFloat(i.totalPrice || "0") * parseFloat(i.vatRate) / 100), 0);
                   createInc.mutate({
                     ...incForm,
                     supplierId: parseInt(incForm.supplierId),
                     receivedDate: incForm.receivedDate,
                     issueDate: incForm.issueDate || undefined,
                     dueDate: incForm.dueDate || undefined,
+                    vatDate: incForm.vatDate || incForm.receivedDate,
+                    reverseCharge: incForm.reverseCharge,
+                    ...(incForm.reverseCharge ? { vatRate: "18" } : {}),
                     subtotal: subtotal.toFixed(2),
                     vatAmount: vatAmount.toFixed(2),
                     totalAmount: (subtotal + vatAmount).toFixed(2),
@@ -480,6 +489,18 @@ export default function Accounting() {
                     <div className="space-y-1"><Label>Датум на прием *</Label><DateInput value={incForm.receivedDate} onChange={(e) => setIncForm({ ...incForm, receivedDate: e.target.value })} required /></div>
                     <div className="space-y-1"><Label>Датум на фактура</Label><DateInput value={incForm.issueDate} onChange={(e) => setIncForm({ ...incForm, issueDate: e.target.value })} /></div>
                     <div className="space-y-1"><Label>Рок на плаќање</Label><DateInput value={incForm.dueDate} onChange={(e) => setIncForm({ ...incForm, dueDate: e.target.value })} /></div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border bg-gray-50/60 p-3">
+                    <div className="space-y-1">
+                      <Label>ДДВ период</Label>
+                      <DateInput value={incForm.vatDate || incForm.receivedDate} onChange={(e) => setIncForm({ ...incForm, vatDate: e.target.value })} />
+                      <p className="text-[11px] text-gray-500">Во кој месец влегува во ДДВ пријавата. По правило — кога е примена.</p>
+                    </div>
+                    <label className="flex items-start gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" className="mt-1 h-4 w-4 accent-amber-500" checked={incForm.reverseCharge} onChange={(e) => setIncForm({ ...incForm, reverseCharge: e.target.checked })} />
+                      <span><b>Услуга од странски добавувач</b> (обратно оданочување)
+                        <span className="block text-[11px] text-gray-500">Добавувачот не пресметал ДДВ — програмата пресметува 18% и го книжи и како излезен и како претходен ДДВ. Не важи за увоз на стока (ДДВ се плаќа на царина).</span></span>
+                    </label>
                   </div>
 
                   {/* Invoice Items */}
@@ -1016,6 +1037,18 @@ export default function Accounting() {
                 <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings, "mk")}><Download className="h-3.5 w-3.5 mr-1" />PDF МК</Button>
                 <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings, "en")}><Download className="h-3.5 w-3.5 mr-1" />PDF EN</Button>
                 <Button size="sm" variant="outline" onClick={() => setMailOpen(true)}><FileText className="h-3.5 w-3.5 mr-1" />Прати по е-пошта</Button>
+                {outDetail.invoiceType === "standard" && !["draft", "cancelled"].includes(outDetail.status) && (
+                  <Button size="sm" variant="outline" className="text-violet-700 border-violet-300" disabled={stornoInv.isPending}
+                    title="Книжно одобрување на целиот износ, со денешен датум — така се поништува издадена фактура"
+                    onClick={async () => {
+                      if (!confirm(`Да се издаде книжно одобрување (сторно) на целата фактура ${outDetail.invoiceNumber}?`)) return;
+                      const num = await utils.accounting.nextCreditNoteNumber.fetch();
+                      const d = new Date(); const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                      stornoInv.mutate({ originalInvoiceId: outDetail.id, creditNoteNumber: num, issueDate: today,
+                        subtotal: String(outDetail.subtotal), vatRate: String(outDetail.vatRate ?? "18"), vatAmount: String(outDetail.vatAmount), totalAmount: String(outDetail.totalAmount),
+                        notes: `Сторно на фактура ${outDetail.invoiceNumber}` });
+                    }}><Undo2 className="h-3.5 w-3.5 mr-1" />Сторно (книжно одобрување)</Button>
+                )}
               </div>
               <SendEmailDialog open={mailOpen} onOpenChange={setMailOpen} docType="invoice" docId={outDetail.id} docNumber={outDetail.invoiceNumber}
                 defaultTo={outDetail.customer?.email} companyName={companySettings?.name}

@@ -252,6 +252,8 @@ export const assetsRouter = createRouter({
     .input(z.object({ year: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      // амортизацијата се книжи месечно — првиот месец од годината мора да е отворен
+      { const { assertOpen } = await import("./period-lock"); await assertOpen(`${input.year}-01-31`, `Амортизација за ${input.year}`); }
       const rows = (await db.select().from(fixedAssets)) as any[];
       const posted = (await db.select().from(depreciationEntries)) as any[];
       const postedSet = new Set(posted.map((p) => `${p.assetId}|${p.year}`));
@@ -284,6 +286,8 @@ export const assetsRouter = createRouter({
     .input(z.object({ year: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      // амортизацијата се книжи месечно — првиот месец од годината мора да е отворен
+      { const { assertOpen } = await import("./period-lock"); await assertOpen(`${input.year}-01-31`, `Амортизација за ${input.year}`); }
       const rows = (await db.select().from(depreciationEntries)) as any[];
       let removed = 0;
       for (const r of rows.filter((x) => x.year === input.year)) {
