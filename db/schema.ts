@@ -825,6 +825,9 @@ export const invoices = pgTable("invoices", {
   language: varchar("language", { length: 5 }).default("mk"), // mk | en — јазик на печатење
   paymentSchedule: text("payment_schedule"), // JSON рати на плаќање (од понудата / про-фактурата)
   createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  // извоз (0% ДДВ): број и датум на царинската декларација (ЕЦД) — доказ за ослободувањето
+  customsDeclaration: varchar("customs_declaration", { length: 60 }),
+  customsDate: date("customs_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

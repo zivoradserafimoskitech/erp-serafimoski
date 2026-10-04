@@ -68,6 +68,28 @@ function periodPreset(kind: "month" | "prev" | "year") {
   return { startDate: ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1)), endDate: ymdLocal(now) };
 }
 
+/** Извоз (0% ДДВ): број и датум на царинската декларација — доказ за ослободувањето од ДДВ. */
+function EcdFields({ invoice }: { invoice: any }) {
+  const utils = trpc.useUtils();
+  const [num, setNum] = useState<string>(invoice.customsDeclaration ?? "");
+  const [date, setDate] = useState<string>(invoice.customsDate ? String(invoice.customsDate).slice(0, 10) : "");
+  const save = trpc.accounting.invoiceUpdate.useMutation({
+    onSuccess: () => { toast.success("ЕЦД е зачуван"); utils.accounting.invoiceById.invalidate(); utils.finance.vatBooks.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const changed = num !== (invoice.customsDeclaration ?? "") || date !== (invoice.customsDate ? String(invoice.customsDate).slice(0, 10) : "");
+  return (
+    <div className={`rounded-lg border p-3 space-y-2 ${num ? "bg-gray-50" : "border-amber-300 bg-amber-50"}`}>
+      <p className="text-xs font-medium">Царинска декларација (ЕЦД) за извоз {num ? "" : "— недостасува; без неа 0% ДДВ нема доказ"}</p>
+      <div className="flex flex-wrap gap-2">
+        <Input className="h-8 w-48" value={num} onChange={(e) => setNum(e.target.value)} placeholder="Број на ЕЦД" />
+        <DateInput className="h-8 w-40" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Button size="sm" className="h-8" disabled={!changed || save.isPending} onClick={() => save.mutate({ id: invoice.id, customsDeclaration: num || null, customsDate: date || null })}>Зачувај</Button>
+      </div>
+    </div>
+  );
+}
+
 export default function Accounting() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
@@ -1032,6 +1054,9 @@ export default function Accounting() {
                 <div><span className="text-gray-500">Датум:</span> {formatDate(outDetail.issueDate)}</div>
                 <div><span className="text-gray-500">Рок:</span> {formatDate(outDetail.dueDate)}</div>
               </div>
+              {(outDetail.currency !== "MKD" || Number(outDetail.vatRate) === 0) && outDetail.invoiceType !== "proforma" && (
+                <EcdFields key={outDetail.id} invoice={outDetail} />
+              )}
               <div className="flex gap-2 pt-2">
                 <Button size="sm" variant="outline" onClick={() => generateUJPXml(outDetail)}><FileText className="h-3.5 w-3.5 mr-1" />УЈП XML</Button>
                 <Button size="sm" variant="outline" onClick={() => printInvoice(outDetail, companySettings, "mk")}><Download className="h-3.5 w-3.5 mr-1" />PDF МК</Button>

@@ -294,7 +294,7 @@ export default function BankTab() {
                 </TableCell></TableRow>
               ) : rows.map((t: any) => (
                 <TableRow key={t.id} className={t.matchStatus === "ignored" ? "opacity-50" : ""}>
-                  <TableCell className="text-sm">{String(t.txDate)}</TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">{String(t.txDate).slice(0, 10).split("-").reverse().join(".")}</TableCell>
                   <TableCell>
                     <div className="text-sm font-medium leading-tight">{t.counterpartyName || "—"}</div>
                     <div className="text-[11px] text-gray-500 leading-snug">{t.purpose}</div>

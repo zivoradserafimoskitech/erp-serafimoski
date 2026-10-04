@@ -213,6 +213,9 @@ export const accountingRouter = createRouter({
       status: z.enum(["draft", "issued", "sent", "partial", "paid", "overdue", "cancelled"]).optional(),
       dueDate: z.string().optional(),
       notes: z.string().optional(),
+      /** ЕЦД за извоз — доказ, не менува книжење (смее и по заклучувањето) */
+      customsDeclaration: z.string().max(60).nullable().optional(),
+      customsDate: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();

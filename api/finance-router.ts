@@ -57,6 +57,9 @@ async function loadRules(): Promise<Rules> {
   return rulesWithDefaults(stored);
 }
 
+/** Од која година амортизацијата се книжи месечно (претходните години остануваат со годишен налог). */
+const MONTHLY_DEPRECIATION_FROM = 2026;
+
 interface Desired { sourceType: string; sourceId: number; date: string; description: string; lines: GlLine[] }
 interface Problem { sourceType: string; sourceId: number; ref: string; reason: string }
 
@@ -266,13 +269,45 @@ async function buildDesired(rules: Rules, rate: RateLookup): Promise<{ desired: 
       lines: payrollLines({ gross: Number(r.g), contributions: Number(r.c), incomeTax: Number(r.t), net: Number(r.n), period: r.period, rules }) });
   }
 
-  // 6) Амортизација (проведена по години) -- едно книжење по година, на 31.12
+  // 6) Амортизација: до 2025 — едно книжење на 31.12; од 2026 — месечно (1/12), до тековниот месец,
+  //    за месечните извештаи да го содржат трошокот (декември го зема заокружувањето)
   const dep = await q(`SELECT year, SUM(amount) s FROM depreciation_entries GROUP BY year`);
+  const nowD = new Date();
   for (const d of dep) {
-    const amount = Number(d.s);
+    const amount = round2(Number(d.s));
+    const year = Number(d.year);
     if (!(amount > 0)) continue;
-    desired.push({ sourceType: "depreciation", sourceId: Number(d.year), date: `${d.year}-12-31`, description: `Амортизација за ${d.year}`,
-      lines: depreciationLines({ amount: round2(amount), year: Number(d.year), rules }) });
+    if (year < MONTHLY_DEPRECIATION_FROM) {
+      desired.push({ sourceType: "depreciation", sourceId: year, date: `${year}-12-31`, description: `Амортизација за ${year}`,
+        lines: depreciationLines({ amount, year, rules }) });
+      continue;
+    }
+    const lastMonth = year < nowD.getFullYear() ? 12 : year === nowD.getFullYear() ? nowD.getMonth() + 1 : 0;
+    const monthly = round2(amount / 12);
+    for (let m = 1; m <= lastMonth; m++) {
+      const amt = m === 12 ? round2(amount - monthly * 11) : monthly;
+      const end = new Date(Date.UTC(year, m, 0)).toISOString().slice(0, 10);
+      desired.push({ sourceType: "depreciation_m", sourceId: year * 100 + m, date: end, description: `Амортизација ${String(m).padStart(2, "0")}/${year}`,
+        lines: depreciationLines({ amount: amt, year, rules }) });
+    }
+  }
+
+  // 7) Залихи на недовршено производство и готови производи на крајот на периодот (по пресметка)
+  //    — книжи се промената од претходната пресметка: Должи 600/630 / Побарува 490 (или обратно)
+  const vals = await q(`SELECT id, period_end, wip, fg FROM inventory_valuations ORDER BY period_end`).catch(() => [] as any[]);
+  let prevW = 0, prevF = 0;
+  for (const v of vals) {
+    const w = round2(Number(v.wip)), f = round2(Number(v.fg));
+    const dw = round2(w - prevW), df = round2(f - prevF);
+    prevW = w; prevF = f;
+    if (!dw && !df) continue;
+    const date = iso(v.period_end);
+    desired.push({ sourceType: "inventory_value", sourceId: Number(v.id), date, description: `Залихи на производи на ${date.split("-").reverse().join(".")}`,
+      lines: normalizeLines([
+        { account: rules.wip_inventory, debit: dw, credit: 0, description: "Недовршено производство" },
+        { account: rules.fg_inventory, debit: df, credit: 0, description: "Готови производи" },
+        { account: rules.inventory_change, debit: 0, credit: round2(dw + df), description: "Промена на залихите на производи" },
+      ]) });
   }
 
   return { desired, problems };
@@ -349,6 +384,40 @@ export async function syncLedger(actor = "автоматски") {
         created++;
       }
     }
+    // Затворање на година: класите 4 и 7 на резултат (800), од моменталната главна книга (без самото затворање)
+    const closes = await client.query(`SELECT year FROM year_closes ORDER BY year`).then((r: any) => r.rows).catch(() => [] as any[]);
+    for (const c of closes) {
+      const year = Number(c.year), date = `${year}-12-31`;
+      const bal = (await client.query(`SELECT l.account_code, SUM(l.debit - l.credit) n FROM gl_lines l JOIN gl_entries e ON e.id = l.entry_id
+        WHERE e.entry_date BETWEEN $1 AND $2 AND e.source_type <> 'year_close' AND (l.account_code LIKE '4%' OR l.account_code LIKE '7%')
+        GROUP BY 1 HAVING ROUND(SUM(l.debit - l.credit), 2) <> 0 ORDER BY 1`, [`${year}-01-01`, date])).rows;
+      const lines: GlLine[] = bal.map((b: any) => { const n = round2(Number(b.n)); return { account: b.account_code, debit: n < 0 ? -n : 0, credit: n > 0 ? n : 0, description: `Затворање ${year}` }; });
+      // net > 0: приходите се поголеми од расходите (добивка) — разликата оди на Побарува 800
+      const net = round2(lines.reduce((a, l) => a + l.debit - l.credit, 0));
+      if (lines.length) lines.push({ account: rules.year_result, debit: net < 0 ? -net : 0, credit: net > 0 ? net : 0, description: net > 0 ? `Добивка ${year}` : `Загуба ${year}` });
+      keep.add(`year_close:${year}`);
+      const key = `year_close:${year}`, ex = byKey.get(key);
+      const dl = normalizeLines(lines);
+      if (!dl.length) continue;
+      const sig = linesSignature(date, dl) + "|close";
+      if (ex && ex.signature === sig) continue;
+      if (isLocked(date, lock)) { problems.push({ sourceType: "year_close", sourceId: year, ref: `${year}`, reason: lockedMsg }); continue; }
+      if (ex) {
+        await client.query(`DELETE FROM gl_lines WHERE entry_id = $1`, [ex.id]);
+        await client.query(`UPDATE gl_entries SET signature = $2 WHERE id = $1`, [ex.id, sig]);
+        await insertLines(client, ex.id, dl);
+        await glAudit(client, { actor: who, action: "update", entryNumber: ex.entry_number, entryDate: date, sourceType: "year_close", description: `Затворање на ${year}` });
+        updated++;
+      } else {
+        const num = await nextEntryNumber(client, date);
+        const r = await client.query(`INSERT INTO gl_entries (entry_number, entry_date, description, source_type, source_id, signature) VALUES ($1,$2,$3,'year_close',$4,$5) RETURNING id`,
+          [num, date, `Затворање на ${year} — приходи и расходи на резултат`, year, sig]);
+        await insertLines(client, r.rows[0].id, dl);
+        await glAudit(client, { actor: who, action: "create", entryNumber: num, entryDate: date, sourceType: "year_close", description: `Затворање на ${year}` });
+        created++;
+      }
+    }
+
     for (const e of existing) {
       if (keep.has(`${e.source_type}:${e.source_id}`)) continue;
       if (isLocked(e.entry_date, lock)) {
@@ -376,7 +445,7 @@ export async function syncLedger(actor = "автоматски") {
 /** КИФ/КУФ и рекапитулација за ДДВ — единствен извор (ДДВ таб, извештај за сметководител, Excel). */
 export async function vatBooksData(input: { from: string; to: string }) {
       const rate = await loadRates();
-      const out = await q(`SELECT i.id, i.invoice_number, i.invoice_type, i.issue_date, i.subtotal, i.vat_amount, i.vat_rate, i.currency,
+      const out = await q(`SELECT i.id, i.invoice_number, i.invoice_type, i.issue_date, i.subtotal, i.vat_amount, i.vat_rate, i.currency, i.customs_declaration, i.customs_date,
           c.name, c.company, c.edb, c.tax_number, c.country
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.invoice_type IN ('standard','credit_note') AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN $1 AND $2
@@ -405,7 +474,10 @@ export async function vatBooksData(input: { from: string; to: string }) {
           if (bad) warnings.push(`${kind === "out" ? "Излезна" : "Влезна"} ${number}: ДДВ ${Math.abs(vat).toLocaleString("mk-MK")} не одговара на ${Number(r.vat_rate)}% од ${Math.abs(base).toLocaleString("mk-MK")} (треба ${bad.expected.toLocaleString("mk-MK")})`);
         }
         const foreign = cur !== "MKD" || !isDomesticCountry(r.country);
-        return { id: r.id, number, date, partner: r.company || r.name, taxId: r.edb || r.tax_number || "", country: r.country || "",
+        // извоз со 0% ДДВ: потребна е царинска декларација (ЕЦД) како доказ
+        if (kind === "out" && foreign && Number(r.vat_rate) === 0 && r.invoice_type !== "credit_note" && !r.customs_declaration)
+          warnings.push(`Излезна ${number}: извоз со 0% ДДВ без број на царинска декларација (ЕЦД) — внеси го во фактурата`);
+        return { id: r.id, number, date, partner: r.company || r.name, taxId: r.edb || r.tax_number || "", country: r.country || "", customsDeclaration: r.customs_declaration ?? null,
           currency: cur, vatRate: rc ? (Number(r.vat_rate) || 18) : Number(r.vat_rate), baseMkd: base ?? 0, vatMkd: vat ?? 0, totalMkd: round2((base ?? 0) + (vat ?? 0)), foreign, creditNote: sign < 0, reverseCharge: rc };
       };
       const incoming = inc.map(r => row(r, "in"));
@@ -692,6 +764,91 @@ export const financeRouter = createRouter({
       await q(`DELETE FROM inventory_transactions WHERE id = $1`, [input.moveId]);
       const sync = await syncLedger();
       return { success: true, removed: sync.removed };
+    }),
+
+  // ===== КРАЈ НА ПЕРИОД =====
+  /** Предлог-пресметка: недовршено производство (отворени налози) и готови производи (на залиха) */
+  inventoryValuationCalc: publicQuery
+    .input(z.object({ date: dateStr }))
+    .query(async () => {
+      const wip = await q(`SELECT w.id, w.wo_number, w.status,
+          COALESCE((SELECT SUM(m.total_cost) FROM work_order_materials m WHERE m.work_order_id = w.id AND m.is_actual = 'actual'), 0) AS mat,
+          COALESCE((SELECT SUM(o.cost_amount) FROM work_order_operations o WHERE o.work_order_id = w.id AND (o.status = 'completed' OR COALESCE(o.actual_time, 0) > 0)), 0) AS ops
+        FROM work_orders w WHERE w.status IN ('in_progress', 'on_hold', 'pending')`);
+      const wipRows = wip.map(r => ({ id: Number(r.id), number: r.wo_number, status: r.status, material: round2(Number(r.mat)), operations: round2(Number(r.ops)), total: round2(Number(r.mat) + Number(r.ops)) }))
+        .filter(r => r.total > 0);
+      const fg = await q(`SELECT f.product_id, p.name, SUM(f.quantity) q, SUM(f.quantity * COALESCE(f.unit_cost, 0)) v
+        FROM finished_goods_stock f LEFT JOIN products p ON p.id = f.product_id GROUP BY 1, 2 HAVING SUM(f.quantity) > 0`).catch(() => [] as any[]);
+      const fgRows = fg.map(r => ({ productId: Number(r.product_id), name: r.name ?? `#${r.product_id}`, quantity: Number(r.q), value: round2(Number(r.v)) }));
+      const last = (await q(`SELECT period_end, wip, fg FROM inventory_valuations ORDER BY period_end DESC LIMIT 1`).catch(() => []))[0];
+      return {
+        wip: round2(wipRows.reduce((a, r) => a + r.total, 0)), fg: round2(fgRows.reduce((a, r) => a + r.value, 0)), wipRows, fgRows,
+        previous: last ? { date: iso(last.period_end), wip: Number(last.wip), fg: Number(last.fg) } : null,
+      };
+    }),
+
+  inventoryValuationList: publicQuery.query(async () =>
+    (await q(`SELECT * FROM inventory_valuations ORDER BY period_end DESC`).catch(() => [])).map(r => ({ id: Number(r.id), date: iso(r.period_end), wip: Number(r.wip), fg: Number(r.fg), note: r.note, createdBy: r.created_by }))),
+
+  inventoryValuationSave: publicQuery
+    .input(z.object({ date: dateStr, wip: z.number().min(0), fg: z.number().min(0), note: z.string().max(500).optional() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertOpen(input.date, "Залихи на производи");
+      const later = await q(`SELECT period_end FROM inventory_valuations WHERE period_end > $1 LIMIT 1`, [input.date]);
+      if (later.length) throw new TRPCError({ code: "BAD_REQUEST", message: `Веќе постои пресметка на ${fmtMk(iso(later[0].period_end))} — внесувај по ред` });
+      await q(`INSERT INTO inventory_valuations (period_end, wip, fg, note, created_by) VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (period_end) DO UPDATE SET wip = EXCLUDED.wip, fg = EXCLUDED.fg, note = EXCLUDED.note, created_by = EXCLUDED.created_by`,
+        [input.date, input.wip, input.fg, input.note ?? null, (ctx as any).actor?.name ?? null]);
+      return { success: true };
+    }),
+
+  inventoryValuationRemove: publicQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const v = (await q(`SELECT period_end FROM inventory_valuations WHERE id = $1`, [input.id]))[0];
+      if (!v) return { success: true };
+      await assertOpen(v.period_end, "Залихи на производи");
+      const later = await q(`SELECT 1 FROM inventory_valuations WHERE period_end > $1 LIMIT 1`, [v.period_end]);
+      if (later.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Може да се избрише само последната пресметка" });
+      await q(`DELETE FROM inventory_valuations WHERE id = $1`, [input.id]);
+      return { success: true };
+    }),
+
+  yearCloseList: publicQuery.query(async () => {
+    const closed = await q(`SELECT year, closed_by, closed_at FROM year_closes ORDER BY year DESC`).catch(() => []);
+    const years = await q(`SELECT DISTINCT EXTRACT(YEAR FROM entry_date)::int y FROM gl_entries ORDER BY 1 DESC`);
+    const rules = await loadRules();
+    const out = [];
+    for (const yr of years) {
+      const y = Number(yr.y);
+      const r = (await q(`SELECT
+          COALESCE(SUM(CASE WHEN l.account_code LIKE '7%' THEN l.credit - l.debit END), 0) AS rev,
+          COALESCE(SUM(CASE WHEN l.account_code LIKE '4%' THEN l.debit - l.credit END), 0) AS exp
+        FROM gl_lines l JOIN gl_entries e ON e.id = l.entry_id WHERE e.entry_date BETWEEN $1 AND $2 AND e.source_type <> 'year_close'`, [`${y}-01-01`, `${y}-12-31`]))[0];
+      const c = closed.find(x => Number(x.year) === y);
+      out.push({ year: y, revenue: round2(Number(r.rev)), expense: round2(Number(r.exp)), result: round2(Number(r.rev) - Number(r.exp)),
+        closed: !!c, closedBy: c?.closed_by ?? null, closedAt: c?.closed_at ?? null });
+    }
+    return { years: out, resultAccount: rules.year_result };
+  }),
+
+  yearClose: publicQuery
+    .input(z.object({ year: z.number().int().min(2000).max(2100) }))
+    .mutation(async ({ input, ctx }) => {
+      await assertOpen(`${input.year}-12-31`, `Затворање на ${input.year}`);
+      if (new Date().getFullYear() <= input.year) throw new TRPCError({ code: "BAD_REQUEST", message: `${input.year} уште не е завршена` });
+      await q(`INSERT INTO year_closes (year, closed_by) VALUES ($1,$2) ON CONFLICT (year) DO NOTHING`, [input.year, (ctx as any).actor?.name ?? null]);
+      return syncLedger((ctx as any).actor?.name ?? "автоматски");
+    }),
+
+  yearReopen: publicQuery
+    .input(z.object({ year: z.number().int() }))
+    .mutation(async ({ input, ctx }) => {
+      const a = (ctx as any).actor;
+      if (a && a.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Отворање затворена година смее само администратор" });
+      await assertOpen(`${input.year}-12-31`, `Затворање на ${input.year}`);
+      await q(`DELETE FROM year_closes WHERE year = $1`, [input.year]);
+      return syncLedger(a?.name ?? "автоматски");
     }),
 
   // ===== ТЕРК: шеми на книжење (конта + страна, без износи) =====

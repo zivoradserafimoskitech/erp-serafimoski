@@ -46,7 +46,7 @@ export async function buildAccountantXlsx(report: any, from: string, to: string,
   const head = (t: string) => [`${company ? company + " — " : ""}${t}`, period];
 
   const book = (rows: any[]): Cell[][] => rows.map((r, i) => [i + 1, r.number, r.date, r.partner ?? "", r.taxId || "", r.country || "", r.currency,
-    r.vatRate, n(r.baseMkd), n(r.vatMkd), n(r.totalMkd), r.creditNote ? "книжно одобрување" : ""]);
+    r.vatRate, n(r.baseMkd), n(r.vatMkd), n(r.totalMkd), [r.creditNote ? "книжно одобрување" : "", r.reverseCharge ? "обратно оданочување" : "", r.customsDeclaration ? `ЕЦД ${r.customsDeclaration}` : ""].filter(Boolean).join(" · ")]);
   const bookHead = ["Р.бр.", "Број", "Датум", "Партнер", "ЕДБ", "Држава", "Валута", "Стапка ДДВ %", "Основица (ден)", "ДДВ (ден)", "Вкупно (ден)", "Забелешка"];
   const kif = book(vat.outgoing), kuf = book(vat.incoming);
   const bookTotal = (rows: Cell[][]): Cell[] => ["Вкупно", `${rows.length} документи`, null, null, null, null, null, null, sum(rows, 8), sum(rows, 9), sum(rows, 10), null];
@@ -79,6 +79,7 @@ export async function buildAccountantXlsx(report: any, from: string, to: string,
       ["Работни налози", sum(wo, 4), null, wo.length],
       ["Потрошен материјал (требовања)", sum(req, 6), null, req.length],
       ...(vat.missingRates?.length ? [[null, null, null, null], [`Внимание: нема курс за ${vat.missingRates.join(", ")} — износите не се во збирот`, null, null, null]] as Cell[][] : []),
+      ...((vat.warnings ?? []).length ? [[null, null, null, null], ["ЗА ПРОВЕРКА ПРЕД ПРИЈАВАТА", null, null, null], ...(vat.warnings as string[]).map((w: string) => [w, null, null, null] as Cell[])] : []),
   ];
   // поднаслови и збирни редови се задебелени
   const boldRows = ovRows.map((r, i) => /^(ИЗЛЕЗНИ|ВЛЕЗНИ|Вкупно|ДДВ за)/.test(String(r[0] ?? "")) ? i : -1).filter(i => i >= 0);

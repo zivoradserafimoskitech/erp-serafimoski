@@ -465,4 +465,50 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     clearActorCache();
     expect(await gateActive()).toBe(false);
   });
+  it("ревизија (средно): залихи на производи, месечна амортизација, затворање година, ЕЦД", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    // залихи: книжи се само промената
+    await caller.finance.inventoryValuationSave({ date: "2026-08-31", wip: 5000, fg: 2000 });
+    await caller.finance.inventoryValuationSave({ date: "2026-09-30", wip: 3000, fg: 2500 });
+    await expect(caller.finance.inventoryValuationSave({ date: "2026-07-31", wip: 1, fg: 1 })).rejects.toThrow(/по ред/);
+    await caller.finance.ledgerSync();
+    const iv = await caller.finance.journalList({ from: "2026-09-30", to: "2026-09-30", search: "Залихи на производи", limit: 5, offset: 0 });
+    const l = (iv.entries[0] as any).lines;
+    expect(l.find((x: any) => x.account === "600")?.credit).toBe(2000);
+    expect(l.find((x: any) => x.account === "630")?.debit).toBe(500);
+    expect(l.find((x: any) => x.account === "490")?.debit).toBe(1500);
+    // амортизација 2026: месечно 1/12
+    await pool.query(`INSERT INTO depreciation_entries (asset_id, year, months, amount) VALUES (999001, 2026, 12, 12000)`);
+    await caller.finance.ledgerSync();
+    const dep = (await caller.finance.journalList({ from: "2026-01-01", to: "2026-12-31", search: "Амортизација", limit: 50, offset: 0 })).entries.filter((e: any) => e.sourceType === "depreciation_m");
+    expect(dep.length).toBe(new Date().getMonth() + 1);
+    expect((dep[0] as any).lines.find((x: any) => x.account === "430")?.debit).toBe(1000);
+    await pool.query(`DELETE FROM depreciation_entries WHERE asset_id = 999001`);
+    // затворање на 2025: приходи и расходи на 800
+    await caller.finance.manualEntryCreate({ date: "2025-06-30", description: "Приход 2025", lines: [{ account: "103", debit: 5000, credit: 0 }, { account: "740", debit: 0, credit: 5000 }] });
+    await caller.finance.manualEntryCreate({ date: "2025-06-30", description: "Трошок 2025", lines: [{ account: "449", debit: 2000, credit: 0 }, { account: "103", debit: 0, credit: 2000 }] });
+    await expect(caller.finance.yearClose({ year: new Date().getFullYear() })).rejects.toThrow(/не е завршена/);
+    await caller.finance.yearClose({ year: 2025 });
+    const yc = await caller.finance.journalList({ from: "2025-12-31", to: "2025-12-31", search: "Затворање на 2025", limit: 5, offset: 0 });
+    const yl = (yc.entries[0] as any).lines;
+    expect(yl.find((x: any) => x.account === "800")?.credit).toBe(3000);
+    expect(yl.find((x: any) => x.account === "740")?.debit).toBe(5000);
+    const tb = await caller.finance.trialBalance({ from: "2026-01-01", to: "2026-12-31" });
+    expect(tb.accounts.find((a: any) => a.code === "740")?.opening ?? 0).toBe(0);
+    expect(tb.accounts.find((a: any) => a.code === "800")?.opening).toBe(-3000);
+    await caller.finance.yearReopen({ year: 2025 });
+    await caller.finance.ledgerSync();
+    expect((await caller.finance.journalList({ from: "2025-12-31", to: "2025-12-31", search: "Затворање", limit: 5, offset: 0 })).total).toBe(0);
+    // ЕЦД: извоз со 0% без декларација -> предупредување; со декларација -> чисто
+    const next = await caller.accounting.nextInvoiceNumber();
+    const ex = await caller.accounting.invoiceCreate({ invoiceNumber: next, customerId: ids.cust, issueDate: "2026-10-03", status: "issued", currency: "EUR", subtotal: "100", vatRate: "0", vatAmount: "0", totalAmount: "100" });
+    await pool.query(`UPDATE customers SET country = 'Austria' WHERE id = $1`, [ids.cust]);
+    let vb = await caller.finance.vatBooks({ from: "2026-10-01", to: "2026-10-31" });
+    expect(vb.warnings.some((w: string) => w.includes(next) && /ЕЦД/.test(w))).toBe(true);
+    await caller.accounting.invoiceUpdate({ id: ex.id, customsDeclaration: "MK0001-26-123", customsDate: "2026-10-03" });
+    vb = await caller.finance.vatBooks({ from: "2026-10-01", to: "2026-10-31" });
+    expect(vb.warnings.some((w: string) => w.includes(next) && /ЕЦД/.test(w))).toBe(false);
+    await pool.query(`UPDATE customers SET country = NULL WHERE id = $1`, [ids.cust]);
+  });
 });

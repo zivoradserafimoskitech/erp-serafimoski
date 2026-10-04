@@ -16,8 +16,9 @@ import { toast } from "sonner";
 import { downloadTableXlsx } from "@/lib/xlsx";
 import TerkTab, { TerkEditor, useAccountItems } from "@/components/TerkTab";
 import PeriodLockTab from "@/components/PeriodLockTab";
+import PeriodEndTab from "@/components/PeriodEndTab";
 import SearchPick from "@/components/SearchPick";
-import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks, Lock, Undo2 } from "lucide-react";
+import { BookOpen, Scale, FileSpreadsheet, Receipt, Wallet, Landmark, Coins, ListTree, RefreshCw, Plus, Trash2, AlertTriangle, Download, TrendingUp, ListChecks, Lock, Undo2, CalendarCheck } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -843,7 +844,7 @@ function ProfitTab() {
 const FIN_GROUPS = [
   { label: "Пари", tabs: [{ key: "bank", label: "Банка", icon: Landmark }, { key: "cash", label: "Благајна", icon: Wallet }] },
   { label: "Извештаи", tabs: [{ key: "vat", label: "ДДВ", icon: Receipt }, { key: "profit", label: "Добивка по нарачка", icon: TrendingUp }] },
-  { label: "Главна книга", tabs: [{ key: "journal", label: "Налози", icon: BookOpen }, { key: "terk", label: "Терк", icon: ListChecks }, { key: "trial", label: "Бруто биланс", icon: Scale }, { key: "card", label: "Картица", icon: FileSpreadsheet }] },
+  { label: "Главна книга", tabs: [{ key: "journal", label: "Налози", icon: BookOpen }, { key: "terk", label: "Терк", icon: ListChecks }, { key: "periodEnd", label: "Крај на период", icon: CalendarCheck }, { key: "trial", label: "Бруто биланс", icon: Scale }, { key: "card", label: "Картица", icon: FileSpreadsheet }] },
   { label: "Поставки", tabs: [{ key: "rates", label: "Курсна листа", icon: Coins }, { key: "lock", label: "Заклучување", icon: Lock }, { key: "chart", label: "Контен план", icon: ListTree }] },
 ];
 
@@ -876,6 +877,7 @@ export default function Finance() {
         <TabsContent value="journal" className="mt-4"><JournalTab /></TabsContent>
         <TabsContent value="terk" className="mt-4"><TerkTab /></TabsContent>
         <TabsContent value="lock" className="mt-4"><PeriodLockTab /></TabsContent>
+        <TabsContent value="periodEnd" className="mt-4"><PeriodEndTab /></TabsContent>
         <TabsContent value="trial" className="mt-4"><TrialBalanceTab onOpenCard={(c) => { setCardCode(c); setTab("card"); }} /></TabsContent>
         <TabsContent value="card" className="mt-4"><AccountCardTab code={cardCode} setCode={setCardCode} /></TabsContent>
         <TabsContent value="vat" className="mt-4"><VatTab /></TabsContent>

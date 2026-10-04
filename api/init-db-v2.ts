@@ -110,6 +110,19 @@ export function getExtraSql(): string[] {
     `UPDATE "incoming_invoices" SET "vat_date" = COALESCE("issue_date", "received_date") WHERE "vat_date" IS NULL`,
     // Ставка од извод без фактура: се книжи на избрано конто (плати, ДДВ, провизии, кредити...)
     `ALTER TABLE "bank_transactions" ADD COLUMN IF NOT EXISTS "account_code" varchar(10)`,
+    // Крај на период: залихи на недовршено производство и готови производи; затворање на година; ЕЦД за извоз
+    `CREATE TABLE IF NOT EXISTS "inventory_valuations" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "period_end" date NOT NULL UNIQUE,
+      "wip" numeric(16, 2) DEFAULT '0' NOT NULL,
+      "fg" numeric(16, 2) DEFAULT '0' NOT NULL,
+      "note" text,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "year_closes" ("year" integer PRIMARY KEY, "closed_by" varchar(160), "closed_at" timestamp DEFAULT now() NOT NULL)`,
+    `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "customs_declaration" varchar(60)`,
+    `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "customs_date" date`,
 
     // ===== РАСПОРЕД НА ПРОИЗВОДСТВО =====
     `ALTER TABLE "work_order_operations" ADD COLUMN IF NOT EXISTS "machine_id" bigint`,

@@ -41,7 +41,7 @@ export default function BankPostDialog({ tx, onClose, onDone }: { tx: any | null
       <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogTitle>Што е оваа ставка?</DialogTitle>
         <DialogDescription>
-          {String(tx.txDate)} · <b className={tx.direction === "in" ? "text-emerald-700" : "text-red-600"}>{tx.direction === "in" ? "+" : "−"}{den(tx.amount)}</b> · {tx.counterpartyName || "—"}
+          {String(tx.txDate).slice(0, 10).split("-").reverse().join(".")} · <b className={tx.direction === "in" ? "text-emerald-700" : "text-red-600"}>{tx.direction === "in" ? "+" : "−"}{den(tx.amount)}</b> · {tx.counterpartyName || "—"}
           {tx.purpose ? <span className="block text-xs text-gray-500 mt-0.5">{tx.purpose}</span> : null}
         </DialogDescription>
         {unsure && !kind && <p className="text-xs rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-amber-800">Можеби е „{unsure.title}“ — не сум сигурен, избери ти.</p>}
