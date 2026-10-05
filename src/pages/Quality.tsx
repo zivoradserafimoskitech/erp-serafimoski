@@ -13,7 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, Plus, CheckCircle2, Trash2, History } from "lucide-react";
+import { ShieldAlert, Wrench, Plus, CheckCircle2, Trash2, History, Gauge, ClipboardCheck } from "lucide-react";
+import OeeTab from "@/components/mfg/OeeTab";
+import QualitySystemTab from "@/components/mfg/QualitySystemTab";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d?: string | null) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : "—");
@@ -207,19 +209,25 @@ function MaintenanceTab() {
 
 export default function Quality() {
   const { data: due } = trpc.ops.maintenanceDue.useQuery();
+  const { data: instruments } = trpc.mfg.instrumentList.useQuery();
+  const calDue = (instruments ?? []).filter((i) => i.overdue || i.dueSoon).length;
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-800">Квалитет и одржување</h2>
-        <p className="text-gray-500 mt-1">Неусогласености и рекламации, редовен сервис и дефекти на машините</p>
+        <p className="text-gray-500 mt-1">Неусогласености и рекламации (со 8D), сервис и застои на машините (OEE), мерни инструменти, план на контрола и оценка на добавувачите</p>
       </div>
       <Tabs defaultValue="quality">
         <TabsList className="bg-amber-50">
           <TabsTrigger value="quality"><ShieldAlert className="h-4 w-4 mr-1.5" />Квалитет</TabsTrigger>
           <TabsTrigger value="maintenance"><Wrench className="h-4 w-4 mr-1.5" />Одржување{due?.dueSoon ? <Badge className="ml-1.5 bg-red-500 text-white text-[10px] px-1.5">{due.dueSoon}</Badge> : null}</TabsTrigger>
+          <TabsTrigger value="oee"><Gauge className="h-4 w-4 mr-1.5" />Застои и OEE</TabsTrigger>
+          <TabsTrigger value="iso"><ClipboardCheck className="h-4 w-4 mr-1.5" />ISO: мерења, инструменти, добавувачи{calDue ? <Badge className="ml-1.5 bg-red-500 text-white text-[10px] px-1.5">{calDue}</Badge> : null}</TabsTrigger>
         </TabsList>
         <TabsContent value="quality" className="mt-4"><QualityTab /></TabsContent>
         <TabsContent value="maintenance" className="mt-4"><MaintenanceTab /></TabsContent>
+        <TabsContent value="oee" className="mt-4"><OeeTab /></TabsContent>
+        <TabsContent value="iso" className="mt-4"><QualitySystemTab /></TabsContent>
       </Tabs>
     </div>
   );

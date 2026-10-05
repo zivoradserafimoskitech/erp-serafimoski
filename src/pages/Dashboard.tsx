@@ -24,7 +24,7 @@ export default function Dashboard() {
   const ago = dataUpdatedAt ? Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000)) : null;
   const money = (v: any) => Number(v ?? 0).toLocaleString("mk-MK", { maximumFractionDigits: 0 });
   const navigate = useNavigate();
-  const pendingParsed = parsedDocs?.filter(d => d.status === "parsed").length ?? 0;
+  const pendingParsed = parsedDocs?.filter((d: any) => d.status === "parsed").length ?? 0;
   const now = new Date();
   const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const monthName = ["јануари", "февруари", "март", "април", "мај", "јуни", "јули", "август", "септември", "октомври", "ноември", "декември"][now.getMonth()];

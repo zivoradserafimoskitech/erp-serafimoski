@@ -1,4 +1,5 @@
 import { trpc } from "@/providers/trpc";
+import { logout as appLogout } from "@/lib/auth";
 import { ROLES, canSeeMenu, type Role } from "@contracts/roles";
 import { useEffect, useState } from "react";
 import GlobalSearch from "@/components/GlobalSearch";
@@ -25,12 +26,12 @@ import {
   Search,
   Workflow,
   Contact,
-  ShieldAlert,
-} from "lucide-react";
+  ShieldAlert, Target, BarChart3 } from "lucide-react";
 
 const navItems = [
   { path: "/", label: "Контролна табла", icon: LayoutDashboard },
   { path: "/tek", label: "Тек на нарачки", icon: Workflow },
+  { path: "/crm", label: "Продажба", icon: Target },
   { path: "/sklad", label: "Склад", icon: Warehouse },
   { path: "/proizvodstvo", label: "Производство", icon: Factory },
   { path: "/kvalitet", label: "Квалитет и одржување", icon: ShieldCheck },
@@ -38,6 +39,7 @@ const navItems = [
   { path: "/nabavka", label: "Набавка", icon: ShoppingCart },
   { path: "/smetkovodstvo", label: "Фактури", icon: Calculator },
   { path: "/finansii", label: "Финансии", icon: Landmark },
+  { path: "/izvestai", label: "Извештаи", icon: BarChart3 },
   { path: "/ponudi", label: "Понуди", icon: FileText },
   { path: "/priemnici", label: "Приемници", icon: ClipboardCheck },
   { path: "/katalog", label: "Каталог", icon: BookOpen },
@@ -106,12 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {me?.gate && (
               <button
                 className="text-slate-400 hover:text-amber-400 underline"
-                onClick={() => {
-                  window.localStorage.removeItem("appKey");
-                  window.localStorage.removeItem("appUserName");
-                  window.localStorage.removeItem("appUserRole");
-                  window.location.reload();
-                }}
+                onClick={() => { void appLogout(); }}
               >
                 одјави
               </button>
@@ -152,7 +149,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-800"
-            onClick={logout}
+            onClick={() => { if (me?.gate) void appLogout(); else logout(); }}
           >
             <LogOut className="h-5 w-5 mr-2" />
             Одјава

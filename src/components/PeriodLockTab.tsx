@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
+import { formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,7 @@ import { toast } from "sonner";
 import { Lock, LockOpen, History, ChevronDown, ChevronRight } from "lucide-react";
 
 const fmtD = (iso?: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join(".") : "—");
-const fmtAt = (v: any) => { const d = new Date(v); return isNaN(d.getTime()) ? "" : `${d.toLocaleDateString("mk-MK")} ${d.toLocaleTimeString("mk-MK", { hour: "2-digit", minute: "2-digit" })}`; };
+const fmtAt = (v: any) => formatDateTime(v);
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const ACTION: Record<string, { label: string; cls: string }> = {
   create: { label: "нов налог", cls: "bg-emerald-50 text-emerald-700" },

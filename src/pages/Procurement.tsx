@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { RfqTab, PricesTab, MatchTab, ApprovalsBar } from "@/components/purch/PurchTabs";
 import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
@@ -40,8 +41,7 @@ import {
   Truck,
   Trash2,
   Eye,
-  AlertTriangle,
-} from "lucide-react";
+  AlertTriangle, Pencil } from "lucide-react";
 
 const poStatusConfig: Record<string, { label: string; className: string }> = {
   draft: { label: "Нацрт", className: "bg-gray-100 text-gray-700" },
@@ -65,7 +65,7 @@ export default function Procurement() {
   const [selectedPO, setSelectedPO] = useState<number | null>(null);
 
   const [supForm, setSupForm] = useState({
-    name: "", contactPerson: "", email: "", phone: "",
+    name: "", edb: "", bankAccount: "", leadTimeDays: "", contactPerson: "", email: "", phone: "",
     address: "", city: "", country: "Македонија", materials: "",
   });
 
@@ -84,7 +84,7 @@ export default function Procurement() {
     onSuccess: () => {
       utils.procurement.supplierList.invalidate();
       setSupplierDialog(false);
-      setSupForm({ name: "", contactPerson: "", email: "", phone: "", address: "", city: "", country: "Македонија", materials: "" });
+      setSupForm({ name: "", edb: "", bankAccount: "", leadTimeDays: "", contactPerson: "", email: "", phone: "", address: "", city: "", country: "Македонија", materials: "" });
     },
   });
 
@@ -107,9 +107,21 @@ export default function Procurement() {
     },
   });
 
+  const [editingSup, setEditingSup] = useState<number | null>(null);
+  const supUpdate = trpc.procurement.supplierUpdate.useMutation({
+    onSuccess: () => { utils.procurement.supplierList.invalidate(); setSupplierDialog(false); setEditingSup(null); },
+  });
   const handleSupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    supCreate.mutate(supForm);
+    const payload: any = { ...supForm, leadTimeDays: supForm.leadTimeDays ? parseInt(supForm.leadTimeDays) : undefined };
+    if (editingSup) supUpdate.mutate({ id: editingSup, ...payload, bankAccount: payload.bankAccount?.replace(/\s+/g, "") || undefined });
+    else supCreate.mutate(payload);
+  };
+  const openSupEdit = (s: any) => {
+    setEditingSup(s.id);
+    setSupForm({ name: s.name ?? "", edb: s.edb ?? "", bankAccount: s.bankAccount ?? "", leadTimeDays: s.leadTimeDays != null ? String(s.leadTimeDays) : "", contactPerson: s.contactPerson ?? "",
+      email: s.email ?? "", phone: s.phone ?? "", address: s.address ?? "", city: s.city ?? "", country: s.country ?? "Македонија", materials: s.materials ?? "" });
+    setSupplierDialog(true);
   };
 
 
@@ -121,7 +133,7 @@ export default function Procurement() {
           <p className="text-gray-500 mt-1">Добавувачи и набавни нарачки</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={supplierDialog} onOpenChange={setSupplierDialog}>
+          <Dialog open={supplierDialog} onOpenChange={(o) => { setSupplierDialog(o); if (!o && editingSup) { setEditingSup(null); setSupForm({ name: "", edb: "", bankAccount: "", leadTimeDays: "", contactPerson: "", email: "", phone: "", address: "", city: "", country: "Македонија", materials: "" }); } }}>
             <DialogTrigger asChild>
               <Button variant="outline">
                 <Plus className="h-4 w-4 mr-2" />
@@ -130,12 +142,26 @@ export default function Procurement() {
             </DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Нов добавувач</DialogTitle>
+                <DialogTitle>{editingSup ? "Измени добавувач" : "Нов добавувач"}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSupSubmit} className="space-y-3">
                 <div className="space-y-2">
                   <Label>Назив *</Label>
                   <Input value={supForm.name} onChange={(e) => setSupForm({ ...supForm, name: e.target.value })} required />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>ЕДБ</Label>
+                    <Input value={supForm.edb} onChange={(e) => setSupForm({ ...supForm, edb: e.target.value })} placeholder="40..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Жиро-сметка</Label>
+                    <Input value={supForm.bankAccount} onChange={(e) => setSupForm({ ...supForm, bankAccount: e.target.value })} placeholder="300000000000000" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Рок на испорака (денови)</Label>
+                  <Input type="number" value={supForm.leadTimeDays} onChange={(e) => setSupForm({ ...supForm, leadTimeDays: e.target.value })} placeholder="7" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
@@ -204,7 +230,13 @@ export default function Procurement() {
             <AlertTriangle className="h-4 w-4 mr-1" />
             Потреби
           </TabsTrigger>
+          <TabsTrigger value="rfq">Барања за понуда</TabsTrigger>
+          <TabsTrigger value="prices">Ценовници</TabsTrigger>
+          <TabsTrigger value="match">Нарачка–приемница–фактура</TabsTrigger>
         </TabsList>
+        <TabsContent value="rfq"><RfqTab /></TabsContent>
+        <TabsContent value="prices"><PricesTab /></TabsContent>
+        <TabsContent value="match"><MatchTab /></TabsContent>
 
         <TabsContent value="needs">
           <ProcurementNeeds />
@@ -228,14 +260,15 @@ export default function Procurement() {
                   {suppliers?.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема добавувачи</TableCell></TableRow>
                   ) : (
-                    suppliers?.map((s) => (
+                    suppliers?.map((s: any) => (
                       <TableRow key={s.id}>
                         <TableCell className="font-medium">{s.name}</TableCell>
                         <TableCell>{s.contactPerson || "-"}</TableCell>
                         <TableCell>{s.phone || "-"}</TableCell>
                         <TableCell>{s.city || "-"}</TableCell>
                         <TableCell className="max-w-xs truncate">{s.materials || "-"}</TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Button size="sm" variant="ghost" onClick={() => openSupEdit(s)}><Pencil className="h-3.5 w-3.5" /></Button>
                           <Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) supDelete.mutate({ id: s.id }); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -249,7 +282,8 @@ export default function Procurement() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="orders">
+        <TabsContent value="orders" className="space-y-3">
+          <ApprovalsBar />
           <Card>
             <CardContent className="p-0">
               <Table>
@@ -267,7 +301,7 @@ export default function Procurement() {
                   {purchaseOrders?.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема набавни нарачки</TableCell></TableRow>
                   ) : (
-                    purchaseOrders?.map((po) => {
+                    purchaseOrders?.map((po: any) => {
                       const st = poStatusConfig[po.status] || poStatusConfig.draft;
                       return (
                         <TableRow key={po.id} className="cursor-pointer hover:bg-amber-50/40" onClick={() => { setSelectedPO(po.id); setDetailOpen(true); }}>

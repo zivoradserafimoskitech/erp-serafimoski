@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
-import { formatDate } from "@/lib/utils";
+import WoInspection from "@/components/mfg/WoInspection";
+import NestingTab from "@/components/mfg/NestingTab";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import ListLimitNote from "@/components/ListLimitNote";
 import { printWorkOrder, printRequisition } from "@/lib/print-documents";
-import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck, Clock, ShieldAlert } from "lucide-react";
+import { Search, Plus, Trash2, Eye, Package, Layers, ArrowDownLeft, FileText, Printer, ClipboardList, Truck, Clock, ShieldAlert, ClipboardCheck, Route } from "lucide-react";
 import { MaterialPicker } from "@/components/MaterialPicker";
 import ScheduleBoard from "@/components/ScheduleBoard";
 import WorkOrderCreateDialog from "@/components/WorkOrderCreateDialog";
@@ -58,7 +60,7 @@ export default function Production() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [view, setView] = useState<"list" | "schedule">("list");
+  const [view, setView] = useState<"list" | "schedule" | "nesting">("list");
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   useEffect(() => {
@@ -103,6 +105,10 @@ export default function Production() {
   const deleteMut = trpc.production.workOrderDelete.useMutation({
     onSuccess: () => { utils.production.workOrderList.invalidate(); utils.production.productionStats.invalidate(); },
   });
+  const applyRouting = trpc.mfg.woApplyRouting.useMutation({
+    onSuccess: (r) => { r.added ? toast.success(`Додадени ${r.added} операции од постапката`) : toast.info(r.products ? "Производите немаат технолошка постапка (Каталог → Норматив)" : "Налогот нема производ од каталогот"); utils.production.workOrderById.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
   const opCreateMut = trpc.production.operationCreate.useMutation({
     onSuccess: () => { utils.production.workOrderById.invalidate(); },
   });
@@ -139,7 +145,7 @@ export default function Production() {
   const handleMatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selWO || !matForm.materialId || !matForm.quantity) return;
-    const mat = materialsData?.find(m => m.id.toString() === matForm.materialId);
+    const mat = materialsData?.find((m: any) => m.id.toString() === matForm.materialId);
     const qty = parseFloat(matForm.quantity);
     const avail = parseFloat(String((mat as any)?.availableQty ?? "NaN"));
     if (Number.isFinite(avail) && qty > avail) {
@@ -181,9 +187,11 @@ export default function Production() {
       <div className="inline-flex rounded-lg bg-gray-100 p-1">
         <button className={`px-4 py-1.5 text-sm rounded-md ${view === "list" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`} onClick={() => setView("list")}>Работни налози</button>
         <button className={`px-4 py-1.5 text-sm rounded-md ${view === "schedule" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`} onClick={() => setView("schedule")}>Распоред по машини</button>
+        <button className={`px-4 py-1.5 text-sm rounded-md ${view === "nesting" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`} onClick={() => setView("nesting")}>Нестинг</button>
       </div>
 
       {view === "schedule" && <ScheduleBoard />}
+      {view === "nesting" && <NestingTab />}
 
       {view === "list" && (<>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
@@ -213,7 +221,7 @@ export default function Production() {
             <TableBody>
               {isLoading ? (<TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Вчитување...</TableCell></TableRow>)
                 : !workOrders || workOrders.length === 0 ? (<TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема работни налози</TableCell></TableRow>)
-                : workOrders.map((wo) => {
+                : workOrders.map((wo: any) => {
                     const st = statusCfg[wo.status] || statusCfg.pending;
                     const pr = priorityCfg[wo.priority] || priorityCfg.normal;
                     return (
@@ -379,7 +387,9 @@ export default function Production() {
                   <TabsTrigger value="operations"><Layers className="h-4 w-4 mr-1.5" />Операции <span className="ml-1.5 text-xs text-gray-400">{ops.length}</span></TabsTrigger>
                   <TabsTrigger value="materials"><Package className="h-4 w-4 mr-1.5" />Материјали <span className="ml-1.5 text-xs text-gray-400">{mats.length}</span></TabsTrigger>
                   <TabsTrigger value="timelogs"><Clock className="h-4 w-4 mr-1.5" />Сесии <span className="ml-1.5 text-xs text-gray-400">{logs.length}</span></TabsTrigger>
+                  <TabsTrigger value="inspection"><ClipboardCheck className="h-4 w-4 mr-1.5" />Контрола</TabsTrigger>
                 </TabsList>
+                <TabsContent value="inspection" className="mt-4"><WoInspection workOrderId={woDetail.id} /></TabsContent>
 
                 {/* ОПЕРАЦИИ */}
                 <TabsContent value="operations" className="space-y-4 mt-4">
@@ -388,6 +398,7 @@ export default function Production() {
                       <Layers className="h-8 w-8 text-gray-300 mx-auto mb-2" />
                       <p className="text-sm font-medium text-gray-600">Сè уште нема операции</p>
                       <p className="text-xs text-gray-400 mt-1">Додади ги чекорите (сечење, виткање, заварување...) — цената се пресметува од време × цена по час.</p>
+                      <Button size="sm" variant="outline" className="mt-3" disabled={applyRouting.isPending} onClick={() => applyRouting.mutate({ workOrderId: woDetail.id })}><Route className="h-3.5 w-3.5 mr-1.5" />Од технолошката постапка на производот</Button>
                     </div>
                   ) : (
                     <div className="rounded-xl border overflow-hidden">
@@ -480,7 +491,7 @@ export default function Production() {
                             <span className="font-medium min-w-[130px]">{op ? (opList[op.operation] || op.operation) : `Операција #${l.operationId}`}</span>
                             <span className="text-gray-600 text-xs">{l.operator || "—"}</span>
                             <span className="text-gray-400 text-xs">
-                              {new Date(l.startedAt).toLocaleString("mk-MK", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              {formatDateTime(l.startedAt)}
                               {l.endedAt && ` → ${new Date(l.endedAt).toLocaleTimeString("mk-MK", { hour: "2-digit", minute: "2-digit" })}`}
                             </span>
                             <span className="ml-auto font-semibold">

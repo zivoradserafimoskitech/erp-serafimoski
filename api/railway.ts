@@ -23,14 +23,130 @@ app.use("/api/*", async (c, next) => {
 });
 
 // ── Заштита со лозинка: активна ако е поставена APP_PASSWORD или постои администратор со код ──
+const clientIp = (c: any) => (c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local");
+
+// Најава: кодот се проверува еднаш и се заменува со сесија со рок (прелистувачот го чува токенот, не кодот)
 app.post("/api/auth-check", async (c) => {
-  const { resolveActor, gateActive } = await import("./context");
+  const { gateActive, resolveActor } = await import("./context");
   if (!(await gateActive())) return c.json({ ok: true, gate: false, name: "Отворен пристап", role: "admin" });
+  const auth = await import("./auth");
   const body = await c.req.json().catch(() => ({}));
-  const provided = body?.password ?? c.req.header("x-app-key") ?? "";
-  const actor = await resolveActor(provided);
-  if (!actor) return c.json({ ok: false, gate: true });
-  return c.json({ ok: true, gate: true, name: actor.name, role: actor.role });
+  const provided = String(body?.password ?? c.req.header("x-app-key") ?? "");
+  if (!provided) return c.json({ ok: false, gate: true });
+  // постоечка сесија — само провери
+  if (provided.startsWith(auth.SESSION_PREFIX)) {
+    const a = await resolveActor(provided);
+    return a ? c.json({ ok: true, gate: true, name: a.name, role: a.role, token: provided }) : c.json({ ok: false, gate: true });
+  }
+  const ip = clientIp(c);
+  const wait = auth.loginWait(ip);
+  if (wait > 0) return c.json({ ok: false, gate: true, wait, message: `Премногу погрешни обиди. Обиди се повторно за ${wait} секунди.` }, 429);
+  const actor = await auth.actorFromCode(provided).catch(() => undefined);
+  if (!actor) { auth.loginFailed(ip); return c.json({ ok: false, gate: true }); }
+  auth.loginOk(ip);
+  const token = await auth.createSession(actor, { ip, userAgent: c.req.header("user-agent") });
+  return c.json({ ok: true, gate: true, name: actor.name, role: actor.role, token });
+});
+app.post("/api/logout", async (c) => {
+  const key = c.req.header("x-app-key") ?? "";
+  const { deleteSession } = await import("./auth");
+  const { clearActorCache } = await import("./context");
+  await deleteSession(key).catch(() => {});
+  clearActorCache();
+  return c.json({ ok: true });
+});
+
+// ── Портал за клиенти: без најава, само со таен токен (секој клиент го гледа само своето) ──
+const portalHits = new Map<string, { n: number; at: number }>();
+app.use("/api/portal/*", async (c, next) => {
+  // ограничување: најмногу 120 барања во минута од една адреса (заштита од погодување токени)
+  const ip = clientIp(c);
+  const h = portalHits.get(ip);
+  const now = Date.now();
+  if (h && now - h.at < 60_000) { if (++h.n > 120) return c.json({ error: "Премногу барања" }, 429); }
+  else portalHits.set(ip, { n: 1, at: now });
+  if (portalHits.size > 5000) portalHits.clear();
+  await next();
+});
+const portalCaller = async () => {
+  const mod: any = await import("./router");
+  return mod.appRouter.createCaller({ req: new Request("http://portal"), resHeaders: new Headers(), actor: { id: null, name: "портал", role: "admin" } });
+};
+app.get("/api/portal/:token", async (c) => {
+  const { portalCustomer, portalData } = await import("./crm-router");
+  const cid = await portalCustomer(c.req.param("token"));
+  if (!cid) return c.json({ error: "Линкот не важи или е истечен. Побарајте нов од вашиот контакт." }, 404);
+  return c.json(await portalData(cid));
+});
+app.get("/api/portal/:token/invoice/:id", async (c) => {
+  const { portalCustomer } = await import("./crm-router");
+  const cid = await portalCustomer(c.req.param("token"));
+  if (!cid) return c.json({ error: "Линкот не важи" }, 404);
+  const caller = await portalCaller();
+  const inv: any = await caller.accounting.invoiceById({ id: Number(c.req.param("id")) }).catch(() => null);
+  if (!inv || Number(inv.customerId) !== cid || ["draft", "cancelled"].includes(inv.status)) return c.json({ error: "Не постои" }, 404);
+  const settings = await caller.settings.settingsGet();
+  return c.json({ invoice: inv, settings });
+});
+app.get("/api/portal/:token/cert/:id", async (c) => {
+  const { portalCustomer } = await import("./crm-router");
+  const cid = await portalCustomer(c.req.param("token"));
+  if (!cid) return c.json({ error: "Линкот не важи" }, 404);
+  const { getPool } = await import("./queries/connection");
+  const r = (await getPool().query(`SELECT c.cert_url, c.cert_number FROM dn_certificates c JOIN delivery_notes dn ON dn.id = c.delivery_note_id WHERE c.id = $1 AND dn.customer_id = $2`,
+    [Number(c.req.param("id")), cid])).rows[0];
+  if (!r?.cert_url) return c.json({ error: "Не постои" }, 404);
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(r.cert_url);
+  if (!m) return c.redirect(r.cert_url);
+  return c.body(Buffer.from(m[2], "base64"), 200, { "Content-Type": m[1], "Content-Disposition": `inline; filename="sertifikat-${String(r.cert_number ?? c.req.param("id")).replace(/[^\w-]+/g, "_")}"` });
+});
+app.post("/api/portal/:token/rfq", async (c) => {
+  const { portalCustomer, portalRfq } = await import("./crm-router");
+  const cid = await portalCustomer(c.req.param("token"));
+  if (!cid) return c.json({ error: "Линкот не важи" }, 404);
+  const body = await c.req.json().catch(() => null);
+  const title = String(body?.title ?? "").trim(), message = String(body?.message ?? "").trim();
+  if (title.length < 3) return c.json({ error: "Напишете наслов на барањето" }, 400);
+  const files = Array.isArray(body?.files) ? body.files.filter((f: any) => f && typeof f.data === "string" && f.data.length < 14_000_000) : [];
+  const r = await portalRfq(cid, { title, message, contact: body?.contact ? String(body.contact).slice(0, 255) : undefined, files });
+  return c.json({ ok: true, id: r.id });
+});
+
+// Бекап: преземање (JSON.gz), проверка на враќање во привремена шема, враќање — само администратор
+app.use("/api/admin/*", async (c, next) => {
+  const { resolveActor, gateActive } = await import("./context");
+  if (!(await gateActive())) return await next();
+  const actor = await resolveActor(c.req.header("x-app-key") ?? c.req.query("key") ?? "");
+  if (!actor || actor.role !== "admin") return c.json({ error: "Само администратор" }, 401);
+  await next();
+});
+app.get("/api/admin/backup", async (c) => {
+  const { backupStream, backupFileName, markBackup } = await import("./backup");
+  const { Readable } = await import("stream");
+  const { stream, done } = backupStream();
+  done.then((s) => markBackup("download", s)).catch((e) => console.error("[BACKUP]", e?.message ?? e));
+  return c.body(Readable.toWeb(stream) as any, 200, {
+    "Content-Type": "application/gzip",
+    "Content-Disposition": `attachment; filename="${backupFileName()}"`,
+    "Cache-Control": "no-store",
+  });
+});
+app.post("/api/admin/backup/check", async (c) => {
+  const { checkRestore } = await import("./backup");
+  const buf = Buffer.from(await c.req.arrayBuffer());
+  try { return c.json(await checkRestore(buf)); }
+  catch (e: any) { return c.json({ ok: false, error: e?.message ?? String(e) }, 400); }
+});
+app.post("/api/admin/backup/restore", async (c) => {
+  if (c.req.query("confirm") !== "ВРАТИ") return c.json({ ok: false, error: "Потребна е потврда" }, 400);
+  const { restoreBackup } = await import("./backup");
+  const buf = Buffer.from(await c.req.arrayBuffer());
+  try {
+    const r = await restoreBackup(buf);
+    const { clearActorCache } = await import("./context");
+    clearActorCache();
+    return c.json(r);
+  } catch (e: any) { return c.json({ ok: false, error: e?.message ?? String(e) }, 400); }
 });
 app.use("/api/trpc/*", async (c, next) => {
   const { resolveActor, gateActive } = await import("./context");
@@ -314,6 +430,8 @@ serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   // Автоматски потсетници по е-пошта (работи само ако се вклучени во Подесувања)
   if (process.env.DATABASE_URL && process.env.DISABLE_REMINDERS !== "true") {
     import("./reminders").then(m => m.startReminderScheduler()).catch(e => console.error("[REMINDERS]", e));
+    import("./backup").then(m => m.startBackupScheduler()).catch(e => console.error("[BACKUP]", e));
+    if (process.env.DISABLE_AUTO_LEDGER !== "true") import("./finance-router").then(m => m.startLedgerNightly()).catch(e => console.error("[LEDGER]", e));
   }
 
   // Шемата се усогласува сама при секое подигање.
@@ -331,6 +449,7 @@ serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
       } else {
         console.log(`[MIGRATE] Шемата е усогласена — ${r.created} извршени, ${r.skipped} прескокнати`);
       }
+      import("./auth").then(m => m.ensureAuthReady()).catch(e => console.error("[AUTH]", e?.message ?? e));
       import("./reconcile").then(m => m.reconcileData())
         .then(n => n && console.log(`[RECONCILE] Усогласени ${n} записи (залиха, статуси на плаќање)`))
         .catch(e => console.error("[RECONCILE]", e?.message ?? e));

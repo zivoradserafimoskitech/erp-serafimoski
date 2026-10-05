@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import DxfCalcDialog from "@/components/DxfCalcDialog";
 import { DateInput } from "@/components/ui/date-input";
 import { printQuotation, printInvoice, quotationHtml, type DocLang } from "@/lib/print-documents";
 import SendEmailDialog from "@/components/SendEmailDialog";
@@ -57,12 +58,6 @@ const prodCats: Record<string, string> = {
 };
 const prodUnits: Record<string, string> = { m2: "м²", m: "м", kg: "кг", pcs: "ком", set: "комплет" };
 
-const matTypes: Record<string, string> = {
-  steel_sheet: "Челичен лим", steel_profile: "Челичен профил", steel_bar: "Челична прачка",
-  aluminum_sheet: "Алуминиумски лим", aluminum_profile: "Алуминиумски профил",
-  stainless_sheet: "Нерѓосувачки лим", pipe: "Цевка", angle: "Аголник",
-  channel: "Канал", screws: "Завртки", welding: "Заварување", paint: "Боја", other: "Други",
-};
 const matUnits: Record<string, string> = { kg: "кг", m: "м", m2: "м²", pcs: "ком", l: "л" };
 
 export default function Quotations() {
@@ -112,7 +107,7 @@ export default function Quotations() {
   const [qSchedule, setQSchedule] = useState<Installment[]>(DEFAULT_SCHEDULE);
   // Странство = клиент од друга држава или валута различна од денари -> извоз, без ДДВ
   const isForeign = (customerId: string | number, currency: string) =>
-    currency !== "MKD" || !isDomesticCountry(customers?.find(c => String(c.id) === String(customerId))?.country);
+    currency !== "MKD" || !isDomesticCountry(customers?.find((c: any) => String(c.id) === String(customerId))?.country);
   const [qForm, setQForm] = useState({
     quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14",
     paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18",
@@ -123,7 +118,9 @@ export default function Quotations() {
     totalPrice: string; notes: string; sortOrder: number;
     weightPerUnit?: string; weightKg?: string;
     priceMode?: "unit" | "kg"; pricePerKg?: string;
+    unitCost?: string; totalCost?: string;
   }>>([]);
+  const [dxfOpen, setDxfOpen] = useState(false);
 
   const [svcForm, setSvcForm] = useState({ name: "", code: "", type: "laser_cutting" as keyof typeof svcTypes, unit: "m2" as keyof typeof svcUnits, description: "", saleRate: "0", costRate: "0" });
   const [prodForm, setProdForm] = useState({ name: "", code: "", category: "laser_fence" as keyof typeof prodCats, unit: "m2" as keyof typeof prodUnits, description: "", defaultPrice: "0", materialCost: "0", laborCost: "0" });
@@ -297,10 +294,30 @@ export default function Quotations() {
       weightPerUnit: String(i.weightPerUnit ?? "0"), weightKg: String(i.weightKg ?? "0"),
       priceMode: (i.priceMode === "kg" ? "kg" : "unit") as "unit" | "kg",
       pricePerKg: String(i.pricePerKg ?? "0"),
+      unitCost: String(i.unitCost ?? "0"), totalCost: String(i.totalCost ?? "0"),
     })));
     setEditingId(qDetail.id);
     setDetailOpen(false);
     setQDialog(true);
+  };
+
+  // причина за одбиена понуда (CRM)
+  const [lostFor, setLostFor] = useState<number | null>(null);
+  const [lostReason, setLostReason] = useState("price");
+  const [lostNote, setLostNote] = useState("");
+  const markLost = trpc.crm.quotationLost.useMutation({ onSuccess: () => { setLostFor(null); setLostNote(""); utils.quotation.invalidate(); utils.crm.invalidate(); toast.success("Запишано — причината се гледа во Продажба"); }, onError: (e) => toast.error(e.message) });
+  // кредитен лимит и цени по купувач
+  const custIdNum = qForm.customerId ? parseInt(qForm.customerId) : 0;
+  const { data: credit } = trpc.crm.creditCheck.useQuery({ customerId: custIdNum, amount: qItems.reduce((s, i) => s + (parseFloat(i.totalPrice) || 0), 0) }, { enabled: !!custIdNum && qDialog });
+  const applyCustomerPrice = async (idx: number, type: "material" | "service" | "product", refId: number | null, price: string) => {
+    if (!custIdNum || !refId) return;
+    try {
+      const r = await utils.crm.priceFor.fetch({ customerId: custIdNum, itemType: type, refId, basePrice: parseFloat(price) || 0 });
+      if (r.rule && r.price !== (parseFloat(price) || 0)) {
+        setQItems((items) => items.map((it, i) => i !== idx ? it : { ...it, unitPrice: r.price.toFixed(2), totalPrice: ((parseFloat(it.quantity) || 0) * r.price).toFixed(2), notes: it.notes || r.rule! }));
+        toast.info(`Цена за купувачот: ${r.rule}`);
+      }
+    } catch { /* без посебна цена */ }
   };
 
   const addItem = (
@@ -317,6 +334,7 @@ export default function Quotations() {
       pricePerKg: w > 0 ? ((Number(price) || 0) / w).toFixed(4) : "0",
     };
     setQItems([...qItems, newItem]);
+    void applyCustomerPrice(qItems.length, type, refId, price);
   };
 
   const updateItem = (idx: number, field: string, value: string) => {
@@ -342,6 +360,7 @@ export default function Quotations() {
 
       const p2 = parseFloat(it.unitPrice) || 0;
       it.totalPrice = (q * p2).toFixed(2);
+      if (it.unitCost) it.totalCost = (q * (parseFloat(it.unitCost) || 0)).toFixed(2);
     }
     setQItems(items);
   };
@@ -427,7 +446,7 @@ export default function Quotations() {
                   {/* Basic info */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-2"><Label>Број на понуда *</Label><Input value={qForm.quoteNumber} onChange={e => setQForm({ ...qForm, quoteNumber: e.target.value })} required disabled={!!editingId} placeholder="ПОН-2026-001" /></div>
-                    <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v, ...(isForeign(v, qForm.currency) ? { vatRate: "0" } : {}) })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Клиент *</Label><Select value={qForm.customerId} onValueChange={v => setQForm({ ...qForm, customerId: v, ...(isForeign(v, qForm.currency) ? { vatRate: "0" } : {}) })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери клиент" /></SelectTrigger><SelectContent>{customers?.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label>Важи до</Label><DateInput value={qForm.validUntil} onChange={e => setQForm({ ...qForm, validUntil: e.target.value })} /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -444,6 +463,9 @@ export default function Quotations() {
                         <Input type="number" className="w-20 h-8" value={qForm.vatRate} onChange={e => setQForm({ ...qForm, vatRate: e.target.value })} />
                       </label>
                     )}
+                    {credit && (credit.over || credit.overdueCount > 0) && (
+                      <span className="text-xs text-red-700 block">{credit.over ? `Над кредитниот лимит: отворено ${Math.round(credit.open).toLocaleString("mk-MK")} + оваа понуда > лимит ${Math.round(credit.limit ?? 0).toLocaleString("mk-MK")} ден. ` : ""}{credit.overdueCount ? `${credit.overdueCount} фактури по рок (${Math.round(credit.overdueMkd).toLocaleString("mk-MK")} ден).` : ""}</span>
+                    )}
                     {qForm.customerId && isForeign(qForm.customerId, qForm.currency) && Number(qForm.vatRate) !== 0 && (
                       <span className="text-xs text-amber-700">Клиентот е од странство / валутата не е денари — обично без ДДВ</span>
                     )}
@@ -456,19 +478,23 @@ export default function Quotations() {
                   {/* Add items section */}
                   <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
                     <h4 className="font-semibold text-sm">Додади ставки во понуда</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                       <MaterialPicker tile={{ icon: "🔩", label: "Материјал" }} title="Избери материјал" materials={materialsData as any} value={null}
                         onSelect={(m: any) => addItem("material", m.id, m.name, matUnits[m.unit] || m.unit, String(m.lastPurchasePrice ?? m.avgCost ?? "0"), String(m.weightPerUnit ?? "0"))} />
                       <MaterialPicker tile={{ icon: "⚙️", label: "Услуга" }} title="Избери услуга" value={null}
-                        materials={servicesData?.map(sv => ({ id: sv.id, code: sv.code, name: sv.name, unit: svcUnits[sv.unit] || sv.unit, lastPurchasePrice: sv.saleRate })) as any}
+                        materials={servicesData?.map((sv: any) => ({ id: sv.id, code: sv.code, name: sv.name, unit: svcUnits[sv.unit] || sv.unit, lastPurchasePrice: sv.saleRate })) as any}
                         onSelect={(sv: any) => addItem("service", sv.id, sv.name, sv.unit, String(sv.lastPurchasePrice ?? "0"))} />
                       <MaterialPicker tile={{ icon: "📦", label: "Производ (каталог)" }} title="Избери производ — ќе се отвори естиматор" value={null}
-                        materials={productsData?.map(p => ({ id: p.id, code: p.code, name: p.name, unit: prodUnits[p.unit] || p.unit, lastPurchasePrice: p.defaultPrice })) as any}
+                        materials={productsData?.map((p: any) => ({ id: p.id, code: p.code, name: p.name, unit: prodUnits[p.unit] || p.unit, lastPurchasePrice: p.defaultPrice })) as any}
                         onSelect={(p: any) => { setEstProduct(p.id); setEstForm({ area: "", perimeter: "", length: "", quantity: "1", width: "", height: "" }); setEstDialog(true); }} />
                       <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300"
                         onClick={() => { setCustomForm({ name: "", unit: "pcs", quantity: "1", salePrice: "" }); setEstMats([]); setEstSvcs([]); setCustomDialog(true); }}>
                         <span className="text-lg leading-none">✏️</span>
                         <span className="text-xs font-medium">Custom производ</span>
+                      </Button>
+                      <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300" onClick={() => setDxfOpen(true)}>
+                        <span className="text-lg leading-none">📐</span>
+                        <span className="text-xs font-medium">Од DXF цртеж</span>
                       </Button>
                     </div>
 
@@ -562,9 +588,9 @@ export default function Quotations() {
                         <div className="grid grid-cols-[1fr_6rem_auto] gap-2 items-end">
                           <MaterialPicker materials={materialsData as any} value={null} placeholder="+ материјал во естимација…"
                             onSelect={(m: any) => setEstMats([...estMats, { materialId: m.id, name: m.name, quantity: "1", price: Number(m.lastPurchasePrice ?? m.avgCost ?? 0) }])} />
-                          <Select onValueChange={v => { const s = servicesData?.find(x => x.id.toString() === v); if (s) setEstSvcs([...estSvcs, { serviceId: s.id, name: s.name, quantity: "1", rate: Number(s.costRate ?? s.saleRate ?? 0) }]); }}>
+                          <Select onValueChange={v => { const s = servicesData?.find((x: any) => x.id.toString() === v); if (s) setEstSvcs([...estSvcs, { serviceId: s.id, name: s.name, quantity: "1", rate: Number(s.costRate ?? s.saleRate ?? 0) }]); }}>
                             <SelectTrigger className="text-xs"><SelectValue placeholder="+ услуга" /></SelectTrigger>
-                            <SelectContent>{servicesData?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
+                            <SelectContent>{servicesData?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
                           </Select>
                           <span className="text-xs text-gray-500 pb-2">трошок: <b>{estCost.toLocaleString("mk-MK")}</b> ден</span>
                         </div>
@@ -679,7 +705,7 @@ export default function Quotations() {
               </TableHeader>
               <TableBody>
                 {!quotationsData?.length ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема понуди</TableCell></TableRow> :
-                  quotationsData.map(q => (
+                  quotationsData.map((q: any) => (
                     <TableRow key={q.id}>
                       <TableCell className="font-mono text-sm font-medium">{q.quoteNumber}</TableCell>
                       <TableCell>{q.customerName} {q.customerCompany ? `(${q.customerCompany})` : ""}</TableCell>
@@ -715,7 +741,7 @@ export default function Quotations() {
               </TableHeader>
               <TableBody>
                 {!servicesData?.length ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема услуги</TableCell></TableRow> :
-                  servicesData.map(s => (
+                  servicesData.map((s: any) => (
                     <TableRow key={s.id}>
                       <TableCell className="font-mono text-sm">{s.code}</TableCell>
                       <TableCell className="font-medium">{s.name}</TableCell>
@@ -741,7 +767,7 @@ export default function Quotations() {
               </TableHeader>
               <TableBody>
                 {!productsData?.length ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема производи</TableCell></TableRow> :
-                  productsData.map(p => (
+                  productsData.map((p: any) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-mono text-sm">{p.code}</TableCell>
                       <TableCell className="font-medium">{p.name}</TableCell>
@@ -878,10 +904,19 @@ export default function Quotations() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {qDetail.items.map(i => (
+                          {qDetail.items.map((i: any) => (
                             <TableRow key={i.id}>
                               <TableCell><Badge variant="outline" className="font-normal">{i.itemType === "material" ? "Мат" : i.itemType === "service" ? "Усл" : "Прд"}</Badge></TableCell>
-                              <TableCell className="font-medium text-gray-800">{i.description}</TableCell>
+                              <TableCell className="font-medium text-gray-800">{i.description}
+                                {/Цртеж #(\d+)/.test(i.notes ?? "") && (
+                                  <button type="button" className="block text-[11px] font-normal text-amber-700 hover:underline" onClick={async () => {
+                                    const d = await utils.quotation.drawingGet.fetch({ id: Number(/Цртеж #(\d+)/.exec(i.notes)![1]) });
+                                    if (!d) { toast.error("Цртежот не е пронајден"); return; }
+                                    const url = URL.createObjectURL(new Blob([d.dxf], { type: "application/dxf" }));
+                                    const a = document.createElement("a"); a.href = url; a.download = d.fileName; a.click(); setTimeout(() => URL.revokeObjectURL(url), 30_000);
+                                  }}>📐 {String(i.notes).split(" · ").slice(0, 4).join(" · ")} — преземи DXF</button>
+                                )}
+                              </TableCell>
                               <TableCell className="whitespace-nowrap text-gray-600">{i.quantity} {i.unit}</TableCell>
                               <TableCell className="text-right text-gray-600">{Number(i.unitPrice).toLocaleString("mk-MK")}</TableCell>
                               <TableCell className="text-right font-semibold text-gray-800">{Number(i.totalPrice).toLocaleString("mk-MK")}</TableCell>
@@ -897,7 +932,7 @@ export default function Quotations() {
               {/* Footer: status + convert */}
               <div className="px-8 py-4 border-t bg-gray-50 flex items-center gap-3">
                 <span className="text-sm text-gray-500">Статус:</span>
-                <Select value={qDetail.status} onValueChange={v => updateQ.mutate({ id: qDetail.id, status: v as any })}>
+                <Select value={qDetail.status} onValueChange={v => { if (v === "rejected") setLostFor(qDetail.id); else updateQ.mutate({ id: qDetail.id, status: v as any }); }}>
                   <SelectTrigger className="w-44 bg-white"><SelectValue /></SelectTrigger>
                   <SelectContent>{Object.entries(qStatus).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>
                 </Select>
@@ -1039,7 +1074,7 @@ export default function Quotations() {
       {/* BOM Estimator Dialog */}
       <Dialog open={estDialog} onOpenChange={setEstDialog}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Естиматор — {productsData?.find(x => x.id === estProduct)?.name ?? "производ"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Естиматор — {productsData?.find((x: any) => x.id === estProduct)?.name ?? "производ"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {estBom && estBom.length === 0 ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -1110,7 +1145,7 @@ export default function Quotations() {
                   </TableBody>
                 </Table>
                 <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => {
-                  const p = productsData?.find(x => x.id === estProduct);
+                  const p = productsData?.find((x: any) => x.id === estProduct);
                   if (p && estimateData) {
                     // Add product header item
                     addItem("product", p.id, `${p.name} (${estForm.area}m2)`, prodUnits[p.unit] || "m2", estimateData.totalCost);
@@ -1123,6 +1158,24 @@ export default function Quotations() {
                 }}>Додади ставки во понуда</Button>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <DxfCalcDialog open={dxfOpen} onOpenChange={setDxfOpen} materials={materialsData as any[]} onAdd={(it) => setQItems((items) => [...items, {
+        itemType: "product", referenceId: null, description: it.description, quantity: it.quantity, unit: it.unit,
+        unitPrice: it.unitPrice, totalPrice: ((parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0)).toFixed(2), notes: it.notes, sortOrder: items.length,
+        weightPerUnit: it.weightPerUnit, weightKg: ((parseFloat(it.quantity) || 0) * (parseFloat(it.weightPerUnit) || 0)).toFixed(3), priceMode: "unit",
+        pricePerKg: (parseFloat(it.weightPerUnit) || 0) > 0 ? ((parseFloat(it.unitPrice) || 0) / parseFloat(it.weightPerUnit)).toFixed(4) : "0",
+        unitCost: it.unitCost, totalCost: ((parseFloat(it.quantity) || 0) * (parseFloat(it.unitCost) || 0)).toFixed(2),
+      }])} />
+      <Dialog open={lostFor !== null} onOpenChange={(o) => !o && setLostFor(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Зошто е одбиена понудата?</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Select value={lostReason} onValueChange={setLostReason}><SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{Object.entries({ price: "Цена", delivery: "Рок на испорака", competitor: "Отиде кај конкурент", spec: "Не можеме технички", no_response: "Нема одговор", cancelled: "Клиентот се откажа", other: "Друго" }).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
+            <Input placeholder="Детали (на пр. конкурентот 10% поевтино)" value={lostNote} onChange={(e) => setLostNote(e.target.value)} />
+            <Button className="w-full" disabled={markLost.isPending} onClick={() => lostFor && markLost.mutate({ quotationId: lostFor, reason: lostReason, note: lostNote || undefined })}>Запиши</Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -60,9 +60,9 @@ export const storageRouter = createRouter({
       let result = withStock;
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
       }
-      if (input?.type) result = result.filter(r => r.type === input.type);
+      if (input?.type) result = result.filter((r: any) => r.type === input.type);
       if (input?.lowStock) {
         result = result.filter(isLowStock);
       }
@@ -80,9 +80,9 @@ export const storageRouter = createRouter({
         .from(materialStock)
         .where(eq(materialStock.materialId, input.id));
       const wh = await db.select().from(warehouses);
-      const stockWithNames = stock.map(s => ({
+      const stockWithNames = stock.map((s: any) => ({
         ...s,
-        warehouseName: wh.find(w => w.id === s.warehouseId)?.name ?? "",
+        warehouseName: wh.find((w: any) => w.id === s.warehouseId)?.name ?? "",
       }));
       return { ...result[0], stockByWarehouse: stockWithNames };
     }),
@@ -488,8 +488,8 @@ export const storageRouter = createRouter({
 
       const result = await query.orderBy(desc(inventoryTransactions.createdAt)).limit(listLimit(input as any));
       let filtered = result;
-      if (input?.materialId) filtered = filtered.filter(r => r.materialId === input.materialId);
-      if (input?.type) filtered = filtered.filter(r => r.type === input.type);
+      if (input?.materialId) filtered = filtered.filter((r: any) => r.materialId === input.materialId);
+      if (input?.type) filtered = filtered.filter((r: any) => r.type === input.type);
       return filtered;
     }),
 
@@ -530,7 +530,7 @@ export const storageRouter = createRouter({
     const allMaterials = await db.select().from(materials).where(eq(materials.isActive, "active"));
     const totalItems = allMaterials.length;
     const lowStockItems = allMaterials.filter(isLowStock).length;
-    const totalValue = allMaterials.reduce((sum, m) => sum + parseFloat(m.currentStock) * parseFloat(m.avgCost), 0);
+    const totalValue = allMaterials.reduce((sum: any, m: any) => sum + parseFloat(m.currentStock) * parseFloat(m.avgCost), 0);
 
     return { totalItems, lowStockItems, totalValue: totalValue.toFixed(2) };
   }),
@@ -542,9 +542,9 @@ export const storageRouter = createRouter({
       const db = getDb();
       let query = db.select().from(materialLots).orderBy(materialLots.date);
       const result = await query;
-      let filtered = result.filter(r => parseFloat(r.remainingQty) > 0);
-      if (input?.materialId) filtered = filtered.filter(r => r.materialId === input.materialId);
-      if (input?.warehouseId) filtered = filtered.filter(r => r.warehouseId === input.warehouseId);
+      let filtered = result.filter((r: any) => parseFloat(r.remainingQty) > 0);
+      if (input?.materialId) filtered = filtered.filter((r: any) => r.materialId === input.materialId);
+      if (input?.warehouseId) filtered = filtered.filter((r: any) => r.warehouseId === input.warehouseId);
       return filtered;
     }),
 });

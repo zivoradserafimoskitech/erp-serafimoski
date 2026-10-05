@@ -3,13 +3,25 @@ import { eq, desc } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
-import { getDb } from "./queries/connection";
+import { getDb, getPool } from "./queries/connection";
+import { DEFAULT_CUT_TABLE } from "@contracts/dxf";
 import {
   quotations, quotationItems,
   services, products, productComponents, materials,
   customers, orders, orderItems,
 } from "@db/schema";
 import { logAudit } from "./audit-helper";
+
+// Поставки за калкулација на сечење од DXF (табела брзини по дебелина, маржа, додатоци)
+const dxfSettingsSchema = z.object({
+  table: z.array(z.object({ t: z.number().positive(), speed: z.number().positive(), pierce: z.number().min(0) })).min(1).max(40),
+  machineId: z.number().nullable().default(null),
+  margin: z.number().min(0).max(500).default(30),
+  edge: z.number().min(0).max(100).default(5),
+  setupMin: z.number().min(0).max(600).default(10),
+  materialBasis: z.enum(["net", "bbox"]).default("bbox"),
+});
+const kvq = async (sql: string, params: any[] = []) => (await getPool().query(sql, params)).rows as any[];
 
 export const quotationRouter = createRouter({
   // ===== SERVICES =====
@@ -18,10 +30,10 @@ export const quotationRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       let result = await db.select().from(services).orderBy(services.name);
-      if (input?.type) result = result.filter(r => r.type === input.type);
+      if (input?.type) result = result.filter((r: any) => r.type === input.type);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
       }
       return result;
     }),
@@ -71,10 +83,10 @@ export const quotationRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       let result = await db.select().from(products).orderBy(products.name);
-      if (input?.category) result = result.filter(r => r.category === input.category);
+      if (input?.category) result = result.filter((r: any) => r.category === input.category);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
       }
       return result;
     }),
@@ -139,7 +151,7 @@ export const quotationRouter = createRouter({
       }).from(materials).where(eq(materials.isActive, "active")).orderBy(materials.name);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s));
       }
       return result;
     }),
@@ -194,6 +206,22 @@ export const quotationRouter = createRouter({
             totalCost: totalCost.toFixed(2),
             sortOrder: c.sortOrder,
           });
+        } else if (c.kind === "product") {
+          // подсклоп: по неговата цена на чинење
+          const sp = await db.select().from(products).where(eq(products.id, c.refId));
+          const unitCost = parseFloat(sp[0]?.totalCost ?? "0") || 0;
+          const totalCost = totalQty * unitCost;
+          materialCost += totalCost;
+          lineItems.push({
+            itemType: "product" as const,
+            referenceId: c.refId,
+            description: `${sp[0]?.name ?? "Подсклоп"} (подсклоп)`,
+            quantity: totalQty.toFixed(3),
+            unit: sp[0]?.unit ?? "pcs",
+            unitCost: unitCost.toFixed(2),
+            totalCost: totalCost.toFixed(2),
+            sortOrder: c.sortOrder,
+          } as any);
         } else {
           const s = await db.select().from(services).where(eq(services.id, c.refId));
           const unitCost = parseFloat(s[0]?.costRate ?? "0");
@@ -260,11 +288,15 @@ export const quotationRouter = createRouter({
           } catch { /* не е JSON — прескокни */ }
         }
       }
+      let opsAdded = 0;
       if (woId) {
         const { recalcWorkOrderCost } = await import("./wo-cost-helper");
         await recalcWorkOrderCost(woId).catch(() => {});
+        // операциите од технолошката постапка на производите во понудата
+        const { applyRoutingToWorkOrder } = await import("./mfg-router");
+        opsAdded = (await applyRoutingToWorkOrder(woId).catch(() => ({ added: 0 }))).added;
       }
-      return { success: true, woNumber, materialsCopied: mats };
+      return { success: true, woNumber, materialsCopied: mats, opsAdded };
     }),
 
   // Про-фактура од понуда (МК или EN, во валута на понудата или конвертирана со курс)
@@ -294,14 +326,14 @@ export const quotationRouter = createRouter({
 
       const f = input.priceFactor;
       const vatR = parseFloat(input.vatRate) || 0;
-      const lines = items.map((it, idx) => {
+      const lines = items.map((it: any, idx: any) => {
         const qty = parseFloat(String(it.quantity)) || 0;
         const unitPrice = Math.round(parseFloat(String(it.unitPrice)) * f * 100) / 100;
         const totalPrice = f === 1 ? parseFloat(String(it.totalPrice)) : Math.round(qty * unitPrice * 100) / 100;
         const desc = input.descriptions?.[idx]?.trim() || it.description;
         return { desc, qty, unit: it.unit, unitPrice, totalPrice };
       });
-      const subtotal = lines.reduce((s, l) => s + l.totalPrice, 0);
+      const subtotal = lines.reduce((s: any, l: any) => s + l.totalPrice, 0);
       const vatAmount = Math.round(subtotal * vatR) / 100;
 
       const { getNextDocNumber } = await import("./counters-helper");
@@ -334,7 +366,7 @@ export const quotationRouter = createRouter({
       }
       if (!insertId) throw new Error("Не може да се додели број на про-фактура");
 
-      await db.insert(documentItems).values(lines.map(l => ({
+      await db.insert(documentItems).values(lines.map((l: any) => ({
         documentId: insertId,
         documentType: "invoice" as const,
         description: l.desc,
@@ -349,6 +381,34 @@ export const quotationRouter = createRouter({
 
       await logAudit({ action: "CREATE", entityType: "invoice", entityId: insertId, description: `Про-фактура ${payload.invoiceNumber} од понуда ${quo[0].quoteNumber}` });
       return { success: true, id: insertId, invoiceNumber: payload.invoiceNumber as string };
+    }),
+
+  // ===== DXF → КАЛКУЛАЦИЈА =====
+  dxfSettingsGet: publicQuery.query(async () => {
+    const raw = (await kvq(`SELECT value FROM app_kv WHERE key = 'dxf:settings'`))[0]?.value;
+    let st: z.infer<typeof dxfSettingsSchema>;
+    try { st = dxfSettingsSchema.parse(raw ? JSON.parse(raw) : { table: DEFAULT_CUT_TABLE }); } catch { st = dxfSettingsSchema.parse({ table: DEFAULT_CUT_TABLE }); }
+    const machines = await kvq(`SELECT id, name, type, cost_per_hour, cost_per_meter FROM machines WHERE COALESCE(is_active, 'active') = 'active' ORDER BY name`);
+    return { ...st, machines: machines.map((m) => ({ id: m.id, name: m.name, type: m.type, perHour: Number(m.cost_per_hour), perMeter: Number(m.cost_per_meter) })) };
+  }),
+  dxfSettingsSave: publicQuery.input(dxfSettingsSchema).mutation(async ({ input }) => {
+    await kvq(`INSERT INTO app_kv (key, value, updated_at) VALUES ('dxf:settings', $1, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [JSON.stringify({ ...input, table: [...input.table].sort((a, b) => a.t - b.t) })]);
+    return { success: true };
+  }),
+  /** Оригиналниот цртеж се чува (за налогот и машината); ставката во понудата има врска до него. */
+  drawingSave: publicQuery
+    .input(z.object({ fileName: z.string().min(1).max(255), dxf: z.string().min(10).max(12_000_000), stats: z.any().optional(), calc: z.any().optional(), quotationId: z.number().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const r = await kvq(`INSERT INTO cad_drawings (file_name, dxf, stats, calc, quotation_id, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+        [input.fileName, input.dxf, input.stats ? JSON.stringify(input.stats) : null, input.calc ? JSON.stringify(input.calc) : null, input.quotationId ?? null, (ctx as any)?.actor?.name ?? null]);
+      return { id: Number(r[0].id) };
+    }),
+  drawingGet: publicQuery
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const r = (await kvq(`SELECT id, file_name, dxf, stats, calc, created_at FROM cad_drawings WHERE id = $1`, [input.id]))[0];
+      return r ? { id: r.id, fileName: r.file_name, dxf: r.dxf, stats: r.stats, calc: r.calc, createdAt: r.created_at } : null;
     }),
 
   quotationNextNumber: publicQuery.query(async () => {
@@ -377,10 +437,10 @@ export const quotationRouter = createRouter({
         .orderBy(desc(quotations.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.quoteNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.quoteNumber.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
       }
       return filtered;
     }),
@@ -552,8 +612,8 @@ export const quotationRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const items = await db.select().from(quotationItems).where(eq(quotationItems.quotationId, input.id));
-      const subtotal = items.reduce((s, i) => s + parseFloat(i.totalPrice), 0);
-      const costTotal = items.reduce((s, i) => s + parseFloat(i.totalCost), 0);
+      const subtotal = items.reduce((s: any, i: any) => s + parseFloat(i.totalPrice), 0);
+      const costTotal = items.reduce((s: any, i: any) => s + parseFloat(i.totalCost), 0);
       const margin = subtotal - costTotal;
       const marginPct = costTotal > 0 ? (margin / costTotal) * 100 : 0;
       const vat = subtotal * 0.18; // default
@@ -599,7 +659,7 @@ export const quotationRouter = createRouter({
       const orderId = Number(orderResult[0].insertId);
 
       if (items.length > 0) {
-        await db.insert(orderItems).values(items.map(i => ({
+        await db.insert(orderItems).values(items.map((i: any) => ({
           orderId,
           description: i.description,
           quantity: Number(i.quantity),

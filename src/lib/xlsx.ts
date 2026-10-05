@@ -54,7 +54,7 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 // Колони со пари: секогаш „1.234,00“, и кога износот е цел број
 const MONEY_HEADER = /ден|должи|побарува|салдо|износ|цена|трошок|основица|ддв|вкупно|приход|добивка|план|реално|отстапување/i;
-const moneyCols = (sh: Sheet) => new Set(sh.header.map((h, i) => i).filter(i =>
+const moneyCols = (sh: Sheet) => new Set(sh.header.map((_h, i) => i).filter(i =>
   !/%/.test(sh.header[i]) && (MONEY_HEADER.test(sh.header[i]) || sh.rows.some(r => typeof r[i] === "number" && !Number.isInteger(r[i] as number)))));
 
 function cellXml(ref: string, v: Cell, kind: "head" | "body" | "total" | "title" | "bold", money = false) {

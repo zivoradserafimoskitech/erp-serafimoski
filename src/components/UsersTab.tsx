@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
+import { formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ROLES, ROLE_ORDER, type Role } from "@contracts/roles";
-import { Plus, Pencil, Trash2, Eye, EyeOff, ShieldAlert, UserPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, KeyRound, ShieldAlert, UserPlus } from "lucide-react";
+import { login } from "@/lib/auth";
 
 function randomCode(): string {
   // Шест цифри — доволно за работилница, лесно за куцање на телефон
@@ -26,7 +28,7 @@ export default function UsersTab() {
   const utils = trpc.useUtils();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [revealed, setRevealed] = useState<Record<number, string>>({});
+  const [shownCode, setShownCode] = useState<{ name: string; code: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -45,10 +47,10 @@ export default function UsersTab() {
 
   // Првиот администратор со код ја затвора апликацијата: тој што го внесува се најавува со тој код,
   // за да не остане заклучен надвор
-  const afterGate = (r: any, vars: any) => {
+  const afterGate = async (r: any, vars: any) => {
     if (!r?.gateActivated) return;
     if (vars?.passcode && (vars.role ?? "admin") === "admin") {
-      window.localStorage.setItem("appKey", vars.passcode);
+      await login(vars.passcode).catch(() => null);
       alert(`Апликацијата сега бара код за пристап. Најавен си како „${vars.name ?? "администратор"}“ со кодот што го внесе — запиши го.`);
     } else {
       alert("Апликацијата сега бара код за пристап. Најави се со кодот на администраторот.");
@@ -66,16 +68,17 @@ export default function UsersTab() {
     onError: (e) => setErr(e.message),
   });
 
-  const reveal = async (id: number) => {
-    if (revealed[id]) {
-      const next = { ...revealed };
-      delete next[id];
-      setRevealed(next);
-      return;
-    }
-    const r = await utils.appUsers.appUsersRevealCode.fetch({ id });
-    if (r?.passcode) setRevealed({ ...revealed, [id]: r.passcode });
-  };
+  const resetCode = trpc.appUsers.appUsersResetCode.useMutation({
+    onSuccess: (r, v) => {
+      utils.appUsers.appUsersList.invalidate();
+      setShownCode({ name: users?.find((u: any) => u.id === v.id)?.name ?? "", code: r.code });
+    },
+    onError: (e) => setErr(e.message),
+  });
+  const revoke = trpc.appUsers.appUsersRevokeSessions.useMutation({
+    onSuccess: (r) => { utils.appUsers.appUsersList.invalidate(); alert(r.revoked ? `Одјавени ${r.revoked} уреди` : "Нема најавени уреди"); },
+    onError: (e) => setErr(e.message),
+  });
 
   const openNew = () => {
     setEditing(null);
@@ -186,11 +189,19 @@ export default function UsersTab() {
                     }>{ROLES[u.role as Role]?.label ?? u.role}</Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="font-mono text-sm">{revealed[u.id] ?? u.passcodeHint}</span>
+                    <span className="font-mono text-sm">{u.passcodeHint}</span>
                     <button className="ml-2 text-gray-400 hover:text-gray-700 align-middle"
-                      onClick={() => reveal(u.id)} title="Прикажи / скриј">
-                      {revealed[u.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      onClick={() => { if (confirm(`Нов код за ${u.name}? Стариот престанува да важи и корисникот се одјавува од сите уреди.`)) resetCode.mutate({ id: u.id }); }}
+                      title="Постави нов код">
+                      <KeyRound className="h-3.5 w-3.5" />
                     </button>
+                    {u.sessions > 0 && (
+                      <button className="block text-[11px] text-gray-500 hover:text-red-600"
+                        onClick={() => { if (confirm(`Да се одјави ${u.name} од сите уреди (${u.sessions})?`)) revoke.mutate({ id: u.id }); }}
+                        title="Одјави од сите уреди">
+                        најавен на {u.sessions} {u.sessions === 1 ? "уред" : "уреди"} · одјави
+                      </button>
+                    )}
                   </TableCell>
                   <TableCell>
                     <button
@@ -207,7 +218,7 @@ export default function UsersTab() {
                   </TableCell>
                   <TableCell className="text-xs text-gray-500">
                     {u.lastSeenAt
-                      ? new Date(u.lastSeenAt).toLocaleString("mk-MK", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                      ? formatDateTime(u.lastSeenAt)
                       : "—"}
                   </TableCell>
                   <TableCell>
@@ -229,9 +240,19 @@ export default function UsersTab() {
       </Card>
 
       <p className="text-xs text-gray-400">
-        Главната лозинка од подесувањата на серверот и понатаму работи и секогаш е администратор —
-        задржи ја како резервен влез ако некој си го заборави кодот.
+        Кодовите се чуваат шифрирани — не може да се прочитаат, само да се постави нов (копчето со клуч).
+        Најавата важи 30 дена од последната употреба на уредот. Главната лозинка од подесувањата на серверот
+        и понатаму работи и секогаш е администратор — задржи ја како резервен влез.
       </p>
+
+      <Dialog open={!!shownCode} onOpenChange={(o) => !o && setShownCode(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Нов код за {shownCode?.name}</DialogTitle></DialogHeader>
+          <p className="text-center font-mono text-3xl tracking-widest py-2">{shownCode?.code}</p>
+          <p className="text-xs text-gray-500">Запиши го и дај му го на корисникот — по затворањето не може повторно да се види.</p>
+          <div className="flex justify-end"><Button onClick={() => setShownCode(null)}>Запишав</Button></div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">

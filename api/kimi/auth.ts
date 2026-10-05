@@ -104,12 +104,13 @@ export function createOAuthCallbackHandler() {
         throw new Error("Failed to fetch user profile from Kimi Open");
       }
 
+      // улогата не се праќа — при ажурирање не смее да ја препише постоечката (базата има default)
       await upsertUser({
         unionId: userId,
         name: userProfile.name,
         avatar: userProfile.avatar_url,
         lastSignInAt: new Date(),
-      });
+      } as any);
 
       const token = await signSessionToken({
         unionId: userId,

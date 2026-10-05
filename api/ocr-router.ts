@@ -7,13 +7,11 @@ import {
   parsedInvoices,
   parsedReceiptItems,
   materials,
-  suppliers,
 } from "@db/schema";
 import {
   parsePdfDocument,
   parseTextDocument,
   matchItemsToMaterials,
-  type MatchedItem,
 } from "./ocr-service";
 
 export const ocrRouter = createRouter({
@@ -234,8 +232,8 @@ export const ocrRouter = createRouter({
         .orderBy(desc(parsedInvoices.createdAt));
 
       let filtered = result;
-      if (input?.documentType) filtered = filtered.filter(r => r.documentType === input.documentType);
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
+      if (input?.documentType) filtered = filtered.filter((r: any) => r.documentType === input.documentType);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
 
       return filtered;
     }),

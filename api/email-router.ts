@@ -100,7 +100,7 @@ export const emailRouter = createRouter({
         return {
           success: true,
           message: `Пронајдени ${fetched.length} фактури, зачувани ${storedIds.length} нови.`,
-          invoices: fetched.map((f, i) => ({
+          invoices: fetched.map((f) => ({
             subject: f.subject,
             sender: f.senderName || f.senderEmail,
             filename: f.pdfFilename,
@@ -122,11 +122,12 @@ export const emailRouter = createRouter({
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let query = db.select().from(emailInvoices).orderBy(desc(emailInvoices.createdAt));
-      const result = await query;
+      const rows = await db.select().from(emailInvoices).orderBy(desc(emailInvoices.createdAt));
+      // PDF-от не се праќа во листата (може да е голем) — само дали го има; се отвора со accounting.documentFile
+      const result = rows.map(({ pdfBase64, ...r }: any) => ({ ...r, hasPdf: !!pdfBase64 }));
 
       if (input?.status) {
-        return result.filter(r => r.status === input.status);
+        return result.filter((r: any) => r.status === input.status);
       }
       return result;
     }),

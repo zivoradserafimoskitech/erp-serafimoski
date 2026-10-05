@@ -91,6 +91,10 @@ export async function weeklyReport() {
   const cash = await one(`SELECT COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) b FROM cash_transactions`);
   const qual = await one(`SELECT COUNT(*) FILTER (WHERE status <> 'closed')::int open, COUNT(*) FILTER (WHERE issue_date >= CURRENT_DATE - 7)::int week FROM quality_issues`);
   const maint = await one(`SELECT COUNT(*)::int n FROM maintenance_plans WHERE is_active = 'active' AND (last_done IS NULL OR last_done + interval_days <= CURRENT_DATE)`);
+  // мерни инструменти со истечена калибрација или во следните 14 дена; застои на машините оваа недела
+  const cal = await q(`SELECT name, next_due FROM instruments WHERE status = 'active' AND next_due IS NOT NULL AND next_due <= CURRENT_DATE + 14 ORDER BY next_due`).catch(() => [] as any[]);
+  const down = await one(`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(end_at, now()) - GREATEST(start_at, now() - interval '7 days'))) / 3600), 0) AS h, COUNT(*)::int AS n
+    FROM machine_downtime WHERE COALESCE(end_at, now()) >= now() - interval '7 days' AND reason NOT IN ('maintenance', 'no_work')`).catch(() => ({} as any));
   return {
     invoicedCount: inv.n ?? 0, invoicedMkd: Number(inv.mkd ?? 0), invoicedFx: inv.fx ?? 0,
     paymentsReceived: Number(paid.s ?? 0),
@@ -98,6 +102,8 @@ export async function weeklyReport() {
     woDone: wos.done ?? 0, woLate: wos.late ?? 0, woOpen: wos.open ?? 0,
     overdueCount: overdue.length, overdueMkd: overdue.filter(o => o.currency === "MKD").reduce((a, o) => a + o.open, 0), overdueTop: overdue.slice(0, 5),
     cashBalance: Number(cash.b ?? 0), qualityOpen: qual.open ?? 0, qualityWeek: qual.week ?? 0, maintenanceDue: maint.n ?? 0,
+    calibrationDue: cal.map((c: any) => ({ name: String(c.name), due: iso(c.next_due) })),
+    downtimeHours: Math.round(Number(down.h ?? 0) * 10) / 10, downtimeCount: Number(down.n ?? 0),
   };
 }
 
@@ -150,7 +156,9 @@ export async function sendWeekly(s: ReminderSettings) {
       `ПРОДАЖБА\n  Фактурирано: ${r.invoicedCount} фактури, ${money(r.invoicedMkd)}${r.invoicedFx ? ` + ${r.invoicedFx} во странска валута` : ""}\n  Наплатено: ${money(r.paymentsReceived)}\n  Нови понуди: ${r.quotesNew}, од нив прифатени: ${r.quotesWon}\n\n` +
       `ПРОИЗВОДСТВО\n  Завршени налози: ${r.woDone}\n  Отворени: ${r.woOpen}, од нив доцнат: ${r.woLate}\n\n` +
       `НАПЛАТА\n  Фактури по рок: ${r.overdueCount} (${money(r.overdueMkd)} во денари)${top ? "\n" + top : ""}\n  Благајна: ${money(r.cashBalance)}\n\n` +
-      `КВАЛИТЕТ И ОДРЖУВАЊЕ\n  Отворени неусогласености: ${r.qualityOpen} (нови оваа недела: ${r.qualityWeek})\n  Сервиси што доцнат: ${r.maintenanceDue}\n` });
+      `КВАЛИТЕТ И ОДРЖУВАЊЕ\n  Отворени неусогласености: ${r.qualityOpen} (нови оваа недела: ${r.qualityWeek})\n  Сервиси што доцнат: ${r.maintenanceDue}\n` +
+      `  Застои на машините: ${r.downtimeCount} (${r.downtimeHours} ч)\n` +
+      (r.calibrationDue.length ? `  Калибрација на мерни инструменти (истечена или во 14 дена):\n${r.calibrationDue.map((c) => `   • ${c.name} — ${dmy(c.due)}`).join("\n")}\n` : "") });
   return { sent: 1 };
 }
 

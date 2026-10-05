@@ -3,7 +3,8 @@ import { accountantReportHtml, htmlToPdfBlob, invoiceHtml } from "@/lib/print-do
 
 const SOURCE: Record<string, string> = {
   invoice: "Излезна фактура", incoming_invoice: "Влезна фактура", bank_alloc: "Банка", cash: "Благајна", payroll: "Плати",
-  depreciation: "Амортизација", advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха",
+  depreciation: "Амортизација", depreciation_m: "Амортизација", advance_settle: "Аванс", manual: "Рачен налог", stock_move: "Залиха",
+  bank_other: "Банка", bank_fee: "Провизија", year_close: "Затворање година", inventory_value: "Залихи на производи", compensation: "Компензација",
 };
 const VAT_KEY: Record<string, string> = { "0-export": "0% извоз / странство", "0-exempt": "0% ослободено" };
 const STATUS: Record<string, string> = {
@@ -19,6 +20,8 @@ type Fetchers = {
   vatBooks: (i: { from: string; to: string }) => Promise<any>;
   trialBalance: (i: { from: string; to: string }) => Promise<any>;
   journalList: (i: { from: string; to: string; limit: number; offset: number }) => Promise<any>;
+  vat04?: (i: { from: string; to: string }) => Promise<any>;
+  statements?: (i: { date: string; from: string }) => Promise<any>;
 };
 
 export const packName = (from: string, to: string) => `smetkovodstvo_${from}_${to}`;
@@ -41,7 +44,8 @@ export async function buildAccountantXlsx(report: any, from: string, to: string,
     journal.push(...page.entries);
     if (journal.length >= page.total || !page.entries.length) break;
   }
-  const [vat, tb] = await Promise.all([f.vatBooks({ from, to }), f.trialBalance({ from, to })]);
+  const [vat, tb, v04, fs] = await Promise.all([f.vatBooks({ from, to }), f.trialBalance({ from, to }),
+    f.vat04 ? f.vat04({ from, to }) : null, f.statements ? f.statements({ date: to, from: `${to.slice(0, 4)}-01-01` }) : null]);
   const period = `Период: ${fmtD(from)} – ${fmtD(to)}`;
   const head = (t: string) => [`${company ? company + " — " : ""}${t}`, period];
 
@@ -101,6 +105,27 @@ export async function buildAccountantXlsx(report: any, from: string, to: string,
     { name: "Требовања", title: head("Потрошен материјал по налози"), header: ["Работен налог", "Датум", "Материјал", "Количина", "Единица", "Цена (ден)", "Вкупно (ден)"],
       rows: req, total: ["Вкупно", null, null, null, null, null, sum(req, 6)] },
   ];
+  if (v04) {
+    const rows: Cell[][] = v04.lines.map((l: any) => [v04.codes?.[l.key] ?? "", l.label, l.base, l.vat]);
+    sheets.splice(3, 0, { name: "ДДВ-04", title: head("ДДВ-04 — износи по полиња"), header: ["Поле", "Опис", "Основица (ден)", "ДДВ (ден)"], rows,
+      boldRows: v04.lines.map((l: any, i: number) => (l.side === "total" ? i : -1)).filter((i: number) => i >= 0), widths: [8, 80, 18, 18] });
+  }
+  if (fs) {
+    const st = (rows: any[]): Cell[][] => rows.map((r) => [fs.codes?.[r.key] ?? "", r.label, r.amount]);
+    const bsRows: Cell[][] = [], bsBold: number[] = [];
+    for (const [title, secs, total] of [["Актива", fs.balanceSheet.assets, fs.balanceSheet.totalAssets], ["Пасива", fs.balanceSheet.liabilities, fs.balanceSheet.totalLiabilities]] as const) {
+      for (const sec of secs as any[]) { bsBold.push(bsRows.length); bsRows.push(["", sec.label, Math.round(sec.rows.reduce((a: number, r: any) => a + r.amount, 0) * 100) / 100]); bsRows.push(...st(sec.rows)); }
+      bsBold.push(bsRows.length); bsRows.push(["", `Вкупно ${title.toLowerCase()}`, total as number]);
+    }
+    const is = fs.incomeStatement;
+    const isRows: Cell[][] = [["", "Приходи", is.totalRevenue], ...st(is.revenue), ["", "Расходи", is.totalExpense], ...st(is.expense),
+      ["", "Резултат пред оданочување", is.beforeTax], ...st([is.tax]), ["", "Нето резултат", is.net]];
+    const isBold = [0, is.revenue.length + 1, is.revenue.length + is.expense.length + 2, isRows.length - 1];
+    const asOf = [`${company ? company + " — " : ""}Биланс на состојба`, `на ${fmtD(to)} (работна верзија од главната книга)`];
+    sheets.push({ name: "Биланс на состојба", title: asOf, header: ["АОП", "Позиција", "Износ (ден)"], rows: bsRows, boldRows: bsBold, widths: [8, 70, 18] });
+    sheets.push({ name: "Биланс на успех", title: [`${company ? company + " — " : ""}Биланс на успех`, `${fmtD(fs.from)} – ${fmtD(to)} (работна верзија од главната книга)`],
+      header: ["АОП", "Позиција", "Износ (ден)"], rows: isRows, boldRows: isBold, widths: [8, 70, 18] });
+  }
   return buildXlsx(sheets);
 }
 

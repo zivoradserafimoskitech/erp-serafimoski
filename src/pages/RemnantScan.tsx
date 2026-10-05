@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Scissors, ArrowLeft, MapPin, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 
-const UNIT_MK: Record<string, string> = { kg: "кг", m: "м", m2: "м²", pcs: "ком", l: "л", sheet: "табла" };
 
 export default function RemnantScan() {
   const { code } = useParams<{ code: string }>();

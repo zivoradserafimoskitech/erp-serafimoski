@@ -25,6 +25,8 @@ export default function AccountantPackActions({ report, from, to }: { report: an
   const fetchers = {
     vatBooks: (i: { from: string; to: string }) => utils.finance.vatBooks.fetch(i),
     trialBalance: (i: { from: string; to: string }) => utils.finance.trialBalance.fetch(i),
+    vat04: (i: { from: string; to: string }) => utils.finance.vat04.fetch(i),
+    statements: (i: { date: string; from: string }) => utils.finance.financialStatements.fetch(i),
     journalList: (i: { from: string; to: string; limit: number; offset: number }) => utils.finance.journalList.fetch(i),
   };
   const docFetchers = {

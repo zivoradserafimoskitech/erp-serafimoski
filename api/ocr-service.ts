@@ -1,5 +1,5 @@
 import { getDb } from "./queries/connection";
-import { materials, suppliers } from "@db/schema";
+import { materials } from "@db/schema";
 import { eq } from "drizzle-orm";
 
 // Dynamic imports for ESM compatibility
@@ -25,7 +25,7 @@ async function loadPdfParse() {
 
 async function loadFuse() {
   if (!Fuse) {
-    const mod = await import("fuse.js");
+    const mod: any = await import("fuse.js");
     Fuse = mod.default || mod.Fuse || mod;
   }
   return Fuse;
@@ -139,7 +139,6 @@ function extractDocumentInfo(text: string): {
   vatAmount: string | null;
   currency: string | null;
 } {
-  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
   // Try to find supplier name - usually first few lines contain company name
   let supplierName: string | null = null;
@@ -401,7 +400,7 @@ export async function matchItemsToMaterials(
   const Fuse = await loadFuse();
 
   // Build searchable list
-  const searchList = allMaterials.map(m => ({
+  const searchList = allMaterials.map((m: any) => ({
     id: m.id,
     name: m.name,
     code: m.code,

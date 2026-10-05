@@ -15,10 +15,10 @@ export const catalogRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       let result = await db.select().from(machines).orderBy(machines.name);
-      if (input?.type) result = result.filter(r => r.type === input.type);
+      if (input?.type) result = result.filter((r: any) => r.type === input.type);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        result = result.filter(r => r.name.toLowerCase().includes(s));
+        result = result.filter((r: any) => r.name.toLowerCase().includes(s));
       }
       return result;
     }),
@@ -174,6 +174,9 @@ export const catalogRouter = createRouter({
         if (c.kind === "material") {
           const m = await db.select().from(materials).where(eq(materials.id, c.refId));
           name = m[0]?.name ?? "";
+        } else if (c.kind === "product") {
+          const pr = await db.select().from(products).where(eq(products.id, c.refId));
+          name = pr[0] ? `${pr[0].name} (подсклоп)` : "";
         } else {
           const s = await db.select().from(services).where(eq(services.id, c.refId));
           name = s[0]?.name ?? "";
@@ -186,7 +189,7 @@ export const catalogRouter = createRouter({
   bomCreate: publicQuery
     .input(z.object({
       productId: z.number(),
-      kind: z.enum(["material", "service"]),
+      kind: z.enum(["material", "service", "product"]),
       refId: z.number(),
       perUnit: z.string(),
       wastePct: z.string().default("0"),
@@ -196,6 +199,8 @@ export const catalogRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      // подсклоп: не смее да биде самиот производ или да го содржи (круг)
+      if (input.kind === "product") { const { assertNoCycle } = await import("./mfg-router"); await assertNoCycle(input.productId, input.refId); }
       await db.insert(productComponents).values(input as any);
       return { success: true };
     }),
@@ -250,6 +255,9 @@ export const catalogRouter = createRouter({
           const m = await db.select().from(materials).where(eq(materials.id, c.refId));
           unitCost = parseFloat(m[0]?.avgCost ?? "0") || parseFloat(m[0]?.lastPurchasePrice ?? "0") || 0;
           materialCost += qty * unitCost;
+        } else if (c.kind === "product") {
+          const sub = await db.select().from(products).where(eq(products.id, c.refId));
+          materialCost += qty * (parseFloat(sub[0]?.totalCost ?? "0") || 0);
         } else {
           const s = await db.select().from(services).where(eq(services.id, c.refId));
           unitCost = parseFloat(s[0]?.costRate ?? "0");
@@ -367,6 +375,11 @@ export const catalogRouter = createRouter({
         if (c.kind === "material") {
           const m = await db.select().from(materials).where(eq(materials.id, c.refId));
           unitCost = parseFloat(m[0]?.avgCost ?? "0") || parseFloat(m[0]?.lastPurchasePrice ?? "0");
+          totalCost = totalQty * unitCost;
+          materialCost += totalCost;
+        } else if (c.kind === "product") {
+          const sub = await db.select().from(products).where(eq(products.id, c.refId));
+          unitCost = parseFloat(sub[0]?.totalCost ?? "0") || 0;
           totalCost = totalQty * unitCost;
           materialCost += totalCost;
         } else {

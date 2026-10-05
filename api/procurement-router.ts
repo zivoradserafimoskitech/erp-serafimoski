@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq, desc, like } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
-import { getDb } from "./queries/connection";
+import { getDb, getPool } from "./queries/connection";
 import { suppliers, purchaseOrders, purchaseOrderItems, materials, workOrders, workOrderMaterials } from "@db/schema";
 // audit helper available for future use
 
@@ -39,10 +39,12 @@ export const procurementRouter = createRouter({
       paymentTerms: z.string().default("30 дена"),
       defaultCurrency: z.string().default("MKD"),
       materials: z.string().optional(),
+      bankAccount: z.string().max(40).optional(),
+      leadTimeDays: z.number().int().min(0).max(365).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const r = await db.insert(suppliers).values(input);
+      const r = await db.insert(suppliers).values({ ...input, edb: input.edb || undefined, bankAccount: input.bankAccount?.replace(/\s+/g, "") || undefined });
       return { success: true, id: Number((r as any)[0]?.insertId) };
     }),
 
@@ -60,6 +62,8 @@ export const procurementRouter = createRouter({
       paymentTerms: z.string().optional(),
       defaultCurrency: z.string().optional(),
       materials: z.string().optional(),
+      bankAccount: z.string().max(40).optional(),
+      leadTimeDays: z.number().int().min(0).max(365).optional(),
       isActive: z.enum(["active", "inactive"]).optional(),
     }))
     .mutation(async ({ input }) => {
@@ -96,11 +100,11 @@ export const procurementRouter = createRouter({
         .orderBy(desc(purchaseOrders.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
-      if (input?.supplierId) filtered = filtered.filter(r => r.supplierId === input.supplierId);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
+      if (input?.supplierId) filtered = filtered.filter((r: any) => r.supplierId === input.supplierId);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.poNumber.toLowerCase().includes(s) || r.supplierName?.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.poNumber.toLowerCase().includes(s) || r.supplierName?.toLowerCase().includes(s));
       }
       return filtered;
     }),
@@ -179,18 +183,33 @@ export const procurementRouter = createRouter({
         incoming.set(r.materialId, (incoming.get(r.materialId) ?? 0) + remain);
       }
 
+      // Нарачки без налог: потреба по нормативот (со подсклоповите), и најран датум на потреба
+      const { orderBomDemand } = await import("./mfg-router");
+      const fromOrders = await orderBomDemand();
+      const needDates = new Map<number, string>();
+      for (const r of (await getPool().query(`SELECT wm.material_id, MIN(COALESCE(w.planned_start, w.created_at))::date AS d FROM work_order_materials wm
+          JOIN work_orders w ON w.id = wm.work_order_id WHERE wm.is_actual <> 'actual' AND w.status NOT IN ('completed','cancelled') GROUP BY 1`)).rows as any[])
+        needDates.set(Number(r.material_id), new Date(r.d).toISOString().slice(0, 10));
+
       const rows = (mats as any[]).map((m) => {
         const stock = Number(m.currentStock ?? 0) || 0;
         const min = Number(m.minStock ?? 0) || 0;
         const res = reserved.get(m.id);
+        const ord = fromOrders.get(m.id);
+        const orderQty = ord?.qty ?? 0;
         const reservedQty = res?.qty ?? 0;
         const inc = Math.round((incoming.get(m.id) ?? 0) * 1000) / 1000;
-        const need = reservedQty + (useMin ? min : 0) - stock - inc;
+        const need = reservedQty + orderQty + (useMin ? min : 0) - stock - inc;
+        const dates = [needDates.get(m.id), ord?.date].filter(Boolean) as string[];
+        const needDate = dates.length ? dates.sort()[0] : null;
         const price = Number(m.lastPurchasePrice ?? 0) || Number(m.avgCost ?? 0) || 0;
         return {
           id: m.id, code: m.code, name: m.name, unit: m.unit,
           currentStock: stock, minStock: min,
           reservedQty: Math.round(reservedQty * 1000) / 1000,
+          orderQty: Math.round(orderQty * 1000) / 1000,
+          orders: ord ? Array.from(ord.orders) : [],
+          needDate,
           incoming: inc,
           workOrders: res ? Array.from(res.wos) : [],
           shortage: Math.round(Math.max(0, need) * 1000) / 1000,
@@ -204,10 +223,18 @@ export const procurementRouter = createRouter({
       // Име на добавувачот
       const sups = await db.select().from(suppliers);
       const supMap = new Map((sups as any[]).map((x) => [x.id, x.name]));
-      const withSup = rows.map((r) => ({
-        ...r,
-        supplierName: r.defaultSupplierId ? (supMap.get(r.defaultSupplierId) ?? null) : null,
-      }));
+      const leadMap = new Map((sups as any[]).map((x) => [x.id, Number(x.leadTimeDays ?? 0) || 7]));
+      const today = new Date().toISOString().slice(0, 10);
+      const withSup = rows.map((r) => {
+        const lead = r.defaultSupplierId ? (leadMap.get(r.defaultSupplierId) ?? 7) : 7;
+        // нарачај до = потребно на − рок на испорака (ако веќе поминало → денес, итно)
+        const orderBy = r.needDate ? new Date(new Date(r.needDate + "T00:00:00Z").getTime() - lead * 86400000).toISOString().slice(0, 10) : null;
+        return {
+          ...r,
+          supplierName: r.defaultSupplierId ? (supMap.get(r.defaultSupplierId) ?? null) : null,
+          leadTimeDays: lead, orderBy, urgent: !!orderBy && orderBy <= today,
+        };
+      });
 
       withSup.sort((a, b) => b.estCost - a.estCost);
 
@@ -217,6 +244,8 @@ export const procurementRouter = createRouter({
           count: withSup.length,
           estCost: Math.round(withSup.reduce((a, r) => a + r.estCost, 0)),
           fromWorkOrders: withSup.filter((r) => r.reservedQty > 0).length,
+          fromOrders: withSup.filter((r) => r.orderQty > 0).length,
+          urgent: withSup.filter((r) => r.urgent).length,
           noSupplier: withSup.filter((r) => !r.defaultSupplierId).length,
         },
       };
@@ -326,6 +355,9 @@ export const procurementRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...data } = input;
+      // над прагот: прво одобрување од администратор
+      const { assertPoApproved } = await import("./purch-router");
+      await assertPoApproved(id, data.status);
       const updateData: any = { ...data };
       if (data.expectedDate) updateData.expectedDate = new Date(data.expectedDate);
       await db.update(purchaseOrders).set(updateData).where(eq(purchaseOrders.id, id));
@@ -382,7 +414,7 @@ export const procurementRouter = createRouter({
 
       // Check if all items received
       const allItems = await db.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.purchaseOrderId, item[0].purchaseOrderId));
-      const allReceived = allItems.every(i => parseFloat(i.receivedQuantity) >= parseFloat(i.quantity));
+      const allReceived = allItems.every((i: any) => parseFloat(i.receivedQuantity) >= parseFloat(i.quantity));
       if (allReceived) {
         await db.update(purchaseOrders).set({ status: "received" }).where(eq(purchaseOrders.id, item[0].purchaseOrderId));
       } else if (parseFloat(newReceived) > 0) {

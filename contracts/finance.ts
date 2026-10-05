@@ -279,6 +279,21 @@ export function calcPayroll(gross: number, p: PayrollParams) {
   return { gross: round2(gross), contributions, taxBase, incomeTax, net };
 }
 
+/** Придонесите по фондови (стапки од 2024: ПИО 18,8 · здравствено 7,5 · вработување 1,2 · дополнително 0,5 = 28%); при друга вкупна стапка — пропорционално. */
+export const CONTRIB_SPLIT: { key: string; label: string; rate: number }[] = [
+  { key: "pio", label: "ПИО (пензиско)", rate: 18.8 }, { key: "health", label: "Здравствено", rate: 7.5 },
+  { key: "employment", label: "Вработување", rate: 1.2 }, { key: "extra_health", label: "Дополнително здравствено (повреда, проф. болест)", rate: 0.5 },
+];
+export function splitContributions(gross: number, totalRate: number) {
+  const base = CONTRIB_SPLIT.reduce((s, c) => s + c.rate, 0);
+  const parts = CONTRIB_SPLIT.map((c) => ({ ...c, rate: Math.round((c.rate * totalRate / base) * 100) / 100, amount: round2(gross * (c.rate * totalRate / base) / 100) }));
+  // заокружување: збирот да е еднаков на вкупните придонеси
+  const total = round2(gross * totalRate / 100);
+  const diff = round2(total - parts.reduce((s, x) => s + x.amount, 0));
+  if (diff) parts[0].amount = round2(parts[0].amount + diff);
+  return parts;
+}
+
 export function payrollLines(p: { gross: number; contributions: number; incomeTax: number; net: number; period: string; rules: Rules }): GlLine[] {
   return fixRounding(normalizeLines([
     { account: p.rules.salary_expense, debit: p.gross, credit: 0, description: `Плати ${p.period}` },

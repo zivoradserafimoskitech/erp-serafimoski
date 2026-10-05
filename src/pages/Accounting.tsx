@@ -1,9 +1,10 @@
 import { DateInput } from "@/components/ui/date-input";
+import { openStoredFile } from "@/lib/stored-file";
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,12 +23,10 @@ import { useSearchParams, useNavigate } from "react-router";
 import { formatDate } from "@/lib/utils";
 import AccountantPackActions from "@/components/AccountantPackActions";
 import { DnCertificates } from "@/components/DnCertificates";
-import {
-  Search, Plus, Trash2, Eye, FileText, Download, FileUp,
-  Receipt, Truck, ArrowUpRight, ArrowDownLeft, Calculator,
-  Radio, RefreshCw, Send, SearchIcon, Upload, Building2, Zap,
-  HardHat, Paintbrush, Fuel, ClipboardList, Star, CheckCircle, ShieldCheck, Landmark, Undo2,
-} from "lucide-react";
+import InvoiceItemForm from "./accounting/InvoiceItemForm";
+import UJPEFakturaTab from "./accounting/UJPEFakturaTab";
+import EmailInvoicesTab from "./accounting/EmailInvoicesTab";
+import { Search, Plus, Trash2, Eye, FileText, Download, FileUp, Truck, ArrowUpRight, ArrowDownLeft, Calculator, Upload, Building2, ShieldCheck, Undo2 } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
 const invStatus: Record<string, { label: string; cls: string }> = {
@@ -361,7 +360,7 @@ export default function Accounting() {
               }} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Број (по ред)</Label><Input value={outForm.invoiceNumber || nextInvoiceNum || ""} readOnly className="bg-gray-50" title="Фактурите се нумерираат по ред, без празнини — бројот го дава програмата" /></div>
-                    <div className="space-y-2"><Label>Клиент *</Label><Select value={outForm.customerId} onValueChange={(v) => setOutForm({ ...outForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Клиент *</Label><Select value={outForm.customerId} onValueChange={(v) => setOutForm({ ...outForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Датум на издавање *</Label><DateInput value={outForm.issueDate} onChange={(e) => setOutForm({ ...outForm, issueDate: e.target.value })} required /></div>
@@ -491,7 +490,7 @@ export default function Accounting() {
                   <div className="space-y-2">
                     <Label className="text-xs text-gray-500">Најчести добавувачи:</Label>
                     <div className="flex flex-wrap gap-2">
-                      {suppliers?.slice(0, 8).map(s => (
+                      {suppliers?.slice(0, 8).map((s: any) => (
                         <Button key={s.id} type="button" size="sm" variant={incForm.supplierId === s.id.toString() ? "default" : "outline"}
                           className="text-xs h-7"
                           onClick={() => setIncForm({ ...incForm, supplierId: s.id.toString() })}>
@@ -503,7 +502,7 @@ export default function Accounting() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1"><Label>Број од добавувач *</Label><Input value={incForm.supplierInvoiceNumber} onChange={(e) => setIncForm({ ...incForm, supplierInvoiceNumber: e.target.value })} required placeholder="на пр. 1-A-4840" /></div>
-                    <div className="space-y-1"><Label>Добавувач *</Label><Select value={incForm.supplierId} onValueChange={(v) => setIncForm({ ...incForm, supplierId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери добавувач" /></SelectTrigger><SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1"><Label>Добавувач *</Label><Select value={incForm.supplierId} onValueChange={(v) => setIncForm({ ...incForm, supplierId: v })}><SelectTrigger className="w-full"><SelectValue placeholder="Избери добавувач" /></SelectTrigger><SelectContent>{suppliers?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <IncomingAccountPicker supplierId={incForm.supplierId ? Number(incForm.supplierId) : undefined} text={[incForm.notes, ...incItems.map((i: any) => i.description)].join(" ")}
                     value={incForm.expenseAccount} onChange={(v) => setIncForm(f => ({ ...f, expenseAccount: v }))} onNeedsAnswer={setIncNeedsKind} />
@@ -589,7 +588,7 @@ export default function Accounting() {
                 <form onSubmit={(e) => { e.preventDefault(); createRec.mutate({ ...recForm, supplierId: recForm.supplierId ? parseInt(recForm.supplierId) : undefined, receiptDate: recForm.receiptDate } as any); }} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Број *</Label><Input value={recForm.receiptNumber} onChange={(e) => setRecForm({ ...recForm, receiptNumber: e.target.value })} required /></div>
-                    <div className="space-y-2"><Label>Добавувач</Label><Select value={recForm.supplierId} onValueChange={(v) => setRecForm({ ...recForm, supplierId: v })}><SelectTrigger><SelectValue placeholder="Избери" /></SelectTrigger><SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Добавувач</Label><Select value={recForm.supplierId} onValueChange={(v) => setRecForm({ ...recForm, supplierId: v })}><SelectTrigger><SelectValue placeholder="Избери" /></SelectTrigger><SelectContent>{suppliers?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="space-y-2"><Label>Датум *</Label><DateInput value={recForm.receiptDate} onChange={(e) => setRecForm({ ...recForm, receiptDate: e.target.value })} required /></div>
                   <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createRec.isPending}>{createRec.isPending ? "Зачувување..." : "Креирај приемник"}</Button>
@@ -605,7 +604,7 @@ export default function Accounting() {
                 <form onSubmit={(e) => { e.preventDefault(); createDN.mutate({ ...dnForm, customerId: parseInt(dnForm.customerId), issueDate: dnForm.issueDate, deliveryDate: dnForm.deliveryDate || undefined, items: dnItems.map(it => ({ description: it.description, quantity: it.quantity, unit: it.unit, productId: it.productId, materialId: it.materialId, itemType: it.itemType, weightKg: ((it.weightPerUnit ?? 0) * (Number(it.quantity) || 0)).toFixed(3) })) } as any); }} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Број *</Label><Input value={dnForm.dnNumber} onChange={(e) => setDnForm({ ...dnForm, dnNumber: e.target.value })} required /></div>
-                    <div className="space-y-2"><Label>Клиент *</Label><Select value={dnForm.customerId} onValueChange={(v) => setDnForm({ ...dnForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Клиент *</Label><Select value={dnForm.customerId} onValueChange={(v) => setDnForm({ ...dnForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Датум на издавање *</Label><DateInput value={dnForm.issueDate} onChange={(e) => setDnForm({ ...dnForm, issueDate: e.target.value })} required /></div>
@@ -814,7 +813,7 @@ export default function Accounting() {
               </TableHeader>
               <TableBody>
                 {!outgoing?.length ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Нема фактури</TableCell></TableRow> :
-                  outgoing.map((inv) => (
+                  outgoing.map((inv: any) => (
                     <TableRow key={inv.id}>
                       <TableCell className="font-mono text-sm font-medium">{inv.invoiceNumber}</TableCell>
                       <TableCell>{inv.customerName} {inv.customerCompany ? `(${inv.customerCompany})` : ""}</TableCell>
@@ -853,22 +852,15 @@ export default function Accounting() {
               </TableHeader>
               <TableBody>
                 {!incoming?.length ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема влезни фактури</TableCell></TableRow> :
-                  incoming.map((inv) => (
+                  incoming.map((inv: any) => (
                     <TableRow key={inv.id}>
                       <TableCell className="font-mono text-sm font-medium">{inv.supplierInvoiceNumber}</TableCell>
                       <TableCell>{inv.supplierName}</TableCell>
                       <TableCell><Badge className={incStatus[inv.status]?.cls}>{incStatus[inv.status]?.label}</Badge></TableCell>
                       <TableCell className="font-medium">{inv.totalAmount} {inv.currency}</TableCell>
                       <TableCell>
-                        {inv.fileUrl ? (
-                          <Button size="sm" variant="outline" className="text-emerald-600 h-7 text-xs" onClick={() => {
-                            const byteCharacters = atob(inv.fileUrl!);
-                            const byteNumbers = new Array(byteCharacters.length).fill(0).map((_, i) => byteCharacters.charCodeAt(i));
-                            const byteArray = new Uint8Array(byteNumbers);
-                            const blob = new Blob([byteArray], { type: "application/pdf" });
-                            const url = URL.createObjectURL(blob);
-                            window.open(url, "_blank");
-                          }}>
+                        {inv.hasFile ? (
+                          <Button size="sm" variant="outline" className="text-emerald-600 h-7 text-xs" onClick={() => openStoredFile(utils.accounting.documentFile.fetch, "incoming_invoice", inv.id).catch((e) => toast.error(e.message))}>
                             <FileText className="h-3 w-3 mr-1" /> Оригинал
                           </Button>
                         ) : (
@@ -900,7 +892,7 @@ export default function Accounting() {
               </TableHeader>
               <TableBody>
                 {!receiptsData?.length ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема приемници</TableCell></TableRow> :
-                  receiptsData.map((r) => (
+                  receiptsData.map((r: any) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-mono text-sm font-medium">{r.receiptNumber}</TableCell>
                       <TableCell>{r.supplierName || "-"}</TableCell>
@@ -926,7 +918,7 @@ export default function Accounting() {
               </TableHeader>
               <TableBody>
                 {!dnData?.length ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема испратници</TableCell></TableRow> :
-                  dnData.map((dn) => (
+                  dnData.map((dn: any) => (
                     <TableRow key={dn.id}>
                       <TableCell className="font-mono text-sm font-medium">{dn.dnNumber}</TableCell>
                       <TableCell>{dn.customerName} {dn.customerCompany ? `(${dn.customerCompany})` : ""}</TableCell>
@@ -978,7 +970,7 @@ export default function Accounting() {
                 </TableHeader>
                 <TableBody>
                   {!parsedData?.length ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Нема парсирани фактури</TableCell></TableRow> :
-                    parsedData.map((p) => (
+                    parsedData.map((p: any) => (
                       <TableRow key={p.id}>
                         <TableCell className="max-w-[220px] truncate text-xs">{p.originalFileName}</TableCell>
                         <TableCell>
@@ -1048,7 +1040,7 @@ export default function Accounting() {
                 <div><span className="text-gray-500">Број:</span> {outDetail.invoiceNumber}</div>
                 <div><span className="text-gray-500">Клиент:</span> {outDetail.customer?.name}</div>
                 <div><span className="text-gray-500">Статус:</span> <Badge className={invStatus[outDetail.status]?.cls}>{invStatus[outDetail.status]?.label}</Badge></div>
-                <div><span className="text-gray-500">Тип:</span> {outDetail.invoiceType}</div>
+                <div><span className="text-gray-500">Тип:</span> {outDetail.invoiceType === "standard" ? "Фактура" : outDetail.invoiceType === "proforma" ? "Про-фактура" : outDetail.invoiceType === "credit_note" ? "Книжно одобрување" : outDetail.invoiceType}</div>
                 <div><span className="text-gray-500">Износ:</span> <span className="font-semibold">{outDetail.totalAmount} {outDetail.currency}</span></div>
                 <div><span className="text-gray-500">ДДВ:</span> {outDetail.vatAmount} ({outDetail.vatRate}%)</div>
                 <div><span className="text-gray-500">Датум:</span> {formatDate(outDetail.issueDate)}</div>
@@ -1101,14 +1093,7 @@ export default function Accounting() {
               {incDetail.fileUrl && (
                 <div className="border rounded p-2">
                   <p className="text-xs text-gray-500 mb-1">Оригинална фактура (PDF):</p>
-                  <Button size="sm" variant="outline" className="text-emerald-600 text-xs" onClick={() => {
-                    const byteCharacters = atob(incDetail.fileUrl!);
-                    const byteNumbers = new Array(byteCharacters.length).fill(0).map((_, i) => byteCharacters.charCodeAt(i));
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const blob = new Blob([byteArray], { type: "application/pdf" });
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, "_blank");
-                  }}>
+                  <Button size="sm" variant="outline" className="text-emerald-600 text-xs" onClick={() => openStoredFile(utils.accounting.documentFile.fetch, "incoming_invoice", incDetail.id).catch((e) => toast.error(e.message))}>
                     <FileText className="h-3 w-3 mr-1" /> Отвори PDF
                   </Button>
                 </div>
@@ -1146,698 +1131,3 @@ export default function Accounting() {
 }
 
 // ===== INVOICE ITEM FORM COMPONENT =====
-function InvoiceItemForm({
-  products,
-  services,
-  finishedGoods,
-  onAdd,
-}: {
-  products?: Array<{ id: number; name: string; code: string; unit: string; price: string | null; category: string }>;
-  services?: Array<{ id: number; name: string; code: string; unit: string; price: string | null; type: string }>;
-  finishedGoods?: Array<{ id: number; productId: number; quantity: string | null; unitCost: string | null }>;
-  onAdd: (item: any) => void;
-}) {
-  const [itemType, setItemType] = useState<"product" | "service" | "manual">("manual");
-  const [selectedProductId, setSelectedProductId] = useState("");
-  const [selectedServiceId, setSelectedServiceId] = useState("");
-  const [description, setDescription] = useState("");
-  const [quantity, setQuantity] = useState("1");
-  const [unit, setUnit] = useState("ком");
-  const [unitPrice, setUnitPrice] = useState("");
-  const [vatRate, setVatRate] = useState("18");
-
-  const getStockForProduct = (productId: number) => {
-    if (!finishedGoods) return 0;
-    return finishedGoods
-      .filter(fg => fg.productId === productId)
-      .reduce((sum, fg) => sum + parseFloat(String(fg.quantity || "0")), 0);
-  };
-
-  const handleAdd = () => {
-    let finalDescription = description;
-    let finalUnitPrice = unitPrice;
-    let finalUnit = unit;
-    let productId: number | undefined;
-    let serviceId: number | undefined;
-
-    if (itemType === "product" && selectedProductId) {
-      const product = products?.find(p => p.id.toString() === selectedProductId);
-      if (!product) return;
-      productId = product.id;
-      finalDescription = product.name;
-      finalUnit = product.unit || "ком";
-      if (!unitPrice) finalUnitPrice = product.price || "0";
-
-      // Check stock
-      const stock = getStockForProduct(product.id);
-      if (stock < parseFloat(quantity || "0")) {
-        alert(`Нема доволно залиха! На залиха: ${stock.toFixed(2)}, побарано: ${parseFloat(quantity || "0").toFixed(2)}`);
-        return;
-      }
-    } else if (itemType === "service" && selectedServiceId) {
-      const service = services?.find(s => s.id.toString() === selectedServiceId);
-      if (!service) return;
-      serviceId = service.id;
-      finalDescription = service.name;
-      finalUnit = service.unit || "час";
-      if (!unitPrice) finalUnitPrice = service.price || "0";
-    }
-
-    const qty = parseFloat(quantity || "0");
-    const price = parseFloat(finalUnitPrice || "0");
-    const total = qty * price;
-
-    onAdd({
-      description: finalDescription,
-      quantity: quantity,
-      unit: finalUnit,
-      unitPrice: finalUnitPrice || "0",
-      discount: "0",
-      totalPrice: total.toFixed(2),
-      vatRate: vatRate,
-      notes: "",
-      productId,
-      serviceId,
-      itemType,
-    });
-
-    // Reset form
-    setSelectedProductId("");
-    setSelectedServiceId("");
-    setDescription("");
-    setQuantity("1");
-    setUnitPrice("");
-  };
-
-  return (
-    <div className="space-y-2">
-      {/* Item Type Selector */}
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant={itemType === "product" ? "default" : "outline"}
-          onClick={() => setItemType("product")}
-          className={itemType === "product" ? "bg-blue-500" : ""}
-        >
-          Производ (склад)
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={itemType === "service" ? "default" : "outline"}
-          onClick={() => setItemType("service")}
-          className={itemType === "service" ? "bg-purple-500" : ""}
-        >
-          Услуга
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={itemType === "manual" ? "default" : "outline"}
-          onClick={() => setItemType("manual")}
-          className={itemType === "manual" ? "bg-gray-500" : ""}
-        >
-          Рачен опис
-        </Button>
-      </div>
-
-      {/* Product Selector */}
-      {itemType === "product" && (
-        <div className="space-y-2">
-          <Select value={selectedProductId} onValueChange={(v) => {
-            setSelectedProductId(v);
-            const product = products?.find(p => p.id.toString() === v);
-            if (product) {
-              setDescription(product.name);
-              setUnit(product.unit || "ком");
-              setUnitPrice(product.price || "");
-            }
-          }}>
-            <SelectTrigger><SelectValue placeholder="Избери производ..." /></SelectTrigger>
-            <SelectContent>
-              {products?.map(p => {
-                const stock = getStockForProduct(p.id);
-                return (
-                  <SelectItem key={p.id} value={p.id.toString()}>
-                    {p.name} ({p.code}) - {stock.toFixed(2)} {p.unit} на залиха
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-          {selectedProductId && (
-            <p className="text-xs text-blue-600">
-              На залиха: {getStockForProduct(parseInt(selectedProductId)).toFixed(2)} {unit}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Service Selector */}
-      {itemType === "service" && (
-        <div className="space-y-2">
-          <Select value={selectedServiceId} onValueChange={(v) => {
-            setSelectedServiceId(v);
-            const service = services?.find(s => s.id.toString() === v);
-            if (service) {
-              setDescription(service.name);
-              setUnit(service.unit || "час");
-              setUnitPrice(service.price || "");
-            }
-          }}>
-            <SelectTrigger><SelectValue placeholder="Избери услуга..." /></SelectTrigger>
-            <SelectContent>
-              {services?.map(s => (
-                <SelectItem key={s.id} value={s.id.toString()}>
-                  {s.name} ({s.code}) - {s.price ?? "?"} ден./{s.unit}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      {/* Manual Description */}
-      {itemType === "manual" && (
-        <Input placeholder="Опис на ставка" value={description} onChange={e => setDescription(e.target.value)} />
-      )}
-
-      {/* Quantity & Price */}
-      <div className="grid grid-cols-4 gap-2">
-        <Input type="number" placeholder="Количина" value={quantity} onChange={e => setQuantity(e.target.value)} />
-        <Input placeholder="Единица" value={unit} onChange={e => setUnit(e.target.value)} />
-        <Input type="number" placeholder="Цена" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} />
-        <Select value={vatRate} onValueChange={setVatRate}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="18">18% ДДВ</SelectItem>
-            <SelectItem value="5">5% ДДВ</SelectItem>
-            <SelectItem value="0">0% ДДВ</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Button type="button" size="sm" variant="outline" onClick={handleAdd} disabled={!description || !quantity || !unitPrice}>
-        <Plus className="h-3 w-3 mr-1" /> Додади ставка
-      </Button>
-    </div>
-  );
-}
-
-// ===== UJP E-FAKTURA TAB COMPONENT =====
-function UJPEFakturaTab() {
-  const utils = trpc.useUtils();
-  const [search, setSearch] = useState("");
-  const [sendDialog, setSendDialog] = useState(false);
-  const [statusDialog, setStatusDialog] = useState(false);
-  const [xmlDialog, setXmlDialog] = useState(false);
-  const [selInvoiceId, setSelInvoiceId] = useState<number | null>(null);
-  const [euidCheck, setEuidCheck] = useState("");
-  const [xmlContent, setXmlContent] = useState("");
-  const [selectedCertId, setSelectedCertId] = useState<string>("");
-
-  // Company lookup
-  const [edbSearch, setEdbSearch] = useState("");
-  const { data: companyData } = trpc.accounting.ujpCompanyLookup.useQuery(
-    { edb: edbSearch },
-    { enabled: edbSearch.length >= 5 }
-  );
-
-  // Invoice list for UJP
-  const { data: ujpInvoices } = trpc.accounting.ujpInvoiceList.useQuery({ search: search || undefined });
-
-  // Active certificates for signing
-  const { data: certificates } = trpc.accounting.certificateList.useQuery();
-
-  // Send form
-  const [sendForm, setSendForm] = useState({
-    sellerEdb: "", sellerName: "", sellerAddress: "", sellerCity: "", sellerVatNumber: "",
-    buyerEdb: "", buyerName: "", buyerAddress: "", buyerCity: "", buyerVatNumber: "",
-  });
-
-  // Status check
-  const { data: statusData, refetch: refetchStatus } = trpc.accounting.ujpCheckStatus.useQuery(
-    { euid: euidCheck },
-    { enabled: false }
-  );
-
-  const sendMutation = trpc.accounting.ujpSendInvoice.useMutation({
-    onSuccess: () => {
-      utils.accounting.ujpInvoiceList.invalidate();
-      setSendDialog(false);
-    },
-  });
-
-  const xmlMutation = trpc.accounting.ujpGenerateXml.useQuery(
-    { invoiceId: selInvoiceId! },
-    { enabled: false }
-  );
-
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selInvoiceId) return;
-    const payload: any = {
-      invoiceId: selInvoiceId,
-      ...sendForm,
-    };
-    if (selectedCertId && selectedCertId !== "test") {
-      payload.certId = parseInt(selectedCertId);
-    }
-    sendMutation.mutate(payload);
-  };
-
-  const handleGenerateXml = async (invoiceId: number) => {
-    setSelInvoiceId(invoiceId);
-    const result = await xmlMutation.refetch();
-    if (result.data) {
-      setXmlContent(result.data);
-      setXmlDialog(true);
-    }
-  };
-
-  const handleDownloadXml = () => {
-    const blob = new Blob([xmlContent], { type: "application/xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `UJP_Faktura_${selInvoiceId}.xml`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Info Card */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Radio className="h-5 w-5 text-blue-600" />
-            <h3 className="text-lg font-semibold">УЈП е-Фактура Интеграција</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <h4 className="font-semibold text-blue-800 mb-1">API Ендпоинт</h4>
-              <p className="text-blue-700 text-xs">efakturatest.ujp.gov.mk</p>
-              <p className="text-blue-600 text-xs mt-1">/JSONReceiver/sales-invoices/send</p>
-            </div>
-            <div className="bg-emerald-50 p-3 rounded-lg">
-              <h4 className="font-semibold text-emerald-800 mb-1">Формат</h4>
-              <p className="text-emerald-700 text-xs">JSON со JWS потпис</p>
-              <p className="text-emerald-600 text-xs mt-1">UBL 2.1 Invoice (ISO 20022)</p>
-            </div>
-            <div className="bg-amber-50 p-3 rounded-lg">
-              <h4 className="font-semibold text-amber-800 mb-1">Статуси</h4>
-              <p className="text-amber-700 text-xs">00=Нацрт, 01=Поднесена</p>
-              <p className="text-amber-600 text-xs">03=Прифатена, 05=Одбиена, 07=Анулирана</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Company Lookup */}
-      <Card>
-        <CardContent className="p-6">
-          <h4 className="font-semibold mb-3 flex items-center gap-2"><SearchIcon className="h-4 w-4" />Пребарување компанија по ЕДБ</h4>
-          <div className="flex gap-3">
-            <Input placeholder="Внеси ЕДБ (на пр. 1234567890123)" value={edbSearch} onChange={e => setEdbSearch(e.target.value)} className="max-w-sm" />
-          </div>
-          {companyData && (
-            <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
-              <div className="grid grid-cols-2 gap-2">
-                <div><span className="text-gray-500">Назив:</span> <b>{companyData.name}</b></div>
-                <div><span className="text-gray-500">ЕДБ:</span> {companyData.edb}</div>
-                <div><span className="text-gray-500">Адреса:</span> {companyData.address}</div>
-                <div><span className="text-gray-500">Град:</span> {companyData.city}</div>
-                <div><span className="text-gray-500">ДДВ:</span> {companyData.vatRegistered ? "Регистриран" : "Нерегистриран"}</div>
-              </div>
-            </div>
-          )}
-          {companyData === null && edbSearch.length >= 5 && (
-            <p className="mt-2 text-sm text-red-500">Компанијата не е пронајдена</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Invoices Ready for UJP */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input placeholder="Пребарувај фактури..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Број</TableHead><TableHead>Клиент</TableHead><TableHead>Износ</TableHead>
-                <TableHead>УЈП ID</TableHead><TableHead>Акции</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!ujpInvoices?.length ? <TableRow><TableCell colSpan={5} className="text-center py-8 text-gray-400">Нема фактури</TableCell></TableRow> :
-                ujpInvoices.map(inv => (
-                  <TableRow key={inv.id}>
-                    <TableCell className="font-mono text-sm font-medium">{inv.invoiceNumber}</TableCell>
-                    <TableCell>{inv.customerName} {inv.customerCompany ? `(${inv.customerCompany})` : ""}</TableCell>
-                    <TableCell className="font-medium">{inv.totalAmount} {inv.currency}</TableCell>
-                    <TableCell>{inv.eInvoiceId ? <Badge className="bg-emerald-100 text-emerald-700">{inv.eInvoiceId.substring(0, 8)}...</Badge> : <Badge className="bg-gray-100 text-gray-500">Неиспратена</Badge>}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {!inv.eInvoiceId && (
-                          <Button size="sm" variant="outline" className="text-blue-600" onClick={() => { setSelInvoiceId(inv.id); setSendDialog(true); }}>
-                            <Send className="h-3.5 w-3.5 mr-1" />Испрати до УЈП
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => handleGenerateXml(inv.id)}>
-                          <FileText className="h-3.5 w-3.5 mr-1" />XML
-                        </Button>
-                        {inv.eInvoiceId && (
-                          <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => { setEuidCheck(inv.eInvoiceId!); setStatusDialog(true); }}>
-                            <RefreshCw className="h-3.5 w-3.5 mr-1" />Статус
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Send Dialog */}
-      <Dialog open={sendDialog} onOpenChange={setSendDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Испрати фактура до УЈП</DialogTitle></DialogHeader>
-          <form onSubmit={handleSend} className="space-y-3">
-            <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 mb-2">
-              <b>Продавач (Вашата фирма):</b>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label>ЕДБ *</Label><Input value={sendForm.sellerEdb} onChange={e => setSendForm({ ...sendForm, sellerEdb: e.target.value })} required placeholder="MK1234567890123" /></div>
-              <div className="space-y-2"><Label>Назив *</Label><Input value={sendForm.sellerName} onChange={e => setSendForm({ ...sendForm, sellerName: e.target.value })} required /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label>Адреса</Label><Input value={sendForm.sellerAddress} onChange={e => setSendForm({ ...sendForm, sellerAddress: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Град</Label><Input value={sendForm.sellerCity} onChange={e => setSendForm({ ...sendForm, sellerCity: e.target.value })} /></div>
-            </div>
-            <div className="space-y-2"><Label>ДДВ број</Label><Input value={sendForm.sellerVatNumber} onChange={e => setSendForm({ ...sendForm, sellerVatNumber: e.target.value })} /></div>
-
-            <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700 mb-2 mt-4">
-              <b>Купувач (Клиент):</b>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label>ЕДБ *</Label><Input value={sendForm.buyerEdb} onChange={e => setSendForm({ ...sendForm, buyerEdb: e.target.value })} required /></div>
-              <div className="space-y-2"><Label>Назив *</Label><Input value={sendForm.buyerName} onChange={e => setSendForm({ ...sendForm, buyerName: e.target.value })} required /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label>Адреса</Label><Input value={sendForm.buyerAddress} onChange={e => setSendForm({ ...sendForm, buyerAddress: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Град</Label><Input value={sendForm.buyerCity} onChange={e => setSendForm({ ...sendForm, buyerCity: e.target.value })} /></div>
-            </div>
-            <div className="space-y-2"><Label>ДДВ број</Label><Input value={sendForm.buyerVatNumber} onChange={e => setSendForm({ ...sendForm, buyerVatNumber: e.target.value })} /></div>
-
-            {/* Certificate Selection */}
-            <div className="space-y-2 border-t pt-3">
-              <Label className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-amber-600" />
-                Дигитален сертификат за потпис *
-              </Label>
-              <Select value={selectedCertId} onValueChange={setSelectedCertId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Избери сертификат..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="test">
-                    🧪 Тест режим (без правна важност)
-                  </SelectItem>
-                  {certificates?.map(cert => (
-                    <SelectItem key={cert.id} value={cert.id.toString()}>
-                      🔐 {cert.name} ({cert.issuer}) - до {cert.validTo ? formatDate(cert.validTo) : "?"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {certificates && certificates.length === 0 && (
-                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                  Нема зачувани сертификати. За да испраќате фактури со правна важност,
-                  додадете квалификуван дигитален сертификат во Подесувања → Сертификати.
-                </p>
-              )}
-            </div>
-
-            <Button type="submit" className="w-full bg-blue-500 hover:bg-blue-600" disabled={sendMutation.isPending}>
-              {sendMutation.isPending ? "Испраќање..." : selectedCertId && selectedCertId !== "test" ? "Испрати до УЈП (Потпишано)" : "Испрати до УЈП (Тест режим)"}
-            </Button>
-            {sendMutation.data && (
-              <div className={`p-3 rounded-lg text-sm ${sendMutation.data.status === 200 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-                <b>{sendMutation.data.status === 200 ? "Успешно!" : "Грешка:"}</b> {sendMutation.data.message}
-                {sendMutation.data.euid && <div className="mt-1">EUID: {sendMutation.data.euid}</div>}
-                {sendMutation.data.qr_link && <div className="mt-1"><a href={sendMutation.data.qr_link} target="_blank" rel="noopener noreferrer" className="underline">QR Линк</a></div>}
-                {selectedCertId === "test" && sendMutation.data.status === 200 && (
-                  <div className="mt-2 text-amber-600 text-xs">
-                    ⚠️ Ова е тест режим - фактурата нема правна важност. За реално испраќање, користете квалификуван сертификат.
-                  </div>
-                )}
-              </div>
-            )}
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Status Dialog */}
-      <Dialog open={statusDialog} onOpenChange={setStatusDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Проверка статус на УЈП фактура</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Input value={euidCheck} onChange={e => setEuidCheck(e.target.value)} placeholder="Внеси EUID" />
-              <Button variant="outline" onClick={() => refetchStatus()}><RefreshCw className="h-4 w-4" /></Button>
-            </div>
-            {statusData && (
-              <div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2">
-                <div><span className="text-gray-500">EUID:</span> {statusData.euid}</div>
-                <div><span className="text-gray-500">Број:</span> {statusData.invoiceNumber}</div>
-                <div><span className="text-gray-500">Статус:</span> <Badge className={
-                  statusData.status === "03" ? "bg-emerald-100 text-emerald-700" :
-                  statusData.status === "05" ? "bg-red-100 text-red-700" :
-                  statusData.status === "01" ? "bg-blue-100 text-blue-700" :
-                  "bg-gray-100 text-gray-700"
-                }>{statusData.statusLabel}</Badge></div>
-                <div><span className="text-gray-500">Време:</span> {statusData.timestamp}</div>
-                {statusData.rejectionReason && <div className="text-red-600"><span className="text-gray-500">Причина:</span> {statusData.rejectionReason}</div>}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* XML Dialog */}
-      <Dialog open={xmlDialog} onOpenChange={setXmlDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>УЈП XML Фактура</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <Textarea value={xmlContent} readOnly className="font-mono text-xs h-96" />
-            <Button onClick={handleDownloadXml} className="w-full bg-amber-500 hover:bg-amber-600">
-              <Download className="h-4 w-4 mr-2" />Превземи XML
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-// ===== EMAIL INVOICES TAB (издвоено од UJPEFakturaTab каде беше недостапно) =====
-function EmailInvoicesTab() {
-  const utils = trpc.useUtils();
-  const [emailSinceDays, setEmailSinceDays] = useState(7);
-  // Email invoices
-  const { data: emailConfig } = trpc.email.hasConfig.useQuery();
-  const [emailForm, setEmailForm] = useState({ host: "", port: "993", username: "", password: "" });
-  const saveEmailCfg = trpc.email.saveConfig.useMutation({ onSuccess: () => { toast.success("Е-маил конфигурацијата е зачувана"); utils.email.hasConfig.invalidate(); } });
-  const { data: emailInvoicesList, refetch: refetchEmail } = trpc.email.list.useQuery();
-  const fetchEmailsMutation = trpc.email.fetchEmails.useMutation({
-    onSuccess: (data) => {
-      refetchEmail();
-      alert(data.message);
-    },
-    onError: (e) => alert(e.message),
-  });
-  const matchSupplierMutation = trpc.email.matchSupplier.useMutation({
-    onSuccess: () => refetchEmail(),
-  });
-  const approveEmailMutation = trpc.email.approve.useMutation({
-    onSuccess: () => refetchEmail(),
-  });
-  const rejectEmailMutation = trpc.email.reject.useMutation({
-    onSuccess: () => refetchEmail(),
-  });
-  const deleteEmailMutation = trpc.email.delete.useMutation({
-    onSuccess: () => refetchEmail(),
-  });
-
-  return (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Upload className="h-5 w-5 text-emerald-700" />
-                    Е-маил фактури
-                  </CardTitle>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Автоматско примање на влезни фактури од е-маил
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Select value={emailSinceDays.toString()} onValueChange={(v) => setEmailSinceDays(parseInt(v))}>
-                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1 ден</SelectItem>
-                      <SelectItem value="3">3 дена</SelectItem>
-                      <SelectItem value="7">7 дена</SelectItem>
-                      <SelectItem value="14">14 дена</SelectItem>
-                      <SelectItem value="30">30 дена</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    onClick={() => fetchEmailsMutation.mutate({ sinceDays: emailSinceDays })}
-                    disabled={fetchEmailsMutation.isPending}
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    {fetchEmailsMutation.isPending ? "Се проверува..." : <><RefreshCw className="h-4 w-4 mr-1" />Провери е-маил</>}
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!emailConfig?.configured && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 space-y-3">
-                  <p className="text-sm text-amber-800"><b>Конфигурирај е-маил</b> (IMAP) за автоматско примање на фактури од добавувачи:</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="IMAP сервер (пр. imap.gmail.com)" value={emailForm.host} onChange={e => setEmailForm({...emailForm, host: e.target.value})} />
-                    <Input placeholder="Порта (993)" value={emailForm.port} onChange={e => setEmailForm({...emailForm, port: e.target.value})} />
-                    <Input placeholder="Е-маил адреса" value={emailForm.username} onChange={e => setEmailForm({...emailForm, username: e.target.value})} />
-                    <Input type="password" placeholder="Лозинка / App password" value={emailForm.password} onChange={e => setEmailForm({...emailForm, password: e.target.value})} />
-                  </div>
-                  <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={!emailForm.host || !emailForm.username || !emailForm.password || saveEmailCfg.isPending}
-                    onClick={() => saveEmailCfg.mutate({ host: emailForm.host, port: Number(emailForm.port) || 993, secure: true, username: emailForm.username, password: emailForm.password })}>
-                    Зачувај конфигурација
-                  </Button>
-                </div>
-              )}
-              {emailConfig?.configured && (
-                <p className="text-xs text-emerald-600 mb-4">
-                  Поврзано со: {emailConfig.username}
-                </p>
-              )}
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Наслов</TableHead>
-                    <TableHead className="text-xs">Испраќач</TableHead>
-                    <TableHead className="text-xs">PDF</TableHead>
-                    <TableHead className="text-xs">Добавувач</TableHead>
-                    <TableHead className="text-xs">Статус</TableHead>
-                    <TableHead className="text-xs">Датум</TableHead>
-                    <TableHead className="text-xs text-right">Акции</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {!emailInvoicesList?.length ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                        Нема примени е-маил фактури. Кликнете "Провери е-маил" за да ги повлечете.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    emailInvoicesList.map((ei) => (
-                      <TableRow key={ei.id}>
-                        <TableCell className="text-xs max-w-[200px] truncate" title={ei.subject || ""}>{ei.subject || "-"}</TableCell>
-                        <TableCell className="text-xs">{ei.senderName || ei.senderEmail || "-"}</TableCell>
-                        <TableCell className="text-xs">
-                          {ei.pdfFilename ? (
-                            <Badge className="bg-red-100 text-red-700 text-xs">
-                              <FileText className="h-3 w-3 mr-1" />PDF
-                            </Badge>
-                          ) : "-"}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {ei.matchedSupplierId ? (
-                            <span className="text-emerald-700 font-medium">{ei.parsedSupplierName}</span>
-                          ) : ei.status === "new" ? (
-                            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => matchSupplierMutation.mutate({ id: ei.id })}>
-                              <Search className="h-3 w-3 mr-1" />Match
-                            </Button>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={
-                            ei.status === "imported" ? "bg-emerald-100 text-emerald-700 text-xs" :
-                            ei.status === "reviewed" ? "bg-blue-100 text-blue-700 text-xs" :
-                            ei.status === "parsed" ? "bg-yellow-100 text-yellow-700 text-xs" :
-                            ei.status === "rejected" ? "bg-red-100 text-red-700 text-xs" :
-                            "bg-gray-100 text-gray-700 text-xs"
-                          }>
-                            {ei.status === "new" ? "Нова" :
-                             ei.status === "parsed" ? "Парсирана" :
-                             ei.status === "reviewed" ? "Прегледана" :
-                             ei.status === "imported" ? "Увезена" :
-                             "Одбиена"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">{formatDate(ei.receivedAt)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            {ei.pdfBase64 && (
-                              <Button size="sm" variant="outline" className="h-6 text-xs text-emerald-600" onClick={() => {
-                                const byteCharacters = atob(ei.pdfBase64!);
-                                const byteNumbers = new Array(byteCharacters.length).fill(0).map((_, i) => byteCharacters.charCodeAt(i));
-                                const byteArray = new Uint8Array(byteNumbers);
-                                const blob = new Blob([byteArray], { type: "application/pdf" });
-                                const url = URL.createObjectURL(blob);
-                                window.open(url, "_blank");
-                              }}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            )}
-                            {ei.status === "new" || ei.status === "parsed" ? (
-                              <Button size="sm" variant="outline" className="h-6 text-xs text-amber-600" onClick={() => {
-                                if (ei.matchedSupplierId) {
-                                  if (confirm("Креирај влезна фактура од оваа email фактура?")) {
-                                    approveEmailMutation.mutate({
-                                      id: ei.id,
-                                      supplierId: ei.matchedSupplierId!,
-                                      supplierInvoiceNumber: ei.parsedInvoiceNumber || "",
-                                      totalAmount: ei.parsedTotalAmount || "",
-                                    });
-                                  }
-                                } else {
-                                  alert("Прво извршете Match за да се пронајде добавувачот.");
-                                }
-                              }}>
-                                <CheckCircle className="h-3 w-3 mr-1" />Увези
-                              </Button>
-                            ) : null}
-                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => { if (confirm("Дали сте сигурни?")) deleteEmailMutation.mutate({ id: ei.id }); }}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-  );
-}

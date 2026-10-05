@@ -22,6 +22,12 @@ import { hrRouter } from "./hr-router";
 import { mailRouter } from "./mail-router";
 import { searchRouter } from "./search-router";
 import { remindersRouter } from "./reminders";
+import { backupRouter } from "./backup";
+import { settleRouter } from "./settle-router";
+import { mfgRouter } from "./mfg-router";
+import { crmRouter } from "./crm-router";
+import { purchRouter } from "./purch-router";
+import { reportsRouter } from "./reports-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -50,6 +56,12 @@ export const appRouter = createRouter({
   mail: mailRouter,
   search: searchRouter,
   reminders: remindersRouter,
+  backup: backupRouter,
+  settle: settleRouter,
+  mfg: mfgRouter,
+  crm: crmRouter,
+  purch: purchRouter,
+  reports: reportsRouter,
 });
 
 export type AppRouter = typeof appRouter;

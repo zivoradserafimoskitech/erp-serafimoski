@@ -123,6 +123,182 @@ export function getExtraSql(): string[] {
     `CREATE TABLE IF NOT EXISTS "year_closes" ("year" integer PRIMARY KEY, "closed_by" varchar(160), "closed_at" timestamp DEFAULT now() NOT NULL)`,
     `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "customs_declaration" varchar(60)`,
     `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "customs_date" date`,
+    // Најава: кодот само како хеш (+ последните две цифри за препознавање), сесии со рок
+    `ALTER TABLE "app_users" ADD COLUMN IF NOT EXISTS "passcode_hint" varchar(8)`,
+    `CREATE TABLE IF NOT EXISTS "app_sessions" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "token_hash" char(64) NOT NULL UNIQUE,
+      "user_id" integer,
+      "name" varchar(255) NOT NULL,
+      "role" varchar(20) NOT NULL,
+      "ip" varchar(64),
+      "user_agent" varchar(300),
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "last_seen_at" timestamp DEFAULT now() NOT NULL,
+      "expires_at" timestamp NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "app_sessions_user_idx" ON "app_sessions" ("user_id")`,
+    // Компензации, ИОС, налози за плаќање
+    `ALTER TABLE "suppliers" ADD COLUMN IF NOT EXISTS "bank_account" varchar(40)`,
+    `CREATE TABLE IF NOT EXISTS "compensations" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "number" varchar(30) NOT NULL UNIQUE,
+      "comp_date" date NOT NULL,
+      "customer_id" integer,
+      "supplier_id" integer,
+      "amount" numeric(16, 2) NOT NULL,
+      "status" varchar(20) DEFAULT 'active' NOT NULL,
+      "note" text,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "compensation_items" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "compensation_id" integer NOT NULL REFERENCES "compensations"("id") ON DELETE CASCADE,
+      "doc_type" varchar(20) NOT NULL,
+      "doc_id" integer NOT NULL,
+      "amount" numeric(16, 2) NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "compensation_items_doc_idx" ON "compensation_items" ("doc_type", "doc_id")`,
+    `CREATE TABLE IF NOT EXISTS "ios_log" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "partner_type" varchar(10) NOT NULL,
+      "partner_id" integer NOT NULL,
+      "as_of" date NOT NULL,
+      "balance" numeric(16, 2) NOT NULL,
+      "sent_to" text,
+      "status" varchar(20) DEFAULT 'sent' NOT NULL,
+      "note" text,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "answered_at" timestamp
+    )`,
+    `CREATE TABLE IF NOT EXISTS "payment_order_batches" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "pay_date" date NOT NULL,
+      "total" numeric(16, 2) NOT NULL,
+      "count" integer NOT NULL,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "payment_order_items" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "batch_id" integer NOT NULL REFERENCES "payment_order_batches"("id") ON DELETE CASCADE,
+      "incoming_invoice_id" integer,
+      "supplier_id" integer,
+      "payee" varchar(255) NOT NULL,
+      "payee_account" varchar(40),
+      "amount" numeric(16, 2) NOT NULL,
+      "purpose" varchar(140),
+      "reference" varchar(40),
+      "payment_code" varchar(10)
+    )`,
+    `CREATE INDEX IF NOT EXISTS "payment_order_items_inc_idx" ON "payment_order_items" ("incoming_invoice_id")`,
+    // Технолошка постапка по производ, рок на испорака кај добавувач
+    `CREATE TABLE IF NOT EXISTS "product_routings" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "product_id" integer NOT NULL,
+      "sequence" integer NOT NULL,
+      "operation" varchar(50) NOT NULL,
+      "description" varchar(500),
+      "machine_id" integer,
+      "setup_min" numeric(10, 2) DEFAULT '0' NOT NULL,
+      "run_min" numeric(10, 3) DEFAULT '0' NOT NULL,
+      "notes" text
+    )`,
+    `CREATE INDEX IF NOT EXISTS "product_routings_product_idx" ON "product_routings" ("product_id")`,
+    `ALTER TABLE "suppliers" ADD COLUMN IF NOT EXISTS "lead_time_days" integer`,
+    // Застои на машини (за OEE)
+    `CREATE TABLE IF NOT EXISTS "machine_downtime" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "machine_id" integer NOT NULL,
+      "start_at" timestamp NOT NULL,
+      "end_at" timestamp,
+      "reason" varchar(30) NOT NULL,
+      "note" text,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "machine_downtime_machine_idx" ON "machine_downtime" ("machine_id", "start_at")`,
+    // Квалитет: план на контрола, записи од мерење, мерни инструменти и калибрации, 8D
+    `CREATE TABLE IF NOT EXISTS "instruments" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "name" varchar(255) NOT NULL,
+      "code" varchar(60),
+      "serial_no" varchar(120),
+      "range_text" varchar(120),
+      "location" varchar(160),
+      "interval_months" integer DEFAULT 12 NOT NULL,
+      "last_calibration" date,
+      "next_due" date,
+      "status" varchar(20) DEFAULT 'active' NOT NULL,
+      "notes" text,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "instrument_calibrations" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "instrument_id" integer NOT NULL REFERENCES "instruments"("id") ON DELETE CASCADE,
+      "cal_date" date NOT NULL,
+      "result" varchar(10) NOT NULL,
+      "certificate_no" varchar(120),
+      "provider" varchar(255),
+      "next_due" date,
+      "notes" text,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "inspection_plans" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "product_id" integer,
+      "operation" varchar(50),
+      "characteristic" varchar(255) NOT NULL,
+      "nominal" numeric(14, 4),
+      "tol_plus" numeric(14, 4),
+      "tol_minus" numeric(14, 4),
+      "unit" varchar(20) DEFAULT 'mm',
+      "instrument_id" integer,
+      "frequency" varchar(120),
+      "sort_order" integer DEFAULT 0 NOT NULL,
+      "notes" text
+    )`,
+    `CREATE TABLE IF NOT EXISTS "inspection_records" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "work_order_id" integer NOT NULL,
+      "plan_id" integer,
+      "characteristic" varchar(255) NOT NULL,
+      "nominal" numeric(14, 4),
+      "tol_plus" numeric(14, 4),
+      "tol_minus" numeric(14, 4),
+      "measured" numeric(14, 4),
+      "result" varchar(10) NOT NULL,
+      "sample_no" integer DEFAULT 1 NOT NULL,
+      "instrument_id" integer,
+      "inspector" varchar(160),
+      "inspected_at" timestamp DEFAULT now() NOT NULL,
+      "notes" text
+    )`,
+    `CREATE INDEX IF NOT EXISTS "inspection_records_wo_idx" ON "inspection_records" ("work_order_id")`,
+    // Нестинг: извоз на делови и увоз на резултат (табли, искористеност, остатоци)
+    `CREATE TABLE IF NOT EXISTS "nesting_jobs" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "work_order_ids" integer[] NOT NULL,
+      "parts" jsonb,
+      "result" jsonb,
+      "status" varchar(20) DEFAULT 'exported' NOT NULL,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "imported_at" timestamp
+    )`,
+    // DXF цртежи од калкулацијата за сечење (оригиналот се чува за налогот/машината)
+    `CREATE TABLE IF NOT EXISTS "cad_drawings" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "file_name" varchar(255) NOT NULL,
+      "dxf" text NOT NULL,
+      "stats" jsonb,
+      "calc" jsonb,
+      "quotation_id" integer,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
 
     // ===== РАСПОРЕД НА ПРОИЗВОДСТВО =====
     `ALTER TABLE "work_order_operations" ADD COLUMN IF NOT EXISTS "machine_id" bigint`,
@@ -246,5 +422,143 @@ export function getExtraSql(): string[] {
     `CREATE INDEX IF NOT EXISTS "wo_materials_wo_idx" ON "work_order_materials" ("work_order_id")`,
     `CREATE INDEX IF NOT EXISTS "wo_ops_wo_idx" ON "work_order_operations" ("work_order_id")`,
     `CREATE INDEX IF NOT EXISTS "document_items_doc_idx" ON "document_items" ("document_type", "document_id")`,
+    // по табелите на квалитет и остатоци (се создаваат погоре)
+    `ALTER TABLE "quality_issues" ADD COLUMN IF NOT EXISTS "eight_d" jsonb`,
+    `ALTER TABLE "material_remnants" ADD COLUMN IF NOT EXISTS "width_mm" numeric(12, 1)`,
+    // ===== Ф3: CRM, портал, отсуства, набавка, продажни услови, буџет =====
+    `CREATE TABLE IF NOT EXISTS "crm_opportunities" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "customer_id" integer,
+      "company" varchar(255),
+      "contact_name" varchar(255),
+      "email" varchar(320),
+      "phone" varchar(60),
+      "title" varchar(300) NOT NULL,
+      "value" numeric(16, 2) DEFAULT '0' NOT NULL,
+      "currency" varchar(10) DEFAULT 'MKD' NOT NULL,
+      "probability" integer DEFAULT 30 NOT NULL,
+      "stage" varchar(20) DEFAULT 'new' NOT NULL,
+      "expected_close" date,
+      "source" varchar(30),
+      "lost_reason" varchar(40),
+      "quotation_id" integer,
+      "owner" varchar(160),
+      "notes" text,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "crm_activities" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "customer_id" integer,
+      "opportunity_id" integer,
+      "quotation_id" integer,
+      "kind" varchar(20) NOT NULL,
+      "subject" varchar(300) NOT NULL,
+      "notes" text,
+      "due_date" date,
+      "done_at" timestamp,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "crm_activities_customer_idx" ON "crm_activities" ("customer_id")`,
+    `CREATE TABLE IF NOT EXISTS "crm_files" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "opportunity_id" integer NOT NULL REFERENCES "crm_opportunities"("id") ON DELETE CASCADE,
+      "file_name" varchar(255) NOT NULL,
+      "mime" varchar(120),
+      "data" text NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `ALTER TABLE "quotations" ADD COLUMN IF NOT EXISTS "lost_reason" varchar(40)`,
+    `ALTER TABLE "quotations" ADD COLUMN IF NOT EXISTS "lost_note" text`,
+    `CREATE TABLE IF NOT EXISTS "customer_portal_tokens" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "customer_id" integer NOT NULL,
+      "token_hash" char(64) NOT NULL UNIQUE,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "expires_at" timestamp,
+      "revoked_at" timestamp,
+      "last_used_at" timestamp
+    )`,
+    `ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "embg" varchar(13)`,
+    `ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "annual_leave_days" integer DEFAULT 20`,
+    `CREATE TABLE IF NOT EXISTS "employee_absences" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "employee_id" integer NOT NULL,
+      "kind" varchar(20) NOT NULL,
+      "date_from" date NOT NULL,
+      "date_to" date NOT NULL,
+      "days" numeric(6, 1) NOT NULL,
+      "note" text,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "rfqs" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "number" varchar(30) NOT NULL UNIQUE,
+      "title" varchar(300) NOT NULL,
+      "needed_by" date,
+      "status" varchar(20) DEFAULT 'draft' NOT NULL,
+      "notes" text,
+      "po_id" integer,
+      "created_by" varchar(160),
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "rfq_items" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "rfq_id" integer NOT NULL REFERENCES "rfqs"("id") ON DELETE CASCADE,
+      "material_id" integer,
+      "description" varchar(500) NOT NULL,
+      "quantity" numeric(14, 3) NOT NULL,
+      "unit" varchar(20)
+    )`,
+    `CREATE TABLE IF NOT EXISTS "rfq_suppliers" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "rfq_id" integer NOT NULL REFERENCES "rfqs"("id") ON DELETE CASCADE,
+      "supplier_id" integer NOT NULL,
+      "sent_at" timestamp,
+      "responded_at" timestamp,
+      "prices" jsonb,
+      "delivery_days" integer,
+      "valid_until" date,
+      "note" text,
+      "chosen" boolean DEFAULT false NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "supplier_prices" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "supplier_id" integer NOT NULL,
+      "material_id" integer NOT NULL,
+      "price" numeric(14, 4) NOT NULL,
+      "currency" varchar(10) DEFAULT 'MKD' NOT NULL,
+      "min_qty" numeric(14, 3),
+      "lead_days" integer,
+      "valid_from" date,
+      "source" varchar(30),
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "supplier_prices_uq" ON "supplier_prices" ("supplier_id", "material_id")`,
+    `ALTER TABLE "purchase_orders" ADD COLUMN IF NOT EXISTS "approved_by" varchar(160)`,
+    `ALTER TABLE "purchase_orders" ADD COLUMN IF NOT EXISTS "approved_at" timestamp`,
+    `ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "discount_pct" numeric(5, 2) DEFAULT '0'`,
+    `ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "credit_limit" numeric(16, 2)`,
+    `ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "payment_days" integer`,
+    `CREATE TABLE IF NOT EXISTS "customer_prices" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "customer_id" integer NOT NULL,
+      "item_type" varchar(20) NOT NULL,
+      "ref_id" integer NOT NULL,
+      "price" numeric(14, 2),
+      "discount_pct" numeric(5, 2),
+      "note" varchar(300)
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "customer_prices_uq" ON "customer_prices" ("customer_id", "item_type", "ref_id")`,
+    `CREATE TABLE IF NOT EXISTS "budgets" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "year" integer NOT NULL,
+      "line" varchar(40) NOT NULL,
+      "month" integer DEFAULT 0 NOT NULL,
+      "amount" numeric(16, 2) NOT NULL
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "budgets_uq" ON "budgets" ("year", "line", "month")`,
   ];
 }

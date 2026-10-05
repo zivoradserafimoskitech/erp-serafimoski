@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
@@ -67,8 +67,8 @@ export const warehouseRouter = createRouter({
 
       const result = await query;
       let filtered = result;
-      if (input?.warehouseId) filtered = filtered.filter(r => r.warehouseId === input.warehouseId);
-      if (input?.materialId) filtered = filtered.filter(r => r.materialId === input.materialId);
+      if (input?.warehouseId) filtered = filtered.filter((r: any) => r.warehouseId === input.warehouseId);
+      if (input?.materialId) filtered = filtered.filter((r: any) => r.materialId === input.materialId);
       return filtered;
     }),
 
@@ -78,7 +78,7 @@ export const warehouseRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       const result = await db.select().from(stockTransfers).orderBy(desc(stockTransfers.createdAt));
-      if (input?.status) return result.filter(r => r.status === input.status);
+      if (input?.status) return result.filter((r: any) => r.status === input.status);
       return result;
     }),
 

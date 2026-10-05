@@ -3,7 +3,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
-  materialLots, materials, suppliers, receipts, receiptItems,
+  materialLots, materials, suppliers, receipts,
   dnCertificates, deliveryNotes, documentItems, workOrders, workOrderMaterials,
 } from "@db/schema";
 import { logAudit } from "./audit-helper";

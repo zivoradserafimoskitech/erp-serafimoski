@@ -1,7 +1,7 @@
 // ===== УЈП е-Фактура API Service =====
 // Комуникација со УЈП е-фактура систем преку API со JWS потпис
 
-import { SignJWT, importPKCS8, importX509 } from "jose";
+import { SignJWT, importPKCS8 } from "jose";
 import { getDb } from "./queries/connection";
 import { digitalCertificates } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -116,7 +116,7 @@ export async function getActiveCertificates(): Promise<CertificateInfo[]> {
 /**
  * Зема сертификат со дешифриран приватен клуч
  */
-export async function getCertificateWithKey(certId: number, decryptionKey?: string) {
+export async function getCertificateWithKey(certId: number, _decryptionKey?: string) {
   const db = getDb();
   const rows = await db
     .select()

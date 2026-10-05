@@ -4,7 +4,7 @@ import { eq, desc } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { listLimit } from "./list-limit";
 import { getDb } from "./queries/connection";
-import { workOrders, workOrderOperations, workOrderMaterials, orders, orderItems, customers, deliveryNotes, documentItems, materials, warehouses, products, finishedGoodsStock , operationTimeLogs } from "@db/schema";
+import { workOrders, workOrderOperations, workOrderMaterials, orders, orderItems, deliveryNotes, documentItems, materials, warehouses, products, finishedGoodsStock , operationTimeLogs } from "@db/schema";
 import { recalcWorkOrderCost } from "./wo-cost-helper";
 import { logAudit } from "./audit-helper";
 
@@ -30,11 +30,11 @@ export const productionRouter = createRouter({
         .orderBy(desc(workOrders.createdAt)).limit(listLimit(input as any));
 
       let filtered = result;
-      if (input?.status) filtered = filtered.filter(r => r.status === input.status);
-      if (input?.priority) filtered = filtered.filter(r => r.priority === input.priority);
+      if (input?.status) filtered = filtered.filter((r: any) => r.status === input.status);
+      if (input?.priority) filtered = filtered.filter((r: any) => r.priority === input.priority);
       if (input?.search) {
         const s = input.search.toLowerCase();
-        filtered = filtered.filter(r => r.woNumber.toLowerCase().includes(s) || r.description.toLowerCase().includes(s));
+        filtered = filtered.filter((r: any) => r.woNumber.toLowerCase().includes(s) || r.description.toLowerCase().includes(s));
       }
       return filtered;
     }),
@@ -176,7 +176,10 @@ export const productionRouter = createRouter({
       const result = await db.insert(workOrders).values(insertData);
       const insertId = Number(result[0].insertId);
       await logAudit({ action: "CREATE", entityType: "work_order", entityId: insertId, description: `Креиран налог ${input.woNumber}` });
-      return { success: true, id: insertId };
+      // налог за нарачка: операциите од технолошката постапка на производите
+      let opsAdded = 0;
+      if (orderId) { const { applyRoutingToWorkOrder } = await import("./mfg-router"); opsAdded = (await applyRoutingToWorkOrder(insertId).catch(() => ({ added: 0 }))).added; }
+      return { success: true, id: insertId, opsAdded };
     }),
 
   workOrderUpdate: publicQuery
@@ -219,7 +222,7 @@ export const productionRouter = createRouter({
           if (already.length === 0) {
             // Најди го магацинот за готови производи
             const allWh = await db.select().from(warehouses);
-            let fgWh = allWh.find(w => w.code === "GL-PROD") || allWh.find(w => w.type === "finished_goods");
+            let fgWh = allWh.find((w: any) => w.code === "GL-PROD") || allWh.find((w: any) => w.type === "finished_goods");
             if (!fgWh) {
               const created = await db.insert(warehouses).values({
                 code: "GL-PROD", name: "Главен Магацин - Производи", type: "finished_goods", isActive: "active",
@@ -233,7 +236,7 @@ export const productionRouter = createRouter({
             let productId: number | null = null;
             if (wo.orderId) {
               const oItems = await db.select().from(orderItems).where(eq(orderItems.orderId, wo.orderId));
-              const withProduct = oItems.filter(oi => oi.productId);
+              const withProduct = oItems.filter((oi: any) => oi.productId);
               if (withProduct.length === 1) productId = Number(withProduct[0].productId);
             }
             // Инаку: најди или создај производ поврзан со налогот
@@ -666,7 +669,7 @@ export const productionRouter = createRouter({
 
       // Готовите производи произведени по овој налог, со преостаната залиха
       const fgRows = (await db.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.workOrderId, input.workOrderId)))
-        .filter(f => (parseFloat(String(f.quantity ?? "0")) || 0) > 0);
+        .filter((f: any) => (parseFloat(String(f.quantity ?? "0")) || 0) > 0);
       if (fgRows.length === 0) throw new Error("Нема залиха на готов производ од овој налог — или не е заведена, или веќе е испорачана");
 
       // Тежината на готовиот производ = потрошениот материјал на овој налог.
@@ -689,7 +692,7 @@ export const productionRouter = createRouter({
       const actualRows = woMats.filter((m: any) => m.isActual === "actual");
       const totalMaterialKg = actualRows.length > 0 ? kgOf(actualRows) : kgOf(woMats as any[]);
       const totalProducedQty = fgRows.reduce(
-        (a, f) => a + (parseFloat(String(f.quantity ?? "0")) || 0),
+        (a: any, f: any) => a + (parseFloat(String(f.quantity ?? "0")) || 0),
         0
       );
       // Тежина по едно парче готов производ
@@ -763,7 +766,7 @@ export const productionRouter = createRouter({
             const price = Math.round(cost * (1 + input.marginPercent / 100) * 100) / 100;
             return [{ description: wo[0].description ?? `Работен налог ${wo[0].woNumber}`, quantity: "1", unit: "pcs", unitPrice: String(price), totalPrice: String(price) }];
           })();
-      const subtotal = Math.round(lines.reduce((a, l) => a + Number(l.totalPrice), 0) * 100) / 100;
+      const subtotal = Math.round(lines.reduce((a: any, l: any) => a + Number(l.totalPrice), 0) * 100) / 100;
       if (!(subtotal > 0)) throw new Error("Налогот нема цена (ни во нарачката, ни пресметан трошок) — креирај фактура рачно");
       // Валута и ДДВ од понудата од која е нарачката (извоз во EUR = 0% ДДВ); без понуда -- денари, 18%
       const { quotations } = await import("@db/schema");
@@ -787,7 +790,7 @@ export const productionRouter = createRouter({
       } as any);
       const invId = Number((res as any)[0]?.insertId ?? 0);
       if (invId) {
-        await db.insert(documentItems).values(lines.map(l => ({
+        await db.insert(documentItems).values(lines.map((l: any) => ({
           documentId: invId, documentType: "invoice", ...l, vatRate: vatRate.toFixed(2), itemType: "manual",
         })) as any);
       }
@@ -801,8 +804,8 @@ export const productionRouter = createRouter({
       const ops = await db.select().from(workOrderOperations).where(eq(workOrderOperations.workOrderId, input.id));
       const mats = await db.select().from(workOrderMaterials).where(eq(workOrderMaterials.workOrderId, input.id));
 
-      const opCost = ops.reduce((s, o) => s + parseFloat(o.costAmount ?? "0"), 0);
-      const matCost = mats.reduce((s, m) => s + parseFloat(m.totalCost ?? "0"), 0);
+      const opCost = ops.reduce((s: any, o: any) => s + parseFloat(o.costAmount ?? "0"), 0);
+      const matCost = mats.reduce((s: any, m: any) => s + parseFloat(m.totalCost ?? "0"), 0);
       const totalCost = opCost + matCost;
 
       await db.update(workOrders).set({ costAmount: totalCost.toFixed(2) }).where(eq(workOrders.id, input.id));
@@ -814,11 +817,11 @@ export const productionRouter = createRouter({
     const db = getDb();
     const allWO = await db.select().from(workOrders);
     const total = allWO.length;
-    const pending = allWO.filter(w => w.status === "pending").length;
-    const inProgress = allWO.filter(w => w.status === "in_progress").length;
-    const completed = allWO.filter(w => w.status === "completed").length;
-    const onHold = allWO.filter(w => w.status === "on_hold").length;
-    const totalCost = allWO.reduce((s, w) => s + parseFloat(w.costAmount ?? "0"), 0);
+    const pending = allWO.filter((w: any) => w.status === "pending").length;
+    const inProgress = allWO.filter((w: any) => w.status === "in_progress").length;
+    const completed = allWO.filter((w: any) => w.status === "completed").length;
+    const onHold = allWO.filter((w: any) => w.status === "on_hold").length;
+    const totalCost = allWO.reduce((s: any, w: any) => s + parseFloat(w.costAmount ?? "0"), 0);
     return { total, pending, inProgress, completed, onHold, totalCost: totalCost.toFixed(2) };
   }),
 });

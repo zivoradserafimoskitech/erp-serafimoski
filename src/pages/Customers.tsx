@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import CustomerCrmDialog from "@/components/CustomerCrmDialog";
 import { DateInput } from "@/components/ui/date-input";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
@@ -40,8 +41,7 @@ import {
   ClipboardList,
   Trash2,
   Eye,
-  Pencil,
-} from "lucide-react";
+  Pencil, Briefcase } from "lucide-react";
 
 const orderStatusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "На чекање", className: "bg-gray-100 text-gray-700" },
@@ -60,6 +60,7 @@ const priorityConfig: Record<string, { label: string; className: string }> = {
 };
 
 export default function Customers() {
+  const [crmCust, setCrmCust] = useState<{ id: number; name: string } | null>(null);
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
   const [customerDialog, setCustomerDialog] = useState(false);
@@ -310,7 +311,7 @@ export default function Customers() {
                     <Select value={orderForm.customerId} onValueChange={(v) => setOrderForm({ ...orderForm, customerId: v })}>
                       <SelectTrigger><SelectValue placeholder="Избери клиент" /></SelectTrigger>
                       <SelectContent>
-                        {customers?.map((c) => (
+                        {customers?.map((c: any) => (
                           <SelectItem key={c.id} value={c.id.toString()}>{c.name} {c.company ? `(${c.company})` : ""}</SelectItem>
                         ))}
                       </SelectContent>
@@ -423,7 +424,7 @@ export default function Customers() {
                   {customers?.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема клиенти</TableCell></TableRow>
                   ) : (
-                    customers?.map((c) => (
+                    customers?.map((c: any) => (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">{c.name}</TableCell>
                         <TableCell>{c.company || "-"}</TableCell>
@@ -436,6 +437,9 @@ export default function Customers() {
                           </Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
+                          <Button size="sm" variant="ghost" onClick={() => setCrmCust({ id: c.id, name: c.company || c.name })} title="Услови, активности, портал">
+                            <Briefcase className="h-3.5 w-3.5" />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => openEditCust(c)} title="Измени">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -471,7 +475,7 @@ export default function Customers() {
                   {orders?.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Нема нарачки</TableCell></TableRow>
                   ) : (
-                    orders?.map((o) => {
+                    orders?.map((o: any) => {
                       const st = orderStatusConfig[o.status] || orderStatusConfig.pending;
                       const pr = priorityConfig[o.priority] || priorityConfig.normal;
                       return (
@@ -536,7 +540,7 @@ export default function Customers() {
                 <div className="border-t pt-3">
                   <h4 className="font-semibold mb-2">Ставки</h4>
                   <div className="space-y-2">
-                    {orderDetail.items.map((item) => (
+                    {orderDetail.items.map((item: any) => (
                       <div key={item.id} className="bg-gray-50 p-2 rounded text-sm">
                         <div className="font-medium">{item.description}</div>
                         <div className="text-gray-500 flex gap-3 mt-1">
@@ -560,6 +564,7 @@ export default function Customers() {
           )}
         </DialogContent>
       </Dialog>
+      <CustomerCrmDialog customer={crmCust} onClose={() => setCrmCust(null)} />
     </div>
   );
 }
