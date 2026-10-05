@@ -560,5 +560,7 @@ export function getExtraSql(): string[] {
       "amount" numeric(16, 2) NOT NULL
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "budgets_uq" ON "budgets" ("year", "line", "month")`,
+    // безбедна миграција: количините на нарачка усогласени со понудите (decimal)
+    `ALTER TABLE "order_items" ALTER COLUMN "quantity" TYPE numeric(12, 3) USING ("quantity"::numeric(12, 3))`,
   ];
 }
