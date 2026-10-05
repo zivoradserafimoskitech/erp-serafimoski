@@ -19,6 +19,9 @@ import Finance from "@/pages/Finance";
 import Quality from "@/pages/Quality";
 import Employees from "@/pages/Employees";
 import DealPipeline from "@/pages/DealPipeline";
+import Crm from "@/pages/Crm";
+import Reports from "@/pages/Reports";
+import Portal from "@/pages/Portal";
 
 export default function App() {
   return (
@@ -27,6 +30,10 @@ export default function App() {
       {/* Скенирање на етикета — без Layout, за телефон */}
       <Route path="/o/:code" element={<RemnantScan />} />
       <Route path="/n/:id" element={<WorkOrderScan />} />
+      {/* Портал за клиенти — таен линк, без најава и без менито */}
+      <Route path="/portal/:token" element={<Portal />} />
+      <Route path="/crm" element={<Layout><Crm /></Layout>} />
+      <Route path="/izvestai" element={<Layout><Reports /></Layout>} />
       <Route
         path="/"
         element={

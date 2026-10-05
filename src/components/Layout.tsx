@@ -26,12 +26,12 @@ import {
   Search,
   Workflow,
   Contact,
-  ShieldAlert,
-} from "lucide-react";
+  ShieldAlert, Target, BarChart3 } from "lucide-react";
 
 const navItems = [
   { path: "/", label: "Контролна табла", icon: LayoutDashboard },
   { path: "/tek", label: "Тек на нарачки", icon: Workflow },
+  { path: "/crm", label: "Продажба", icon: Target },
   { path: "/sklad", label: "Склад", icon: Warehouse },
   { path: "/proizvodstvo", label: "Производство", icon: Factory },
   { path: "/kvalitet", label: "Квалитет и одржување", icon: ShieldCheck },
@@ -39,6 +39,7 @@ const navItems = [
   { path: "/nabavka", label: "Набавка", icon: ShoppingCart },
   { path: "/smetkovodstvo", label: "Фактури", icon: Calculator },
   { path: "/finansii", label: "Финансии", icon: Landmark },
+  { path: "/izvestai", label: "Извештаи", icon: BarChart3 },
   { path: "/ponudi", label: "Понуди", icon: FileText },
   { path: "/priemnici", label: "Приемници", icon: ClipboardCheck },
   { path: "/katalog", label: "Каталог", icon: BookOpen },

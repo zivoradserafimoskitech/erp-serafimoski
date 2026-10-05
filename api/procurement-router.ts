@@ -355,6 +355,9 @@ export const procurementRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...data } = input;
+      // над прагот: прво одобрување од администратор
+      const { assertPoApproved } = await import("./purch-router");
+      await assertPoApproved(id, data.status);
       const updateData: any = { ...data };
       if (data.expectedDate) updateData.expectedDate = new Date(data.expectedDate);
       await db.update(purchaseOrders).set(updateData).where(eq(purchaseOrders.id, id));

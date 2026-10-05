@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import CustomerCrmDialog from "@/components/CustomerCrmDialog";
 import { DateInput } from "@/components/ui/date-input";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
@@ -40,8 +41,7 @@ import {
   ClipboardList,
   Trash2,
   Eye,
-  Pencil,
-} from "lucide-react";
+  Pencil, Briefcase } from "lucide-react";
 
 const orderStatusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "На чекање", className: "bg-gray-100 text-gray-700" },
@@ -60,6 +60,7 @@ const priorityConfig: Record<string, { label: string; className: string }> = {
 };
 
 export default function Customers() {
+  const [crmCust, setCrmCust] = useState<{ id: number; name: string } | null>(null);
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
   const [customerDialog, setCustomerDialog] = useState(false);
@@ -436,6 +437,9 @@ export default function Customers() {
                           </Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
+                          <Button size="sm" variant="ghost" onClick={() => setCrmCust({ id: c.id, name: c.company || c.name })} title="Услови, активности, портал">
+                            <Briefcase className="h-3.5 w-3.5" />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => openEditCust(c)} title="Измени">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -560,6 +564,7 @@ export default function Customers() {
           )}
         </DialogContent>
       </Dialog>
+      <CustomerCrmDialog customer={crmCust} onClose={() => setCrmCust(null)} />
     </div>
   );
 }

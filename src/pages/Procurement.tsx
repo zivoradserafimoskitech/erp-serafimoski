@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { RfqTab, PricesTab, MatchTab, ApprovalsBar } from "@/components/purch/PurchTabs";
 import { useSearchParams } from "react-router";
 import { formatDate } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
@@ -229,7 +230,13 @@ export default function Procurement() {
             <AlertTriangle className="h-4 w-4 mr-1" />
             Потреби
           </TabsTrigger>
+          <TabsTrigger value="rfq">Барања за понуда</TabsTrigger>
+          <TabsTrigger value="prices">Ценовници</TabsTrigger>
+          <TabsTrigger value="match">Нарачка–приемница–фактура</TabsTrigger>
         </TabsList>
+        <TabsContent value="rfq"><RfqTab /></TabsContent>
+        <TabsContent value="prices"><PricesTab /></TabsContent>
+        <TabsContent value="match"><MatchTab /></TabsContent>
 
         <TabsContent value="needs">
           <ProcurementNeeds />
@@ -275,7 +282,8 @@ export default function Procurement() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="orders">
+        <TabsContent value="orders" className="space-y-3">
+          <ApprovalsBar />
           <Card>
             <CardContent className="p-0">
               <Table>

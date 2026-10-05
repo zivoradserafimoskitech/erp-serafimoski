@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AbsencesTab from "@/components/hr/AbsencesTab";
 import { DateInput } from "@/components/ui/date-input";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Users, Banknote, Plus, Pencil, Calculator, CheckCircle2, Undo2, Download } from "lucide-react";
+import { Users, Banknote, Plus, Pencil, Calculator, CheckCircle2, Undo2, Download, FileText, FileCode, CalendarDays } from "lucide-react";
 
 const fmt = (n: number) => n.toLocaleString("mk-MK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -20,7 +21,7 @@ function EmployeesTab() {
   const utils = trpc.useUtils();
   const [showAll, setShowAll] = useState(false);
   const { data } = trpc.hr.employeesList.useQuery({ includeInactive: showAll, period: thisMonth() });
-  const empty = { id: 0, fullName: "", position: "", scanName: "", grossSalary: "", hourlyCost: "", startDate: "", bankAccount: "", notes: "", isActive: "active" };
+  const empty = { id: 0, fullName: "", position: "", scanName: "", grossSalary: "", hourlyCost: "", startDate: "", bankAccount: "", notes: "", isActive: "active", embg: "", annualLeaveDays: "20" };
   const [f, setF] = useState<typeof empty | null>(null);
   const save = trpc.hr.employeeUpsert.useMutation({ onSuccess: () => { toast.success("Зачувано"); setF(null); utils.hr.employeesList.invalidate(); }, onError: (e) => toast.error(e.message) });
   return (
@@ -45,7 +46,7 @@ function EmployeesTab() {
                   <TableCell className="text-right tabular-nums">{fmt(e.grossSalary)}</TableCell>
                   <TableCell className="text-right tabular-nums text-gray-500">{e.hourlyCost ? fmt(e.hourlyCost) : "—"}</TableCell>
                   <TableCell className="text-right tabular-nums">{e.hoursThisPeriod ? `${e.hoursThisPeriod} ч` : "—"}</TableCell>
-                  <TableCell><Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setF({ ...empty, ...e, grossSalary: String(e.grossSalary), hourlyCost: String(e.hourlyCost || ""), position: e.position ?? "", scanName: e.scanName ?? "", startDate: e.startDate ?? "", bankAccount: e.bankAccount ?? "", notes: e.notes ?? "" })}><Pencil className="h-3.5 w-3.5" /></Button></TableCell>
+                  <TableCell><Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setF({ ...empty, ...e, grossSalary: String(e.grossSalary), hourlyCost: String(e.hourlyCost || ""), position: e.position ?? "", scanName: e.scanName ?? "", startDate: e.startDate ?? "", bankAccount: e.bankAccount ?? "", notes: e.notes ?? "", embg: e.embg ?? "", annualLeaveDays: String(e.annualLeaveDays ?? 20) })}><Pencil className="h-3.5 w-3.5" /></Button></TableCell>
                 </TableRow>
               ))}
           </TableBody>
@@ -71,11 +72,15 @@ function EmployeesTab() {
                 <div className="space-y-1"><Label className="text-xs">Почеток на работа</Label><DateInput value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
                 <div className="space-y-1"><Label className="text-xs">Трансакциска сметка</Label><Input value={f.bankAccount} onChange={(e) => setF({ ...f, bankAccount: e.target.value })} /></div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">ЕМБГ (за МПИН)</Label><Input value={f.embg} maxLength={13} onChange={(e) => setF({ ...f, embg: e.target.value.replace(/\D/g, "") })} /></div>
+                <div className="space-y-1"><Label className="text-xs">Денови годишен одмор</Label><Input type="number" value={f.annualLeaveDays} onChange={(e) => setF({ ...f, annualLeaveDays: e.target.value })} /></div>
+              </div>
               {!!f.id && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.isActive === "active"} onChange={(e) => setF({ ...f, isActive: e.target.checked ? "active" : "inactive" })} />Активен</label>}
               <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={f.fullName.length < 3 || !(parseFloat(f.grossSalary) >= 0) || save.isPending}
                 onClick={() => save.mutate({ id: f.id || undefined, fullName: f.fullName, position: f.position || undefined, scanName: f.scanName || undefined,
                   grossSalary: parseFloat(f.grossSalary) || 0, hourlyCost: parseFloat(f.hourlyCost) || 0, startDate: f.startDate || undefined,
-                  bankAccount: f.bankAccount || undefined, isActive: f.isActive as any })}>Зачувај</Button>
+                  bankAccount: f.bankAccount || undefined, isActive: f.isActive as any, embg: f.embg || "", annualLeaveDays: parseInt(f.annualLeaveDays) || 20 })}>Зачувај</Button>
             </div>
           )}
         </DialogContent>
@@ -103,6 +108,45 @@ function PayrollTab() {
       ...(run?.lines ?? []).map(l => [l.name, l.bankAccount ?? "", l.gross.toFixed(2), l.contributions.toFixed(2), l.taxBase.toFixed(2), l.incomeTax.toFixed(2), l.net.toFixed(2), l.hours])];
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" })); a.download = `plati-${period}.csv`; a.click();
+  };
+  const { data: settings } = trpc.settings.settingsGet.useQuery(undefined, { staleTime: 300_000 });
+  /** Платна листа за секој вработен — една страница по вработен, во еден PDF. */
+  const payslipsPdf = async () => {
+    try {
+      const d = await utils.hr.payslips.fetch({ period });
+      if (!d) return;
+      const { simpleReportHtml, htmlToPdfBlob } = await import("@/lib/print-documents");
+      const { saveBlob } = await import("@/lib/xlsx");
+      const pages = d.slips.map((s) => simpleReportHtml({
+        title: `Платна листа ${period.slice(5, 7)}.${period.slice(0, 4)}`, subtitle: `${s.name}${s.position ? " · " + s.position : ""}${s.embg ? " · ЕМБГ " + s.embg : ""}`, settings,
+        head: ["Ставка", "Износ (ден)"], numCols: [1],
+        rows: [
+          { cells: ["Бруто плата", s.gross], bold: true },
+          ...s.contributionParts.map((c) => ({ cells: [`  Придонес ${c.label} (${c.rate}%)`, c.amount] as (string | number | null)[], indent: 1 })),
+          { cells: ["Вкупно придонеси", s.contributions] },
+          { cells: ["Лично ослободување", s.personalExemption] },
+          { cells: ["Даночна основа", s.taxBase] },
+          { cells: [`Персонален данок (${d.params.incomeTaxRate}%)`, s.incomeTax] },
+          { cells: ["Нето плата за исплата", s.net], bold: true },
+          { cells: [`Работни денови во месецот: ${d.workdays} · евидентирани часови: ${s.hours || "—"}`, null], muted: true },
+          ...s.absences.map((a) => ({ cells: [`${a.label}: ${a.days} дена`, null] as (string | number | null)[], muted: true })),
+        ],
+        notes: [s.bankAccount ? `Исплата на сметка ${s.bankAccount}` : ""].filter(Boolean),
+        signatures: ["Пресметал", "Примил"],
+      }));
+      // секоја листа е посебна страница: се спојуваат телата
+      const html = pages[0].replace(/<body>[\s\S]*<\/body>/, `<body>${pages.map((p) => `<div style="page-break-after:always">${/<body>([\s\S]*)<\/body>/.exec(p)![1]}</div>`).join("")}</body>`);
+      saveBlob(await htmlToPdfBlob(html), `platni-listi-${period}.pdf`);
+    } catch (e: any) { toast.error(e.message); }
+  };
+  const mpin = async () => {
+    try {
+      const r = await utils.hr.mpinXml.fetch({ period });
+      const { saveBlob } = await import("@/lib/xlsx");
+      saveBlob(new Blob([r.xml], { type: "application/xml" }), r.fileName);
+      if (r.missingEmbg.length) toast.warning(`Нема ЕМБГ за: ${r.missingEmbg.join(", ")} — внеси го кај вработениот`);
+      else toast.info("МПИН е подготвен — проверете го со сметководителот пред поднесување во е-ПДД");
+    } catch (e: any) { toast.error(e.message); }
   };
   return (
     <div className="space-y-4">
@@ -151,6 +195,8 @@ function PayrollTab() {
           <Badge className={posted ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}>{posted ? "Книжено во главната книга" : "Нацрт — не е книжено"}</Badge>
           <div className="flex gap-2">
             <Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4 mr-1.5" />Листа за банка (CSV)</Button>
+            <Button variant="outline" onClick={() => void payslipsPdf()}><FileText className="h-4 w-4 mr-1.5" />Платни листи (PDF)</Button>
+            <Button variant="outline" onClick={() => void mpin()}><FileCode className="h-4 w-4 mr-1.5" />МПИН (XML)</Button>
             {posted
               ? <Button variant="outline" onClick={() => post.mutate({ period, post: false })}><Undo2 className="h-4 w-4 mr-1.5" />Откажи книжење</Button>
               : <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => post.mutate({ period, post: true })}><CheckCircle2 className="h-4 w-4 mr-1.5" />Потврди и книжи</Button>}
@@ -183,7 +229,9 @@ export default function Employees() {
         <TabsList className="bg-amber-50">
           <TabsTrigger value="employees"><Users className="h-4 w-4 mr-1.5" />Вработени</TabsTrigger>
           <TabsTrigger value="payroll"><Banknote className="h-4 w-4 mr-1.5" />Плати</TabsTrigger>
+          <TabsTrigger value="absences"><CalendarDays className="h-4 w-4 mr-1.5" />Отсуства</TabsTrigger>
         </TabsList>
+        <TabsContent value="absences" className="mt-4"><AbsencesTab /></TabsContent>
         <TabsContent value="employees" className="mt-4"><EmployeesTab /></TabsContent>
         <TabsContent value="payroll" className="mt-4"><PayrollTab /></TabsContent>
       </Tabs>

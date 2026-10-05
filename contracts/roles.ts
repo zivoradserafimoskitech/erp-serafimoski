@@ -68,6 +68,9 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   settle: "manager",
   // застои и мерења ги внесува и операторот; постапки, планови, инструменти — менаџер (подолу)
   mfg: "operator",
+  crm: "manager",
+  purch: "manager",
+  reports: "manager",
   ops: "operator",
   hr: "admin",
   mail: "manager",
@@ -80,15 +83,15 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
 };
 
 /** Каде сметководителот смее да пишува. */
-export const ACCOUNTANT_ROUTERS = ["accounting", "finance", "settle", "bank", "assets", "mail", "ocr", "email", "customers"];
+export const ACCOUNTANT_ROUTERS = ["accounting", "finance", "settle", "reports", "bank", "assets", "mail", "ocr", "email", "customers"];
 
 /** Мени по улога: патеки што ги гледа секоја улога (администраторот гледа сè). */
 export const MENU_BY_ROLE: Record<Role, string[] | "all"> = {
   admin: "all",
-  manager: ["/", "/tek", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva"],
-  accountant: ["/", "/tek", "/smetkovodstvo", "/finansii", "/klienti", "/sredstva"],
+  manager: ["/", "/tek", "/crm", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva"],
+  accountant: ["/", "/tek", "/izvestai", "/smetkovodstvo", "/finansii", "/klienti", "/sredstva"],
   operator: ["/", "/proizvodstvo", "/sklad", "/kvalitet", "/priemnici"],
-  viewer: ["/", "/tek", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva"],
+  viewer: ["/", "/tek", "/crm", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva"],
 };
 
 export function canSeeMenu(role: string | undefined | null, path: string): boolean {
@@ -146,6 +149,8 @@ export function canRun(role: string | undefined | null, path: string, type?: "qu
 
   // во производството операторот смее само застои, мерења и издавање по нестинг
   if (router === "mfg" && !/^(downtime|inspectionRecord)/.test(procedure)) return atLeast(role, "manager");
+  // одобрување на набавка над прагот и самиот праг — само администратор
+  if (router === "purch" && (procedure === "poApprove" || procedure === "approvalSettingsSave")) return atLeast(role, "admin");
 
   const min = WRITE_ROLE_BY_ROUTER[router] ?? "manager";
   return atLeast(role, min);

@@ -301,6 +301,25 @@ export default function Quotations() {
     setQDialog(true);
   };
 
+  // причина за одбиена понуда (CRM)
+  const [lostFor, setLostFor] = useState<number | null>(null);
+  const [lostReason, setLostReason] = useState("price");
+  const [lostNote, setLostNote] = useState("");
+  const markLost = trpc.crm.quotationLost.useMutation({ onSuccess: () => { setLostFor(null); setLostNote(""); utils.quotation.invalidate(); utils.crm.invalidate(); toast.success("Запишано — причината се гледа во Продажба"); }, onError: (e) => toast.error(e.message) });
+  // кредитен лимит и цени по купувач
+  const custIdNum = qForm.customerId ? parseInt(qForm.customerId) : 0;
+  const { data: credit } = trpc.crm.creditCheck.useQuery({ customerId: custIdNum, amount: qItems.reduce((s, i) => s + (parseFloat(i.totalPrice) || 0), 0) }, { enabled: !!custIdNum && qDialog });
+  const applyCustomerPrice = async (idx: number, type: "material" | "service" | "product", refId: number | null, price: string) => {
+    if (!custIdNum || !refId) return;
+    try {
+      const r = await utils.crm.priceFor.fetch({ customerId: custIdNum, itemType: type, refId, basePrice: parseFloat(price) || 0 });
+      if (r.rule && r.price !== (parseFloat(price) || 0)) {
+        setQItems((items) => items.map((it, i) => i !== idx ? it : { ...it, unitPrice: r.price.toFixed(2), totalPrice: ((parseFloat(it.quantity) || 0) * r.price).toFixed(2), notes: it.notes || r.rule! }));
+        toast.info(`Цена за купувачот: ${r.rule}`);
+      }
+    } catch { /* без посебна цена */ }
+  };
+
   const addItem = (
     type: "material" | "service" | "product",
     refId: number | null, desc: string, unit: string, price: string,
@@ -315,6 +334,7 @@ export default function Quotations() {
       pricePerKg: w > 0 ? ((Number(price) || 0) / w).toFixed(4) : "0",
     };
     setQItems([...qItems, newItem]);
+    void applyCustomerPrice(qItems.length, type, refId, price);
   };
 
   const updateItem = (idx: number, field: string, value: string) => {
@@ -442,6 +462,9 @@ export default function Quotations() {
                       <label className="flex items-center gap-2 text-sm">ДДВ %
                         <Input type="number" className="w-20 h-8" value={qForm.vatRate} onChange={e => setQForm({ ...qForm, vatRate: e.target.value })} />
                       </label>
+                    )}
+                    {credit && (credit.over || credit.overdueCount > 0) && (
+                      <span className="text-xs text-red-700 block">{credit.over ? `Над кредитниот лимит: отворено ${Math.round(credit.open).toLocaleString("mk-MK")} + оваа понуда > лимит ${Math.round(credit.limit ?? 0).toLocaleString("mk-MK")} ден. ` : ""}{credit.overdueCount ? `${credit.overdueCount} фактури по рок (${Math.round(credit.overdueMkd).toLocaleString("mk-MK")} ден).` : ""}</span>
                     )}
                     {qForm.customerId && isForeign(qForm.customerId, qForm.currency) && Number(qForm.vatRate) !== 0 && (
                       <span className="text-xs text-amber-700">Клиентот е од странство / валутата не е денари — обично без ДДВ</span>
@@ -909,7 +932,7 @@ export default function Quotations() {
               {/* Footer: status + convert */}
               <div className="px-8 py-4 border-t bg-gray-50 flex items-center gap-3">
                 <span className="text-sm text-gray-500">Статус:</span>
-                <Select value={qDetail.status} onValueChange={v => updateQ.mutate({ id: qDetail.id, status: v as any })}>
+                <Select value={qDetail.status} onValueChange={v => { if (v === "rejected") setLostFor(qDetail.id); else updateQ.mutate({ id: qDetail.id, status: v as any }); }}>
                   <SelectTrigger className="w-44 bg-white"><SelectValue /></SelectTrigger>
                   <SelectContent>{Object.entries(qStatus).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>
                 </Select>
@@ -1145,6 +1168,17 @@ export default function Quotations() {
         pricePerKg: (parseFloat(it.weightPerUnit) || 0) > 0 ? ((parseFloat(it.unitPrice) || 0) / parseFloat(it.weightPerUnit)).toFixed(4) : "0",
         unitCost: it.unitCost, totalCost: ((parseFloat(it.quantity) || 0) * (parseFloat(it.unitCost) || 0)).toFixed(2),
       }])} />
+      <Dialog open={lostFor !== null} onOpenChange={(o) => !o && setLostFor(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Зошто е одбиена понудата?</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Select value={lostReason} onValueChange={setLostReason}><SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{Object.entries({ price: "Цена", delivery: "Рок на испорака", competitor: "Отиде кај конкурент", spec: "Не можеме технички", no_response: "Нема одговор", cancelled: "Клиентот се откажа", other: "Друго" }).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
+            <Input placeholder="Детали (на пр. конкурентот 10% поевтино)" value={lostNote} onChange={(e) => setLostNote(e.target.value)} />
+            <Button className="w-full" disabled={markLost.isPending} onClick={() => lostFor && markLost.mutate({ quotationId: lostFor, reason: lostReason, note: lostNote || undefined })}>Запиши</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

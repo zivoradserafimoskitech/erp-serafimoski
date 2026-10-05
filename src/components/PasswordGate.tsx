@@ -28,6 +28,8 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // порталот за клиенти има свој таен линк — без најава во програмата
+  if (window.location.pathname.startsWith("/portal/")) return <>{children}</>;
   if (state === "checking") return null;
   if (state === "open") return <>{children}</>;
 

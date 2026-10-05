@@ -56,6 +56,62 @@ app.post("/api/logout", async (c) => {
   return c.json({ ok: true });
 });
 
+// ── Портал за клиенти: без најава, само со таен токен (секој клиент го гледа само своето) ──
+const portalHits = new Map<string, { n: number; at: number }>();
+app.use("/api/portal/*", async (c, next) => {
+  // ограничување: најмногу 120 барања во минута од една адреса (заштита од погодување токени)
+  const ip = clientIp(c);
+  const h = portalHits.get(ip);
+  const now = Date.now();
+  if (h && now - h.at < 60_000) { if (++h.n > 120) return c.json({ error: "Премногу барања" }, 429); }
+  else portalHits.set(ip, { n: 1, at: now });
+  if (portalHits.size > 5000) portalHits.clear();
+  await next();
+});
+const portalCaller = async () => {
+  const mod: any = await import("./router");
+  return mod.appRouter.createCaller({ req: new Request("http://portal"), resHeaders: new Headers(), actor: { id: null, name: "портал", role: "admin" } });
+};
+app.get("/api/portal/:token", async (c) => {
+  const { portalCustomer, portalData } = await import("./crm-router");
+  const cid = await portalCustomer(c.req.param("token"));
+  if (!cid) return c.json({ error: "Линкот не важи или е истечен. Побарајте нов од вашиот контакт." }, 404);
+  return c.json(await portalData(cid));
+});
+app.get("/api/portal/:token/invoice/:id", async (c) => {
+  const { portalCustomer } = await import("./crm-router");
+  const cid = await portalCustomer(c.req.param("token"));
+  if (!cid) return c.json({ error: "Линкот не важи" }, 404);
+  const caller = await portalCaller();
+  const inv: any = await caller.accounting.invoiceById({ id: Number(c.req.param("id")) }).catch(() => null);
+  if (!inv || Number(inv.customerId) !== cid || ["draft", "cancelled"].includes(inv.status)) return c.json({ error: "Не постои" }, 404);
+  const settings = await caller.settings.settingsGet();
+  return c.json({ invoice: inv, settings });
+});
+app.get("/api/portal/:token/cert/:id", async (c) => {
+  const { portalCustomer } = await import("./crm-router");
+  const cid = await portalCustomer(c.req.param("token"));
+  if (!cid) return c.json({ error: "Линкот не важи" }, 404);
+  const { getPool } = await import("./queries/connection");
+  const r = (await getPool().query(`SELECT c.cert_url, c.cert_number FROM dn_certificates c JOIN delivery_notes dn ON dn.id = c.delivery_note_id WHERE c.id = $1 AND dn.customer_id = $2`,
+    [Number(c.req.param("id")), cid])).rows[0];
+  if (!r?.cert_url) return c.json({ error: "Не постои" }, 404);
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(r.cert_url);
+  if (!m) return c.redirect(r.cert_url);
+  return c.body(Buffer.from(m[2], "base64"), 200, { "Content-Type": m[1], "Content-Disposition": `inline; filename="sertifikat-${String(r.cert_number ?? c.req.param("id")).replace(/[^\w-]+/g, "_")}"` });
+});
+app.post("/api/portal/:token/rfq", async (c) => {
+  const { portalCustomer, portalRfq } = await import("./crm-router");
+  const cid = await portalCustomer(c.req.param("token"));
+  if (!cid) return c.json({ error: "Линкот не важи" }, 404);
+  const body = await c.req.json().catch(() => null);
+  const title = String(body?.title ?? "").trim(), message = String(body?.message ?? "").trim();
+  if (title.length < 3) return c.json({ error: "Напишете наслов на барањето" }, 400);
+  const files = Array.isArray(body?.files) ? body.files.filter((f: any) => f && typeof f.data === "string" && f.data.length < 14_000_000) : [];
+  const r = await portalRfq(cid, { title, message, contact: body?.contact ? String(body.contact).slice(0, 255) : undefined, files });
+  return c.json({ ok: true, id: r.id });
+});
+
 // Бекап: преземање (JSON.gz), проверка на враќање во привремена шема, враќање — само администратор
 app.use("/api/admin/*", async (c, next) => {
   const { resolveActor, gateActive } = await import("./context");

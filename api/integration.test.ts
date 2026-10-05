@@ -825,4 +825,104 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(res.remnants.length).toBe(1);
     expect(Number((await pool.query(`SELECT width_mm FROM material_remnants WHERE code = $1`, [res.remnants[0]])).rows[0].width_mm)).toBe(400);
   });
+
+  it("Ф3: CRM, портал, продажни услови, отсуства и МПИН, RFQ/ценовници/одобрување, тристрано, извештаи и буџет", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    // CRM: можност → изгубена бара причина; активност
+    const opp = await caller.crm.oppSave({ customerId: ids.cust, title: "Ограда 40 m", value: 300000, stage: "new" });
+    await expect(caller.crm.oppSave({ id: opp.id, customerId: ids.cust, title: "Ограда 40 m", value: 300000, stage: "lost" })).rejects.toThrow(/зошто/);
+    await caller.crm.activitySave({ customerId: ids.cust, opportunityId: opp.id, kind: "call", subject: "Повик за мерки" });
+    expect((await caller.crm.oppList({})).find((o: any) => o.id === opp.id).stage).toBe("contacted");
+    await caller.crm.activitySave({ customerId: ids.cust, kind: "task", subject: "Прати понуда", dueDate: "2026-10-20" });
+    expect((await caller.crm.activityList({ openTasks: true })).some((a: any) => a.subject === "Прати понуда")).toBe(true);
+    const qt = (await pool.query(`SELECT id FROM quotations ORDER BY id LIMIT 1`)).rows[0].id;
+    await caller.crm.oppLinkQuotation({ id: opp.id, quotationId: qt });
+    await caller.crm.quotationLost({ quotationId: qt, reason: "price", note: "конкурентот 10% поевтино" });
+    expect((await caller.crm.oppList({ includeClosed: true })).find((o: any) => o.id === opp.id).stage).toBe("lost");
+    const st: any = await caller.crm.crmStats({ from: "2026-01-01", to: "2026-12-31" });
+    expect(st.lostReasons.find((r: any) => r.reason === "price").count).toBeGreaterThan(0);
+
+    // продажни услови: попуст, посебна цена, кредитен лимит
+    await caller.crm.customerTermsSave({ customerId: ids.cust, discountPct: 5, creditLimit: 1000, paymentDays: 30 });
+    expect((await caller.crm.priceFor({ customerId: ids.cust, itemType: "material", refId: ids.mat, basePrice: 100 })).price).toBe(95);
+    await caller.crm.customerPriceSave({ customerId: ids.cust, itemType: "material", refId: ids.mat, price: 88, discountPct: null });
+    expect((await caller.crm.priceFor({ customerId: ids.cust, itemType: "material", refId: ids.mat, basePrice: 100 })).price).toBe(88);
+    const cc: any = await caller.crm.creditCheck({ customerId: ids.cust, amount: 5000 });
+    expect(cc.limit).toBe(1000);
+    expect(cc.over).toBe(true);
+
+    // портал: само со важечки токен; барање за понуда → можност + задача
+    const link: any = await caller.crm.portalLinkCreate({ customerId: ids.cust, days: 30 });
+    const crm = await import("./crm-router");
+    expect(await crm.portalCustomer(link.token)).toBe(ids.cust);
+    expect(await crm.portalCustomer("x".repeat(32))).toBeNull();
+    const pd: any = await crm.portalData(ids.cust);
+    expect(Array.isArray(pd.invoices)).toBe(true);
+    expect(pd.invoices.every((i: any) => i.status !== "draft")).toBe(true);
+    const rfqP = await crm.portalRfq(ids.cust, { title: "Капак 2 mm", message: "200 парчиња", files: [{ name: "kapak.dxf", mime: "application/dxf", data: "0\nEOF" }] });
+    expect((await caller.crm.oppFiles({ id: rfqP.id })).length).toBe(1);
+    const linkRow = (await caller.crm.portalLinks({ customerId: ids.cust }))[0];
+    await caller.crm.portalLinkRevoke({ id: linkRow.id });
+    expect(await crm.portalCustomer(link.token)).toBeNull();
+
+    // отсуства и платни листи, МПИН
+    const emp = await caller.hr.employeeUpsert({ fullName: "Петар Петров", grossSalary: 50000, embg: "0101990450001", annualLeaveDays: 21 });
+    await caller.hr.absenceSave({ employeeId: emp.id, kind: "annual", from: "2026-10-05", to: "2026-10-09" });
+    await expect(caller.hr.absenceSave({ employeeId: emp.id, kind: "sick", from: "2026-10-08", to: "2026-10-12" })).rejects.toThrow(/веќе има/);
+    const ab: any = await caller.hr.absenceList({ year: 2026 });
+    expect(ab.balance.find((b: any) => b.employeeId === emp.id).annualLeft).toBe(16);
+    await caller.hr.payrollCalculate({ period: "2026-10", params: { contributionRate: 28, incomeTaxRate: 10, personalExemption: 10270 } });
+    const ps: any = await caller.hr.payslips({ period: "2026-10" });
+    const slip = ps.slips.find((x: any) => x.employeeId === emp.id);
+    expect(slip.contributionParts.reduce((s: number, c: any) => s + c.amount, 0)).toBeCloseTo(slip.contributions, 2);
+    expect(slip.absences[0].days).toBe(5);
+    const mp: any = await caller.hr.mpinXml({ period: "2026-10" });
+    expect(mp.xml).toContain("<EMBG>0101990450001</EMBG>");
+    expect(mp.xml).toContain("<BrutoPlata>50000.00</BrutoPlata>");
+
+    // RFQ до двајца добавувачи → одговори → избор → нарачка; ценовник
+    const s2 = (await pool.query(`INSERT INTO suppliers (name) VALUES ('Метал Б') RETURNING id`)).rows[0].id;
+    const rfq: any = await caller.purch.rfqCreate({ title: "Лим 3 mm", items: [{ materialId: ids.mat, description: "Лим 3 mm", quantity: 500, unit: "kg" }], supplierIds: [ids.sup, s2] });
+    const g: any = await caller.purch.rfqGet({ id: rfq.id });
+    const [o1, o2] = g.offers;
+    await caller.purch.rfqRespond({ rfqSupplierId: o1.id, prices: { [g.items[0].id]: 62 }, deliveryDays: 5 });
+    await caller.purch.rfqRespond({ rfqSupplierId: o2.id, prices: { [g.items[0].id]: 58 }, deliveryDays: 10 });
+    const g2: any = await caller.purch.rfqGet({ id: rfq.id });
+    expect(g2.best[g.items[0].id]).toBe(58);
+    expect((await caller.purch.priceList({ materialId: ids.mat })).length).toBeGreaterThanOrEqual(2);
+    const ch: any = await caller.purch.rfqChoose({ rfqSupplierId: o2.id });
+    const po = (await pool.query(`SELECT total_amount, supplier_id FROM purchase_orders WHERE id = $1`, [ch.poId])).rows[0];
+    expect(Number(po.total_amount)).toBe(29000);
+    // одобрување над прагот
+    await caller.purch.approvalSettingsSave({ threshold: 10000 });
+    await expect(caller.procurement.poUpdate({ id: ch.poId, status: "sent" })).rejects.toThrow(/одобри/);
+    expect((await caller.purch.pendingApprovals()).list.some((x: any) => x.id === ch.poId)).toBe(true);
+    await caller.purch.poApprove({ poId: ch.poId, approve: true });
+    await caller.procurement.poUpdate({ id: ch.poId, status: "sent" });
+    await caller.purch.approvalSettingsSave({ threshold: null });
+
+    // тристрано: фактура со разлика во цената
+    await pool.query(`INSERT INTO receipts (receipt_number, supplier_id, po_id, warehouse_id, status, receipt_date, total_amount) VALUES ('ПР-3W', $1, $2, $3, 'confirmed', '2026-10-15', 0)`, [s2, ch.poId, ids.wh]);
+    const rcp = (await pool.query(`SELECT id FROM receipts WHERE receipt_number = 'ПР-3W'`)).rows[0].id;
+    await pool.query(`INSERT INTO receipt_items (receipt_id, material_id, quantity, unit, unit_price, total_price) VALUES ($1,$2,500,'kg',58,29000)`, [rcp, ids.mat]);
+    await pool.query(`INSERT INTO incoming_invoices (supplier_invoice_number, supplier_id, po_id, receipt_id, status, issue_date, received_date, subtotal, vat_rate, vat_amount, total_amount, currency)
+      VALUES ('MB-3W', $1, $2, $3, 'received', '2026-10-16', '2026-10-16', 31000, 18, 5580, 36580, 'MKD')`, [s2, ch.poId, rcp]);
+    const tw: any[] = await caller.purch.threeWayMatch({ from: "2026-10-01", to: "2026-10-31" });
+    const m = tw.find((x) => x.invoice === "MB-3W");
+    expect(m.ok).toBe(false);
+    expect(m.diff).toBe(2000);
+
+    // извештаи и буџет
+    const pb: any = await caller.reports.profitBy({ from: "2026-01-01", to: "2026-12-31" });
+    expect(Array.isArray(pb.byCustomer)).toBe(true);
+    const yoy: any = await caller.reports.yearOverYear({ year: 2026 });
+    expect(yoy.months.length).toBe(12);
+    await caller.finance.ledgerSync();
+    await caller.reports.budgetSave({ year: 2026, values: [{ line: "r_sales", month: 0, amount: 1200000 }, { line: "x_material", month: 10, amount: 5000 }] });
+    const bva: any = await caller.reports.budgetVsActual({ year: 2026, upToMonth: 10 });
+    expect(bva.rows.find((r: any) => r.key === "r_sales").budget).toBe(1000000);
+    expect(bva.rows.find((r: any) => r.key === "x_material").budget).toBe(5000);
+    expect((await caller.reports.profitByMachine({ from: "2026-01-01", to: "2026-12-31" })).length).toBeGreaterThan(0);
+  });
 });

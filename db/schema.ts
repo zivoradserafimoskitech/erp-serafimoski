@@ -460,6 +460,9 @@ export const customers = pgTable("customers", {
   isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  discountPct: decimal("discount_pct", { precision: 5, scale: 2 }), // општ попуст за купувачот
+  creditLimit: decimal("credit_limit", { precision: 16, scale: 2 }), // кредитен лимит (предупредување)
+  paymentDays: integer("payment_days"), // рок на плаќање
 });
 
 export type Customer = typeof customers.$inferSelect;
@@ -547,6 +550,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  approvedBy: varchar("approved_by", { length: 160 }), // одобрување над прагот
+  approvedAt: timestamp("approved_at"),
 });
 
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
