@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PageHeader from "@/components/layout/PageHeader";
-import { CalendarCheck, CheckCircle2, Circle, ListTodo, Bot } from "lucide-react";
+import { CalendarCheck, CheckCircle2, Circle, ListTodo, Bot, BellRing } from "lucide-react";
 import { ACT_META, ActivityTimeline, fmtD, type ActivityRow } from "@/components/crm/shared";
 import { NewActivityDialog } from "./NewActivityDialog";
+import { ReminderSettingsDialog } from "./ReminderSettingsDialog";
 
 /** Активности и задачи: „Мои задачи / Денес“ (доцнат, денес, наскоро) + целосен дневник. */
 export default function Activities() {
@@ -15,13 +16,14 @@ export default function Activities() {
   const [scope, setScope] = useState<"me" | "all">("me");
   const [kind, setKind] = useState("");
   const [creating, setCreating] = useState(false);
+  const [settings, setSettings] = useState(false);
   const { data: mine } = trpc.crm.myTasksList.useQuery({ all: scope === "all" });
   const { data: feed } = trpc.crm.activityFeedList.useQuery({ kind: (kind || undefined) as any, limit: 300 }, { enabled: tab === "feed" });
   return (
     <div className="space-y-6">
       <PageHeader title="Активности" description="Повици, средби, е-пошта, белешки и задачи — поврзани со фирма, контакт или зделка."
         icon={<CalendarCheck className="h-6 w-6 text-primary" />}
-        actions={<Button onClick={() => setCreating(true)}><ListTodo className="h-4 w-4 mr-1.5" />Нова активност / задача</Button>} />
+        actions={<div className="flex gap-2"><Button variant="outline" onClick={() => setSettings(true)}><BellRing className="h-4 w-4 mr-1.5" />Потсетници</Button><Button onClick={() => setCreating(true)}><ListTodo className="h-4 w-4 mr-1.5" />Нова активност / задача</Button></div>} />
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1 rounded-lg border bg-card p-0.5">
           <Button size="sm" variant={tab === "mine" ? "default" : "ghost"} className="h-8" onClick={() => setTab("mine")}>Мои задачи / Денес</Button>
@@ -51,6 +53,7 @@ export default function Activities() {
         <Card><CardContent className="p-4"><ActivityTimeline rows={feed} /></CardContent></Card>
       )}
       {creating && <NewActivityDialog onClose={() => setCreating(false)} />}
+      <ReminderSettingsDialog open={settings} onOpenChange={setSettings} />
     </div>
   );
 }

@@ -653,6 +653,9 @@ export function getExtraSql(): string[] {
       "created_at" timestamp DEFAULT now() NOT NULL
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "crm_notifications_dedupe_uq" ON "crm_notifications" ("dedupe_key")`,
+    // е-пошта од понуда → „пратена“ + follow-up потсетници
+    `ALTER TABLE "quotations" ADD COLUMN IF NOT EXISTS "sent_at" timestamp`,
+    `CREATE INDEX IF NOT EXISTS "crm_notifications_recipient_idx" ON "crm_notifications" ("recipient", "read_at")`,
 
   ];
 }
