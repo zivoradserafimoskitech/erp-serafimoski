@@ -139,13 +139,16 @@ export default function Customers() {
   });
 
   const orderCreate = trpc.customers.orderCreate.useMutation({
-    onSuccess: () => {
+    onSuccess: (r: any) => {
       utils.customers.orderList.invalidate();
       utils.dashboard.stats.invalidate();
       setOrderDialog(false);
       setOrderForm({ orderNumber: "", customerId: "", priority: "normal", deliveryDate: "", notes: "", salesperson: "" });
       setItems([]);
+      if (r?.warnings?.length) toast.warning(r.warnings.join(" · "));
+      else toast.success("Нарачката е креирана");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const chainWO = trpc.production.orderFromChain.useMutation({ onSuccess: (d) => { toast.success(`Креиран работен налог ${d.woNumber}`); utils.customers.orderList.invalidate(); } });
