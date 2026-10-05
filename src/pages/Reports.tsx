@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import { downloadTableXlsx } from "@/lib/xlsx";
-import { BarChart3, Users, Package, Cog, CalendarRange, Target, Download } from "lucide-react";
+import PageHeader from "@/components/layout/PageHeader";
+import EmptyState from "@/components/layout/EmptyState";
+import {
+  BarChart3, Users, Package, Cog, CalendarRange, Target, Download, Search,
+  Landmark, Receipt, TrendingUp, Scale, BookOpen, Warehouse, Factory, ExternalLink, ShoppingBag, Tags,
+} from "lucide-react";
 
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : Math.round(n).toLocaleString("mk-MK"));
 const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`);
@@ -15,39 +21,165 @@ const MONTHS = ["Јан", "Феб", "Мар", "Апр", "Мај", "Јун", "Ј�
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const change = (cur: number, prev: number) => (prev ? (cur - prev) / Math.abs(prev) : null);
 
-/** Извештаи за раководство: добивка по купувач/производ/машина, година спрема година, буџет. */
+type ReportDef = {
+  id: string;
+  category: "sales" | "finance" | "ops" | "crm";
+  title: string;
+  description: string;
+  view?: string;
+  href?: string;
+  icon: typeof BarChart3;
+};
+
+const CATALOG: ReportDef[] = [
+  { id: "profit-customer", category: "sales", title: "Добивка по купувач", description: "Приход, трошок и маржа по клиент", view: "customer", icon: Users },
+  { id: "profit-product", category: "sales", title: "Добивка по производ", description: "Маржа по производ / ставка", view: "product", icon: Package },
+  { id: "profit-order", category: "sales", title: "Добивка по нарачка", description: "План vs стварно по нарачка", href: "/finansii?tab=profit", icon: TrendingUp },
+  { id: "sales-yoy", category: "sales", title: "Година спрема година", description: "Промет и тренд по месеци", view: "yoy", icon: CalendarRange },
+  { id: "sales-budget", category: "sales", title: "Буџет vs остварување", description: "План и отстапувања", view: "budget", icon: Target },
+  { id: "crm-pipeline", category: "crm", title: "CRM pipeline", description: "Можности, win-rate, изгубени причини", href: "/crm", icon: Target },
+  { id: "deal-flow", category: "sales", title: "Тек на нарачки", description: "Од понуда до наплата", href: "/tek", icon: TrendingUp },
+  { id: "sales-summary", category: "sales", title: "Продажба по купувач / продавач", description: "Фактуриран промет и нарачки по продавач", view: "salesSummary", icon: ShoppingBag },
+  { id: "price-lists", category: "sales", title: "Ценовници", description: "Попусти и цени по клиент", href: "/cenovnici", icon: Tags },
+
+  { id: "vat", category: "finance", title: "ДДВ (КИФ / КУФ)", description: "Книги и рекапитулација", href: "/finansii?tab=vat", icon: Receipt },
+  { id: "statements", category: "finance", title: "Биланси", description: "Биланс на состојба / успех", href: "/finansii?tab=statements", icon: BookOpen },
+  { id: "trial", category: "finance", title: "Бруто биланс", description: "Салда по конта", href: "/finansii?tab=trial", icon: Scale },
+  { id: "journal", category: "finance", title: "Главна книга / налози", description: "Книжења", href: "/finansii?tab=journal", icon: Landmark },
+  { id: "accountant", category: "finance", title: "Пакет за сметководител", description: "Излезни/влезни, ДДВ, налози за период", href: "/smetkovodstvo", icon: Receipt },
+  { id: "machine", category: "ops", title: "Добивка по машина", description: "Искористеност и маржа", view: "machine", icon: Cog },
+  { id: "stock", category: "ops", title: "Склад / залихи", description: "Материјали и ниски залихи", href: "/sklad", icon: Warehouse },
+  { id: "production", category: "ops", title: "Производство", description: "Налози и распоред", href: "/proizvodstvo", icon: Factory },
+];
+
+const CAT_LABEL: Record<string, string> = {
+  sales: "Продажба",
+  finance: "Финансии и сметководство",
+  ops: "Операции (склад / производство)",
+  crm: "CRM",
+};
+
+/** Единствен hub за сите извештаи во апликацијата. */
 export default function Reports() {
-  const [view, setView] = useState<"customer" | "product" | "machine" | "yoy" | "budget">("customer");
+  const [params, setParams] = useSearchParams();
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState<string>("all");
+  const view = (params.get("view") || "") as "customer" | "product" | "machine" | "yoy" | "budget" | "salesSummary" | "";
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(ymd(new Date()));
-  const TABS = [
-    { k: "customer", l: "По купувач", i: Users }, { k: "product", l: "По производ", i: Package }, { k: "machine", l: "По машина", i: Cog },
-    { k: "yoy", l: "Година спрема година", i: CalendarRange }, { k: "budget", l: "Буџет", i: Target },
-  ] as const;
+
+  const filtered = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    return CATALOG.filter((r) => {
+      if (cat !== "all" && r.category !== cat) return false;
+      if (!qq) return true;
+      return `${r.title} ${r.description} ${CAT_LABEL[r.category]}`.toLowerCase().includes(qq);
+    });
+  }, [q, cat]);
+
+  const openView = (id: string, v?: string) => {
+    const next = new URLSearchParams(params);
+    if (v) next.set("view", v);
+    else next.delete("view");
+    next.set("r", id);
+    setParams(next);
+  };
+
+  const active = CATALOG.find((r) => r.view && r.view === view);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="h-6 w-6 text-amber-600" />Извештаи</h2>
-        <p className="text-gray-500 mt-1">Каде се заработува, што се движи низ годината и колку отстапуваме од планот</p>
-      </div>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap gap-1 rounded-lg border bg-white p-0.5">
-          {TABS.map((t) => { const I = t.i; return <Button key={t.k} size="sm" variant={view === t.k ? "default" : "ghost"} className="h-8" onClick={() => setView(t.k)}><I className="h-4 w-4 mr-1.5" />{t.l}</Button>; })}
-        </div>
-        {["customer", "product", "machine"].includes(view) && (
-          <div className="flex gap-2">
-            <div className="space-y-1"><Label className="text-xs">Од</Label><DateInput className="h-9 w-40" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div className="space-y-1"><Label className="text-xs">До</Label><DateInput className="h-9 w-40" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+      <PageHeader
+        title="Извештаи"
+        description="Сите извештаи на едно место — продажба, финансии, CRM и операции."
+        icon={<BarChart3 className="h-6 w-6 text-amber-600" />}
+      />
+
+      {!view && (
+        <>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input className="pl-9" placeholder="Пребарај извештај..." value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-1 rounded-lg border bg-white p-0.5">
+              <Button size="sm" variant={cat === "all" ? "default" : "ghost"} className="h-8" onClick={() => setCat("all")}>Сите</Button>
+              {Object.entries(CAT_LABEL).map(([k, l]) => (
+                <Button key={k} size="sm" variant={cat === k ? "default" : "ghost"} className="h-8" onClick={() => setCat(k)}>{l.split(" ")[0]}</Button>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
-      {(view === "customer" || view === "product") && <ProfitBy view={view} from={from} to={to} />}
-      {view === "machine" && <ByMachine from={from} to={to} />}
-      {view === "yoy" && <Yoy />}
-      {view === "budget" && <Budget />}
+
+          {!filtered.length ? (
+            <Card><CardContent className="p-0"><EmptyState title="Нема извештаи за филтерот" /></CardContent></Card>
+          ) : (
+            <div className="space-y-6">
+              {(["sales", "crm", "finance", "ops"] as const).map((c) => {
+                const rows = filtered.filter((r) => r.category === c);
+                if (!rows.length) return null;
+                return (
+                  <div key={c}>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{CAT_LABEL[c]}</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {rows.map((r) => {
+                        const Icon = r.icon;
+                        return (
+                          <Card key={r.id} className="hover:border-amber-300 transition-colors">
+                            <CardContent className="p-4 flex gap-3">
+                              <div className="h-10 w-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                                <Icon className="h-5 w-5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-gray-800 text-sm">{r.title}</p>
+                                <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{r.description}</p>
+                                <div className="mt-2">
+                                  {r.view ? (
+                                    <Button size="sm" className="h-7 bg-amber-500 hover:bg-amber-600" onClick={() => openView(r.id, r.view)}>Отвори</Button>
+                                  ) : (
+                                    <Button size="sm" variant="outline" className="h-7" asChild>
+                                      <Link to={r.href!}><ExternalLink className="h-3.5 w-3.5 mr-1" />Оди до модулот</Link>
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {!!view && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Button variant="outline" size="sm" onClick={() => { const n = new URLSearchParams(params); n.delete("view"); n.delete("r"); setParams(n); }}>
+              ← Назад кон сите извештаи
+            </Button>
+            <p className="text-sm font-medium text-gray-700">{active?.title ?? "Извештај"}</p>
+            {["customer", "product", "machine", "salesSummary"].includes(view) && (
+              <div className="flex gap-2">
+                <div className="space-y-1"><Label className="text-xs">Од</Label><DateInput className="h-9 w-40" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">До</Label><DateInput className="h-9 w-40" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+              </div>
+            )}
+          </div>
+          {(view === "customer" || view === "product") && <ProfitBy view={view} from={from} to={to} />}
+          {view === "machine" && <ByMachine from={from} to={to} />}
+          {view === "yoy" && <Yoy />}
+          {view === "budget" && <Budget />}
+          {view === "salesSummary" && <SalesSummary from={from} to={to} />}
+        </div>
+      )}
     </div>
   );
 }
+
 
 function ProfitBy({ view, from, to }: { view: "customer" | "product"; from: string; to: string }) {
   const { data, isLoading } = trpc.reports.profitBy.useQuery({ from, to });
@@ -164,5 +296,57 @@ function Budget() {
       </table>
       {bva && <p className="text-sm">Приходи: {fmt(bva.totals.revenue.actual)} од планирани {fmt(bva.totals.revenue.budget)} · Расходи: {fmt(bva.totals.expense.actual)} од планирани {fmt(bva.totals.expense.budget)}</p>}
     </CardContent></Card>
+  );
+}
+
+function SalesSummary({ from, to }: { from: string; to: string }) {
+  const { data, isLoading } = trpc.reports.salesSummary.useQuery({ from, to });
+  const byC = data?.byCustomer ?? [];
+  const byS = data?.bySalesperson ?? [];
+  const xlsx = () => downloadTableXlsx(`prodazba-${from}-${to}.xlsx`, "Продажба",
+    [["Купувач", "Фактури", "Приход"], ...byC.map((r) => [r.customer, r.invoices, r.revenue])],
+  );
+  const xlsxSp = () => downloadTableXlsx(`prodavaci-${from}-${to}.xlsx`, "Продавачи",
+    [["Продавач", "Нарачки", "Вредност"], ...byS.map((r) => [r.salesperson, r.orders, r.orderTotal])],
+  );
+  return (
+    <div className="space-y-4">
+      <Card><CardContent className="p-4 flex flex-wrap gap-6 text-sm">
+        <div><p className="text-[11px] uppercase text-gray-400 font-semibold">Фактури</p><p className="text-xl font-bold">{data?.totals.invoices ?? "—"}</p></div>
+        <div><p className="text-[11px] uppercase text-gray-400 font-semibold">Приход (без ДДВ)</p><p className="text-xl font-bold">{fmt(data?.totals.revenue)}</p></div>
+        <div><p className="text-[11px] uppercase text-gray-400 font-semibold">ДДВ</p><p className="text-xl font-bold">{fmt(data?.totals.vat)}</p></div>
+        <div className="flex-1" />
+        <Button size="sm" variant="outline" onClick={xlsx} disabled={!byC.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel купувачи</Button>
+        <Button size="sm" variant="outline" onClick={xlsxSp} disabled={!byS.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel продавачи</Button>
+      </CardContent></Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card><CardContent className="p-4 space-y-2">
+          <p className="text-sm font-semibold">По купувач</p>
+          <table className="w-full text-sm">
+            <thead><tr className="text-xs text-gray-500 border-b"><th className="text-left font-medium py-2">Купувач</th><th className="text-right font-medium">Фактури</th><th className="text-right font-medium">Приход</th></tr></thead>
+            <tbody>
+              {isLoading ? <tr><td colSpan={3} className="py-8 text-center text-gray-400">Вчитување...</td></tr>
+                : !byC.length ? <tr><td colSpan={3} className="py-8 text-center text-gray-400">Нема податоци</td></tr>
+                : byC.map((r, i) => (
+                  <tr key={i} className="border-b border-gray-100"><td className="py-1.5 font-medium">{r.customer}</td><td className="text-right">{r.invoices}</td><td className="text-right tabular-nums">{fmt(r.revenue)}</td></tr>
+                ))}
+            </tbody>
+          </table>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 space-y-2">
+          <p className="text-sm font-semibold">По продавач</p>
+          <table className="w-full text-sm">
+            <thead><tr className="text-xs text-gray-500 border-b"><th className="text-left font-medium py-2">Продавач</th><th className="text-right font-medium">Нарачки</th><th className="text-right font-medium">Вредност</th></tr></thead>
+            <tbody>
+              {isLoading ? <tr><td colSpan={3} className="py-8 text-center text-gray-400">Вчитување...</td></tr>
+                : !byS.length ? <tr><td colSpan={3} className="py-8 text-center text-gray-400">Нема податоци (пополнете поле „Продавач“ на понуда/нарачка)</td></tr>
+                : byS.map((r, i) => (
+                  <tr key={i} className="border-b border-gray-100"><td className="py-1.5 font-medium">{r.salesperson}</td><td className="text-right">{r.orders}</td><td className="text-right tabular-nums">{fmt(r.orderTotal)}</td></tr>
+                ))}
+            </tbody>
+          </table>
+        </CardContent></Card>
+      </div>
+    </div>
   );
 }

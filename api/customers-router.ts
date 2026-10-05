@@ -202,8 +202,14 @@ export const customersRouter = createRouter({
       const insertId = Number(result[0].insertId);
 
       if (items && items.length > 0) {
+        const reserve = input.status === "confirmed" || input.status === "pending";
         await db.insert(orderItems).values(
-          items.map((item) => ({ ...item, orderId: insertId }))
+          items.map((item) => ({
+            ...item,
+            orderId: insertId,
+            reservedQty: reserve ? String(item.quantity) : "0",
+            deliveredQty: "0",
+          }))
         );
 
         // Update total amount

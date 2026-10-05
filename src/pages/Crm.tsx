@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,7 +123,17 @@ function OppDialog({ opp, onClose }: { opp: Opp; onClose: () => void }) {
   const { data: files } = trpc.crm.oppFiles.useQuery({ id: opp.id ?? -1 }, { enabled: !!opp.id });
   const { data: quotes } = trpc.quotation.quotationList.useQuery({}, { enabled: !!f.customerId });
   const custItems = useMemo(() => (customers ?? []).map((c: any) => ({ id: c.id as number, label: c.company || c.name, sub: c.city ?? null })), [customers]);
+  const navigate = useNavigate();
   const save = trpc.crm.oppSave.useMutation({ onSuccess: () => { toast.success("Зачувано"); utils.crm.invalidate(); onClose(); }, onError: (e) => toast.error(e.message) });
+  const toQuote = trpc.crm.oppToQuotation.useMutation({
+    onSuccess: (r) => {
+      toast.success(r.existing ? "Понудата веќе постои" : `Креирана понуда ${r.quoteNumber}`);
+      utils.crm.invalidate();
+      onClose();
+      navigate(`/ponudi?open=${r.id}`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const del = trpc.crm.oppDelete.useMutation({ onSuccess: () => { utils.crm.invalidate(); onClose(); } });
   const [act, setAct] = useState({ kind: "call", subject: "", dueDate: "" });
   const addAct = trpc.crm.activitySave.useMutation({ onSuccess: () => { setAct({ ...act, subject: "", dueDate: "" }); utils.crm.invalidate(); }, onError: (e) => toast.error(e.message) });
@@ -178,6 +189,7 @@ function OppDialog({ opp, onClose }: { opp: Opp; onClose: () => void }) {
         <div className="flex justify-between pt-2">
           {f.id ? <Button variant="ghost" className="text-red-600" onClick={() => { if (confirm("Да се избрише можноста?")) del.mutate({ id: f.id! }); }}>Избриши</Button> : <span />}
           <div className="flex gap-2">
+            {f.id ? <Button variant="outline" disabled={toQuote.isPending} onClick={() => toQuote.mutate({ opportunityId: f.id! })}>Креирај понуда</Button> : null}
             <Button variant="outline" onClick={onClose}>Откажи</Button>
             <Button className="bg-amber-500 hover:bg-amber-600" disabled={f.title.length < 2 || save.isPending} onClick={() => save.mutate({
               id: f.id, customerId: f.customerId, company: f.company || undefined, contactName: f.contactName || undefined, email: f.email || undefined, phone: f.phone || undefined,

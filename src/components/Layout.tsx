@@ -30,8 +30,10 @@ import {
 
 const navItems = [
   { path: "/", label: "Контролна табла", icon: LayoutDashboard },
+  { path: "/prodazba", label: "Продажба (hub)", icon: Target },
   { path: "/tek", label: "Тек на нарачки", icon: Workflow },
-  { path: "/crm", label: "Продажба", icon: Target },
+  { path: "/crm", label: "Можности (CRM)", icon: Target },
+  { path: "/cenovnici", label: "Ценовници", icon: BookOpen },
   { path: "/sklad", label: "Склад", icon: Warehouse },
   { path: "/proizvodstvo", label: "Производство", icon: Factory },
   { path: "/kvalitet", label: "Квалитет и одржување", icon: ShieldCheck },
