@@ -49,7 +49,7 @@ export default function Crm() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Target className="h-6 w-6 text-amber-600" />Продажба</h2>
-          <p className="text-gray-500 mt-1">Барања и можности пред понудата, разговори и задачи, зошто губиме понуди</p>
+          <p className="text-gray-500 mt-1">Барања и можности пред понудата, разговори и задачи, зошто губиме понуди · <a className="text-amber-700 hover:underline" href="/izvestai">Извештаи</a></p>
         </div>
         <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => setEdit({ ...EMPTY })}><Plus className="h-4 w-4 mr-1.5" />Нова можност</Button>
       </div>

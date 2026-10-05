@@ -864,6 +864,7 @@ export default function Finance() {
       <div>
         <h2 className="text-2xl font-bold text-gray-800">Финансии</h2>
         <p className="text-gray-500 mt-1">Пари и книговодство — банка, благајна, ДДВ, добивка и главна книга. Фактурите и уплатите се книжат автоматски.</p>
+        <p className="text-sm"><a className="text-amber-700 hover:underline" href="/izvestai">Сите извештаи на едно место →</a></p>
       </div>
       <Tabs value={tab} onValueChange={setTab}>
         {/* Групирано по тоа што бара корисникот: пари -> извештаи -> главна книга -> поставки */}
