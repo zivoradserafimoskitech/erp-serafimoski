@@ -32,7 +32,7 @@ export default function RoutingEditor({ productId }: { productId: number }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="font-semibold flex items-center gap-2"><Route className="h-4 w-4 text-amber-600" />Технолошка постапка</p>
+        <p className="font-semibold flex items-center gap-2"><Route className="h-4 w-4 text-primary" />Технолошка постапка</p>
         <span className="text-xs text-gray-500">подготовка {setup} мин · {perUnit} мин/ком</span>
       </div>
       <p className="text-xs text-gray-500">Кога ќе се отвори работен налог за овој производ, операциите се прават сами со пресметано време (подготовка + време по парче × количина) и цена на машината.</p>
@@ -59,7 +59,7 @@ export default function RoutingEditor({ productId }: { productId: number }) {
       ))}
       <div className="flex justify-between">
         <Button size="sm" variant="ghost" onClick={() => { setSteps([...steps, { operation: "cutting_laser", description: "", machineId: "", setupMin: "0", runMin: "0" }]); setDirty(true); }}><Plus className="h-3.5 w-3.5 mr-1" />Операција</Button>
-        <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={!dirty || save.isPending}
+        <Button size="sm" disabled={!dirty || save.isPending}
           onClick={() => save.mutate({ productId, steps: steps.map((s) => ({ operation: s.operation as any, description: s.description || undefined, machineId: s.machineId ? Number(s.machineId) : null, setupMin: parseFloat(s.setupMin) || 0, runMin: parseFloat(s.runMin) || 0 })) })}>
           Зачувај постапка
         </Button>

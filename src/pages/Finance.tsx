@@ -158,17 +158,17 @@ function JournalTab() {
         <div className="flex gap-2">
           <Input placeholder="Пребарај..." className="h-9 w-48" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
           <Button size="sm" variant="outline" className="h-9" onClick={() => sync.mutate()} disabled={sync.isPending || !canPost}><RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${sync.isPending ? "animate-spin" : ""}`} />Книжи документи</Button>
-          <Button size="sm" className="h-9 bg-amber-500 hover:bg-amber-600" onClick={() => setManualOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Нов налог</Button>
+          <Button size="sm" className="h-9" onClick={() => setManualOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Нов налог</Button>
         </div>
       </div>
 
       {sync.data && sync.data.problems.length > 0 && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
-          <p className="font-medium text-amber-900 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />Не се книжени {sync.data.problems.length} документи</p>
-          <ul className="mt-1 text-amber-800 text-xs space-y-0.5">
+        <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
+          <p className="font-medium text-warning-foreground flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />Не се книжени {sync.data.problems.length} документи</p>
+          <ul className="mt-1 text-foreground/80 text-xs space-y-0.5">
             {sync.data.problems.slice(0, 8).map((p, i) => <li key={i}>{p.ref}: {p.reason}</li>)}
           </ul>
-          <p className="text-xs text-amber-700 mt-1">Најчеста причина е курс што недостасува. Внеси го во табот „Курсна листа“ и повторно кликни „Книжи документи“.</p>
+          <p className="text-xs text-primary mt-1">Најчеста причина е курс што недостасува. Внеси го во табот „Курсна листа“ и повторно кликни „Книжи документи“.</p>
         </div>
       )}
 
@@ -181,10 +181,10 @@ function JournalTab() {
                 <span className="font-mono text-xs font-semibold text-gray-700">{e.number}</span>
                 <span className="text-xs text-gray-400">{fmtDate(e.date)}</span>
                 <Badge variant="outline" className="text-[10px] font-normal">{SOURCE_LBL[e.sourceType] ?? e.sourceType}</Badge>
-                {(e as any).templateName && <Badge variant="outline" className="text-[10px] font-normal border-amber-300 text-amber-800">терк: {(e as any).templateName}</Badge>}
+                {(e as any).templateName && <Badge variant="outline" className="text-[10px] font-normal border-primary/40 text-foreground/80">терк: {(e as any).templateName}</Badge>}
                 <span className="text-sm text-gray-700 flex-1 truncate">{e.description}</span>
                 {(() => { const href = e.sourceId != null ? SOURCE_HREF[e.sourceType]?.(e.sourceId, (e as any).source) : ""; return href ? (
-                  <button className="text-xs text-amber-700 hover:underline whitespace-nowrap" onClick={() => navigate(href)}>Отвори документ →</button>) : null; })()}
+                  <button className="text-xs text-primary hover:underline whitespace-nowrap" onClick={() => navigate(href)}>Отвори документ →</button>) : null; })()}
                 {(e as any).locked && <span title="Заклучен период — не се менува"><Lock className="h-3.5 w-3.5 text-slate-500" /></span>}
                 {(e as any).stornoOf && <Badge variant="outline" className="text-[10px] font-normal border-violet-300 text-violet-700">сторно</Badge>}
                 {e.sourceType === "manual" && !(e as any).stornoOf && (
@@ -197,11 +197,11 @@ function JournalTab() {
                 )}
               </div>
               {(e as any).source && (() => { const src = (e as any).source; return (
-                <div className={`mb-1.5 flex flex-wrap items-center gap-2 text-xs ${src.orphan || src.missing ? "rounded-md bg-amber-50 px-2 py-1 text-amber-900" : "text-gray-500"}`}>
+                <div className={`mb-1.5 flex flex-wrap items-center gap-2 text-xs ${src.orphan || src.missing ? "rounded-md bg-primary/10 px-2 py-1 text-warning-foreground" : "text-gray-500"}`}>
                   <span><span className="text-gray-400">Од каде:</span> {src.text}</span>
                   {src.orphan && <span>— материјалот е избришан, па ова движење останало без материјал. Ако било проба, отстрани го.</span>}
                   {src.orphan && isAdmin && (
-                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs border-amber-300" disabled={removeOrphan.isPending}
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs border-primary/40" disabled={removeOrphan.isPending}
                       onClick={() => { if (confirm(`Да се отстрани движењето и налогот ${e.number}? Ова не може да се врати.`)) removeOrphan.mutate({ moveId: src.moveId }); }}>
                       Отстрани го движењето и налогот</Button>
                   )}
@@ -235,7 +235,7 @@ function JournalTab() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>Нов налог за книжење</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-1">
+            <div className="rounded-lg border border-primary/20 bg-primary/10 p-3 space-y-1">
               <Label className="text-xs">Терк (шема на книжење)</Label>
               <div className="flex gap-2">
                 <Select value={mTerk} onValueChange={pickTerk}>
@@ -283,7 +283,7 @@ function JournalTab() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-1">
                 <Button size="sm" variant="ghost" onClick={() => setMLines([...mLines, { account: "", debit: "", credit: "" }])}><Plus className="h-3.5 w-3.5 mr-1" />Ред</Button>
-                {Math.abs(diff) >= 0.005 && <Button size="sm" variant="ghost" className="text-amber-700" onClick={fillDiff}>Дополни разлика ({fmt(Math.abs(diff))})</Button>}
+                {Math.abs(diff) >= 0.005 && <Button size="sm" variant="ghost" className="text-primary" onClick={fillDiff}>Дополни разлика ({fmt(Math.abs(diff))})</Button>}
                 {mLines.filter(l => l.account).length >= 2 && (
                   <Button size="sm" variant="ghost" onClick={() => setTerkDraft({ id: terk?.id, name: terk?.name ?? mDesc, description: terk?.description ?? "",
                     lines: mLines.filter(l => l.account).map(l => ({ account: l.account, side: l.side ?? (parseFloat(l.credit) ? "P" : "D"), note: l.note ?? "" })) })}>
@@ -292,8 +292,8 @@ function JournalTab() {
               </div>
               <span className={`text-sm tabular-nums ${Math.abs(diff) < 0.005 && dSum > 0 ? "text-emerald-700" : "text-red-600"}`}>Должи {fmt(dSum)} · Побарува {fmt(cSum)}</span>
             </div>
-            {missingPartner && <p className="text-xs text-amber-700">Избери купувач/добавувач на редот со конто на купувачи или добавувачи — така налогот влегува во неговото салдо.</p>}
-            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={manual.isPending || Math.abs(diff) > 0.005 || dSum === 0 || mDesc.length < 2 || missingPartner || mLines.some(l => !l.account && (l.debit || l.credit))}
+            {missingPartner && <p className="text-xs text-primary">Избери купувач/добавувач на редот со конто на купувачи или добавувачи — така налогот влегува во неговото салдо.</p>}
+            <Button className="w-full" disabled={manual.isPending || Math.abs(diff) > 0.005 || dSum === 0 || mDesc.length < 2 || missingPartner || mLines.some(l => !l.account && (l.debit || l.credit))}
               onClick={() => manual.mutate({ date: mDate, description: mDesc, templateName: terk?.name,
                 lines: mLines.filter(l => l.account && ((parseFloat(l.debit) || 0) + (parseFloat(l.credit) || 0)) > 0)
                   .map(l => ({ account: l.account, debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0, description: l.note || undefined,
@@ -345,7 +345,7 @@ function TrialBalanceTab({ onOpenCard }: { onOpenCard: (code: string) => void })
         <Button size="sm" variant="outline" onClick={exportCsv} disabled={!data?.accounts.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel</Button>
       </div>
       {data && (data.unposted.invoices > 0 || data.unposted.incoming > 0) && (
-        <p className="text-sm text-amber-700">Има некнижени документи ({data.unposted.invoices} излезни, {data.unposted.incoming} влезни фактури) — отвори „Налози“ за да се книжат.</p>
+        <p className="text-sm text-primary">Има некнижени документи ({data.unposted.invoices} излезни, {data.unposted.incoming} влезни фактури) — отвори „Налози“ за да се книжат.</p>
       )}
       <Card><CardContent className="p-0">
         <Table>
@@ -362,7 +362,7 @@ function TrialBalanceTab({ onOpenCard }: { onOpenCard: (code: string) => void })
                 const g = classes.get(a.code[0])!;
                 return (
                   <Fragment key={a.code}>
-                    <TableRow className="cursor-pointer hover:bg-amber-50/50" onClick={() => onOpenCard(a.code)}>
+                    <TableRow className="cursor-pointer hover:bg-accent/50" onClick={() => onOpenCard(a.code)}>
                       <TableCell className="font-mono">{a.code}</TableCell><TableCell>{a.name}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmt(a.opening)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmt(a.debit)}</TableCell>
@@ -473,7 +473,7 @@ function VatTab() {
             {data.summary.input.map(g => <div key={g.key} className="flex justify-between text-sm py-0.5"><span className="text-gray-500">{VAT_KEY[g.key] ?? g.key + "%"}</span><span className="tabular-nums">{fmt(g.base)} / <b>{fmt(g.vat)}</b></span></div>)}
             <p className="text-lg font-bold mt-2 tabular-nums">{fmt(data.summary.inVat)} ден</p>
           </CardContent></Card>
-          <Card className={data.summary.payable >= 0 ? "border-amber-300 bg-amber-50/60" : "border-emerald-300 bg-emerald-50/60"}><CardContent className="p-4">
+          <Card className={data.summary.payable >= 0 ? "border-primary/40 bg-primary/10" : "border-emerald-300 bg-emerald-50/60"}><CardContent className="p-4">
             <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-2">{data.summary.payable >= 0 ? "ДДВ за уплата" : "ДДВ за поврат"}</p>
             <p className="text-3xl font-bold tabular-nums">{fmt(Math.abs(data.summary.payable))} <span className="text-base">ден</span></p>
             <p className="text-xs text-gray-500 mt-2">Помош за ДДВ пријавата. Бројките провери ги со сметководителот пред поднесување.</p>
@@ -481,7 +481,7 @@ function VatTab() {
         </div>
       )}
       {data && (data as any).warnings?.length > 0 && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-warning-foreground">
           <p className="font-medium flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />Провери пред ДДВ пријавата: ДДВ не одговара на стапката</p>
           <ul className="mt-1 text-xs space-y-0.5">{(data as any).warnings.slice(0, 10).map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
         </div>
@@ -565,7 +565,7 @@ function CashTab({ presetInvoiceId }: { presetInvoiceId?: number | null }) {
           { l: "Почетно салдо", v: data?.opening, c: "" },
           { l: "Уплати", v: data?.ins, c: "text-emerald-700" },
           { l: "Исплати", v: data?.outs, c: "text-red-600" },
-          { l: "Салдо во благајна", v: data?.closing, c: "text-amber-700" },
+          { l: "Салдо во благајна", v: data?.closing, c: "text-primary" },
         ].map(k => (
           <Card key={k.l}><CardContent className="p-4">
             <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">{k.l}</p>
@@ -662,7 +662,7 @@ function RatesTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PeriodPicker from={from} to={to} onChange={(a, b) => { setFrom(a); setTo(b); }} />
-        <Button size="sm" className="bg-amber-500 hover:bg-amber-600" onClick={() => fetchN.mutate({ from, to })} disabled={fetchN.isPending}>
+        <Button size="sm" onClick={() => fetchN.mutate({ from, to })} disabled={fetchN.isPending}>
           <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${fetchN.isPending ? "animate-spin" : ""}`} />Преземи од НБРМ
         </Button>
       </div>
@@ -749,7 +749,7 @@ function ChartTab() {
             </div>
           ))}
         </div>
-        <Button className="bg-amber-500 hover:bg-amber-600" disabled={!Object.keys(edits).length || saveRules.isPending}
+        <Button disabled={!Object.keys(edits).length || saveRules.isPending}
           onClick={() => saveRules.mutate(Object.entries(edits).map(([key, accountCode]) => ({ key, accountCode })))}>Зачувај правила</Button>
       </CardContent></Card>
     </div>
@@ -824,7 +824,7 @@ function ProfitTab() {
                       {m === null ? <span className="text-xs text-gray-400">—</span> : (
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
-                            <div className={`h-full rounded-full ${m >= 20 ? "bg-emerald-500" : m >= 0 ? "bg-amber-400" : "bg-red-500"}`} style={{ width: `${Math.min(100, Math.abs(m))}%` }} />
+                            <div className={`h-full rounded-full ${m >= 20 ? "bg-emerald-500" : m >= 0 ? "bg-warning" : "bg-red-500"}`} style={{ width: `${Math.min(100, Math.abs(m))}%` }} />
                           </div>
                           <span className={`text-xs tabular-nums w-12 text-right ${m < 0 ? "text-red-600" : ""}`}>{m.toFixed(1)}%</span>
                         </div>
@@ -872,7 +872,7 @@ export default function Finance() {
           {FIN_GROUPS.map(g => (
             <div key={g.label} className="space-y-1">
               <div className="text-[10px] uppercase tracking-wider text-gray-400 pl-1">{g.label}</div>
-              <TabsList className="bg-amber-50 h-auto">
+              <TabsList className="bg-primary/10 h-auto">
                 {g.tabs.map(t => { const I = t.icon; return <TabsTrigger key={t.key} value={t.key}><I className="h-4 w-4 mr-1.5" />{t.label}</TabsTrigger>; })}
               </TabsList>
             </div>

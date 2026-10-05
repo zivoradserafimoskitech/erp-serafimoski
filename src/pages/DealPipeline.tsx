@@ -32,14 +32,14 @@ export default function DealPipeline() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Workflow className="h-6 w-6 text-amber-600" />Тек на нарачки</h2>
+        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Workflow className="h-6 w-6 text-primary" />Тек на нарачки</h2>
         <p className="text-gray-500 mt-1">Секоја понуда од прифаќање до наплата — на кој чекор е и што е следно</p>
       </div>
 
       <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
         {STAGES.map(s => (
           <button key={s.key} onClick={() => setStageF(stageF === s.key ? null : s.key)}
-            className={`rounded-lg border px-3 py-2 text-left transition ${stageF === s.key ? "border-amber-400 bg-amber-50" : "bg-white hover:bg-gray-50"}`}>
+            className={`rounded-lg border px-3 py-2 text-left transition ${stageF === s.key ? "border-primary/50 bg-primary/10" : "bg-white hover:bg-gray-50"}`}>
             <div className="text-[11px] text-gray-500 truncate">{s.label}</div>
             <div className={`text-xl font-bold ${counts[s.key] ? "text-gray-800" : "text-gray-300"}`}>{counts[s.key] ?? 0}</div>
           </button>
@@ -78,7 +78,7 @@ export default function DealPipeline() {
         <DialogContent className="sm:max-w-5xl">
           <DialogHeader><DialogTitle>Тек на нарачка · {open?.number}</DialogTitle></DialogHeader>
           {open && <DealFlow quotationId={open.id} />}
-          {open && <button className="text-sm text-amber-700 hover:underline text-left" onClick={() => navigate(`/ponudi?open=${open.id}`)}>Отвори ја понудата →</button>}
+          {open && <button className="text-sm text-primary hover:underline text-left" onClick={() => navigate(`/ponudi?open=${open.id}`)}>Отвори ја понудата →</button>}
         </DialogContent>
       </Dialog>
     </div>

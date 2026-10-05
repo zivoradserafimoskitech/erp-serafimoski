@@ -55,7 +55,7 @@ export default function QualityIssueDetailDialog({ issue, onClose }: { issue: an
     <>
       <Dialog open={!!issue} onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
-          <DialogTitle className="flex flex-wrap items-center gap-2"><span className="font-mono text-amber-600">{q.number}</span> {q.title}</DialogTitle>
+          <DialogTitle className="flex flex-wrap items-center gap-2"><span className="font-mono text-primary">{q.number}</span> {q.title}</DialogTitle>
           <DialogDescription className="flex flex-wrap items-center gap-2">
             <Badge className={KIND[q.kind]?.cls}>{KIND[q.kind]?.label}</Badge><span>{fmtDate(q.date)}</span>{q.responsible && <span>· одговорен {q.responsible}</span>}
           </DialogDescription>
@@ -65,12 +65,12 @@ export default function QualityIssueDetailDialog({ issue, onClose }: { issue: an
           <div className="rounded-lg border p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-wider text-gray-400">Поврзано со</span>
-              <button className="text-xs text-amber-700 hover:underline flex items-center gap-1" onClick={() => setEditLinks(!editLinks)}><Pencil className="h-3 w-3" />{editLinks ? "Готово" : "Смени"}</button>
+              <button className="text-xs text-primary hover:underline flex items-center gap-1" onClick={() => setEditLinks(!editLinks)}><Pencil className="h-3 w-3" />{editLinks ? "Готово" : "Смени"}</button>
             </div>
             {!editLinks ? (
               <div className="flex flex-wrap gap-2">
                 {links.length ? links.map(l => { const I = l.icon; return (
-                  <button key={l.href} onClick={() => go(l.href)} className="inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1 text-sm hover:border-amber-400 hover:bg-amber-50">
+                  <button key={l.href} onClick={() => go(l.href)} className="inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1 text-sm hover:border-primary/50 hover:bg-accent">
                     <I className="h-3.5 w-3.5 text-gray-500" />{l.label}<ExternalLink className="h-3 w-3 text-gray-400" /></button>); })
                   : <span className="text-sm text-gray-400">Не е поврзано — кликни „Смени“</span>}
               </div>
@@ -89,15 +89,15 @@ export default function QualityIssueDetailDialog({ issue, onClose }: { issue: an
           </div>
 
           {/* Корекција */}
-          <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-3">
-            <span className="text-xs uppercase tracking-wider text-amber-800">Корекција</span>
+          <div className="rounded-lg border border-primary/20 bg-primary/10 p-3 space-y-3">
+            <span className="text-xs uppercase tracking-wider text-foreground/80">Корекција</span>
             <div className="flex flex-wrap gap-2">
               {q.reworkWoId ? (
                 <button onClick={() => go(`/proizvodstvo?open=${q.reworkWoId}`)} className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 hover:bg-emerald-100">
                   <Hammer className="h-4 w-4" />Доработка {q.reworkWoNumber} · {q.reworkStatus === "completed" ? "завршена" : "во тек"}{q.reworkCost > 0 ? ` · ${money(q.reworkCost)} ден` : ""}<ExternalLink className="h-3 w-3" />
                 </button>
               ) : (
-                <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={rework.isPending} onClick={() => rework.mutate({ id: q.id })}><Hammer className="h-4 w-4 mr-1.5" />Налог за доработка</Button>
+                <Button size="sm" disabled={rework.isPending} onClick={() => rework.mutate({ id: q.id })}><Hammer className="h-4 w-4 mr-1.5" />Налог за доработка</Button>
               )}
               {q.reworkWoId && q.reworkCost > 0 && Math.abs(q.reworkCost - q.cost) > 0.01 && (
                 <Button size="sm" variant="outline" onClick={() => update.mutate({ id: q.id, cost: q.reworkCost })}><Wallet className="h-4 w-4 mr-1.5" />Трошок од доработката ({money(q.reworkCost)} ден)</Button>

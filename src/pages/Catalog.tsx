@@ -340,7 +340,7 @@ export default function CatalogPage() {
                     <TableBody>
                       {bomData.map((c: any) => (
                         <TableRow key={c.id}>
-                          <TableCell><Badge className={c.kind === "material" ? "bg-blue-100 text-blue-800" : c.kind === "product" ? "bg-violet-100 text-violet-800" : "bg-amber-100 text-amber-800"}>{c.kind === "material" ? "Мат" : c.kind === "product" ? "Подск." : "Усл"}</Badge></TableCell>
+                          <TableCell><Badge className={c.kind === "material" ? "bg-blue-100 text-blue-800" : c.kind === "product" ? "bg-violet-100 text-violet-800" : "bg-warning/15 text-foreground/80"}>{c.kind === "material" ? "Мат" : c.kind === "product" ? "Подск." : "Усл"}</Badge></TableCell>
                           <TableCell className="text-xs">{c.refName}</TableCell><TableCell>{c.perUnit}</TableCell><TableCell>{c.wastePct}%</TableCell>
                           <TableCell className="text-xs">{c.scale === "area" ? "m2" : c.scale === "perimeter" ? "перим." : c.scale === "length" ? "долж." : "фикс"}</TableCell>
                           <TableCell><Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Дали сте сигурни дека сакате да избришете?")) bomDelete.mutate({ id: c.id }); }}>Избриши</Button></TableCell>

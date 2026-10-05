@@ -195,14 +195,14 @@ export default function Procurement() {
                   <Label>Материјали што ги нуди</Label>
                   <Textarea value={supForm.materials} onChange={(e) => setSupForm({ ...supForm, materials: e.target.value })} placeholder="на пр. Челични лимови, профили..." />
                 </div>
-                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={supCreate.isPending}>
+                <Button type="submit" className="w-full" disabled={supCreate.isPending}>
                   {supCreate.isPending ? "Зачувување..." : "Зачувај добавувач"}
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
 
-          <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setPoDialog(true)}>
+          <Button onClick={() => setPoDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Нова набавна нарачка
           </Button>
@@ -304,7 +304,7 @@ export default function Procurement() {
                     purchaseOrders?.map((po: any) => {
                       const st = poStatusConfig[po.status] || poStatusConfig.draft;
                       return (
-                        <TableRow key={po.id} className="cursor-pointer hover:bg-amber-50/40" onClick={() => { setSelectedPO(po.id); setDetailOpen(true); }}>
+                        <TableRow key={po.id} className="cursor-pointer hover:bg-accent/40" onClick={() => { setSelectedPO(po.id); setDetailOpen(true); }}>
                           <TableCell className="font-mono text-sm font-medium">{po.poNumber}</TableCell>
                           <TableCell>{po.supplierName}</TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>

@@ -23,8 +23,8 @@ export default function IncomingAccountPicker({ supplierId, text, value, onChang
   if (unsure) {
     const picked = PURCHASE_KINDS.find(k => k.code === value);
     return (
-      <div className={`rounded-lg border p-3 space-y-2 ${needs ? "border-amber-300 bg-amber-50/60" : "bg-gray-50/60"}`}>
-        <Label className="flex items-center gap-1.5 text-gray-800"><HelpCircle className="h-4 w-4 text-amber-600" />Што е купено со оваа фактура? *</Label>
+      <div className={`rounded-lg border p-3 space-y-2 ${needs ? "border-primary/40 bg-primary/10" : "bg-gray-50/60"}`}>
+        <Label className="flex items-center gap-1.5 text-gray-800"><HelpCircle className="h-4 w-4 text-primary" />Што е купено со оваа фактура? *</Label>
         <p className="text-xs text-gray-500">Програмата не може сама да препознае — избери што најмногу одговара. Изборот се памети за овој добавувач.</p>
         <PurchaseKindQuestion value={value} onChange={onChange} compact />
         {picked && <p className="text-[11px] text-gray-500">Ќе се книжи на конто {picked.code}.</p>}
@@ -41,7 +41,7 @@ export default function IncomingAccountPicker({ supplierId, text, value, onChang
           {EXPENSE_CHOICES.map(c => <SelectItem key={c.code} value={c.code}><span className="font-mono text-xs mr-1.5">{c.code}</span>{c.label}</SelectItem>)}
         </SelectContent>
       </Select>
-      {!value && g?.sure && <p className="text-[11px] text-amber-700 flex items-center gap-1"><Sparkles className="h-3 w-3" />Пополнето само: {g.reason}</p>}
+      {!value && g?.sure && <p className="text-[11px] text-primary flex items-center gap-1"><Sparkles className="h-3 w-3" />Пополнето само: {g.reason}</p>}
     </div>
   );
 }

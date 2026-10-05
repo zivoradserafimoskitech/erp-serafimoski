@@ -128,7 +128,7 @@ function PortalLinks({ customerId }: { customerId: number }) {
   return (
     <div className="space-y-3 text-sm">
       <p className="text-gray-600">Клиентот со таен линк (без лозинка) ги гледа своите нарачки и докле се, фактурите (со PDF) и колку е отворено, сертификатите за материјал — и може да прати барање за понуда со цртеж. Линкот важи една година; може да се поништи во секое време.</p>
-      <Button className="bg-amber-500 hover:bg-amber-600" disabled={create.isPending} onClick={() => create.mutate({ customerId, days: 365 })}><Link2 className="h-4 w-4 mr-1.5" />Нов линк за порталот</Button>
+      <Button disabled={create.isPending} onClick={() => create.mutate({ customerId, days: 365 })}><Link2 className="h-4 w-4 mr-1.5" />Нов линк за порталот</Button>
       {fresh && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-1">
           <p className="text-xs text-emerald-800">Копирај го и прати го на клиентот — подоцна не може повторно да се види (се чува само шифриран).</p>

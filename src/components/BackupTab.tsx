@@ -78,7 +78,7 @@ export default function BackupTab() {
     <div className="space-y-4">
       <Card><CardContent className="p-4 space-y-3">
         <div className="flex items-start gap-3">
-          <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${stale ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+          <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${stale ? "bg-warning/15 text-primary" : "bg-emerald-100 text-emerald-700"}`}>
             {stale ? <AlertTriangle className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
           </div>
           <div className="flex-1">
@@ -90,16 +90,16 @@ export default function BackupTab() {
               ако нешто се случи со базата, од неа се враќа сè. Базата сега има околу {data ? mb(data.dbBytes) : "…"} (копијата е компресирана, обично многу помала).
             </p>
           </div>
-          <Button className="bg-amber-500 hover:bg-amber-600" onClick={download} disabled={!!busy}>
+          <Button onClick={download} disabled={!!busy}>
             <Download className="h-4 w-4 mr-1.5" />{busy === "download" ? "Се прави..." : "Преземи бекап"}
           </Button>
         </div>
       </CardContent></Card>
 
       <Card><CardContent className="p-4 space-y-3">
-        <p className="font-semibold flex items-center gap-2"><Mail className="h-4 w-4 text-amber-600" />Автоматски секој ден по е-пошта</p>
+        <p className="font-semibold flex items-center gap-2"><Mail className="h-4 w-4 text-primary" />Автоматски секој ден по е-пошта</p>
         <p className="text-sm text-gray-600">Секоја вечер серверот прави копија и ја праќа како прилог (до {data ? mb(data.maxMailBytes) : "20 MB"}). Ако е поголема, стигнува потсетник да се преземе рачно. Најдобро е посебна адреса (на пр. Gmail само за бекап).</p>
-        {data && !data.mailConfigured && <p className="text-xs text-amber-700">Прво внеси SMTP во Подесувања → Фирма.</p>}
+        {data && !data.mailConfigured && <p className="text-xs text-primary">Прво внеси SMTP во Подесувања → Фирма.</p>}
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex items-center gap-2 text-sm h-9"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />Вклучено</label>
           <div className="space-y-1 flex-1 min-w-[14rem]"><Label className="text-xs">Е-пошта</Label><Input className="h-9" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="bekap@..." /></div>
@@ -110,7 +110,7 @@ export default function BackupTab() {
       </CardContent></Card>
 
       <Card><CardContent className="p-4 space-y-3">
-        <p className="font-semibold flex items-center gap-2"><RotateCcw className="h-4 w-4 text-amber-600" />Провери / врати од датотека</p>
+        <p className="font-semibold flex items-center gap-2"><RotateCcw className="h-4 w-4 text-primary" />Провери / врати од датотека</p>
         <p className="text-sm text-gray-600">„Провери“ ја враќа копијата во привремен простор и брои дали е сè на место — сегашните податоци не се допираат. Препорачливо е еднаш месечно, за да знаеш дека бекапот навистина работи. „Врати“ ги заменува сите сегашни податоци со копијата.</p>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={fileRef} type="file" accept=".gz,.json" className="hidden" onChange={(e) => { const f = e.target.files?.[0] ?? null; setFile(f); setCheck(null); if (f) void runCheck(f); e.target.value = ""; }} />
@@ -120,12 +120,12 @@ export default function BackupTab() {
         {check && (check.error ? (
           <p className="text-sm text-red-600">{check.error}</p>
         ) : (
-          <div className={`rounded-lg border px-3 py-2 text-sm ${check.ok ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+          <div className={`rounded-lg border px-3 py-2 text-sm ${check.ok ? "border-emerald-200 bg-emerald-50" : "border-primary/20 bg-primary/10"}`}>
             <p className="font-medium flex items-center gap-1.5">
-              {check.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+              {check.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-primary" />}
               Копија од {fmtAt(check.createdAt)}: {check.tables} табели, {check.rows.toLocaleString("mk-MK")} записи {check.ok ? "— се враќа без проблем" : "— има проблеми"}
             </p>
-            {check.problems.slice(0, 10).map((p, i) => <p key={i} className="text-xs text-amber-800 ml-6">{p}</p>)}
+            {check.problems.slice(0, 10).map((p, i) => <p key={i} className="text-xs text-foreground/80 ml-6">{p}</p>)}
             {check.ok && (
               <Button size="sm" variant="ghost" className="mt-1 text-red-600" disabled={!!busy} onClick={restore}>
                 {busy === "restore" ? "Се враќа..." : "Врати ги сите податоци од оваа копија"}

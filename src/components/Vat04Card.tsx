@@ -38,9 +38,9 @@ export default function Vat04Card({ from, to }: { from: string; to: string }) {
   return (
     <Card><CardContent className="p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-        <p className="font-semibold flex items-center gap-2"><ClipboardList className="h-4 w-4 text-amber-600" />ДДВ-04 по полиња</p>
+        <p className="font-semibold flex items-center gap-2"><ClipboardList className="h-4 w-4 text-primary" />ДДВ-04 по полиња</p>
         <div className="flex gap-1.5">
-          {edit ? <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={save.isPending} onClick={() => save.mutate({ kind: "vat04", codes })}>Зачувај броеви</Button> : null}
+          {edit ? <Button size="sm" disabled={save.isPending} onClick={() => save.mutate({ kind: "vat04", codes })}>Зачувај броеви</Button> : null}
           <Button size="sm" variant="outline" onClick={() => setEdit(!edit)}><Hash className="h-3.5 w-3.5 mr-1.5" />{edit ? "Откажи" : "Броеви на полиња"}</Button>
           <Button size="sm" variant="outline" onClick={xlsx}><Download className="h-3.5 w-3.5 mr-1.5" />Excel</Button>
           <Button size="sm" variant="outline" onClick={pdf}><FileText className="h-3.5 w-3.5 mr-1.5" />PDF</Button>
@@ -56,7 +56,7 @@ export default function Vat04Card({ from, to }: { from: string; to: string }) {
             const head = l.side !== lastSide ? (lastSide = l.side, <tr key={l.side + "_h"} className="bg-gray-50"><td colSpan={4} className="px-3 py-1 text-[11px] uppercase tracking-wider text-gray-500 font-semibold">{SIDE[l.side]}</td></tr>) : null;
             const empty = l.side !== "total" && !l.count;
             return [head, (
-              <tr key={l.key} className={`${l.key === "t_pay" ? "bg-amber-50 font-bold" : l.side === "total" ? "font-semibold" : ""} ${empty ? "text-gray-400" : ""} border-b border-gray-100`}>
+              <tr key={l.key} className={`${l.key === "t_pay" ? "bg-primary/10 font-bold" : l.side === "total" ? "font-semibold" : ""} ${empty ? "text-gray-400" : ""} border-b border-gray-100`}>
                 <td className="px-3 py-1.5">{edit ? <Input className="h-7 w-16 text-xs" value={codes[l.key] ?? ""} onChange={(e) => setCodes({ ...codes, [l.key]: e.target.value })} /> : <span className="font-mono text-xs text-gray-500">{codes[l.key] ?? ""}</span>}</td>
                 <td className="px-3 py-1.5">{l.label}{l.count ? <span className="text-xs text-gray-400"> · {l.count} док.</span> : null}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{l.base === null ? "" : fmt(l.base)}</td>

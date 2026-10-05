@@ -110,8 +110,8 @@ export default function PurchaseOrderCreateDialog({ open, onOpenChange, onCreate
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden max-h-[94vh] flex flex-col [&>button]:hidden">
         {/* Заглавие */}
-        <div className="flex items-start gap-3 px-6 py-5 bg-gradient-to-r from-amber-50 to-white border-b">
-          <div className="h-11 w-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm shrink-0"><ShoppingCart className="h-5 w-5" /></div>
+        <div className="flex items-start gap-3 px-6 py-5 bg-gradient-to-r from-primary/10 to-white border-b">
+          <div className="h-11 w-11 rounded-xl bg-primary text-white flex items-center justify-center shadow-sm shrink-0"><ShoppingCart className="h-5 w-5" /></div>
           <div className="flex-1 min-w-0">
             <DialogTitle className="text-lg font-semibold text-gray-900">Нова набавна нарачка</DialogTitle>
             <DialogDescription className="text-sm text-gray-500 mt-0.5">Нарачка до добавувач — при прием се прави приемница и залихата се зголемува</DialogDescription>
@@ -135,10 +135,10 @@ export default function PurchaseOrderCreateDialog({ open, onOpenChange, onCreate
               <div className="md:col-span-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="flex items-center gap-1.5 text-gray-700"><Truck className="h-4 w-4 text-gray-400" />Добавувач *</Label>
-                  {!newSup && <button type="button" className="text-xs text-amber-700 hover:underline flex items-center gap-1" onClick={() => setNewSup({ name: "", phone: "", email: "" })}><UserPlus className="h-3.5 w-3.5" />Нов добавувач</button>}
+                  {!newSup && <button type="button" className="text-xs text-primary hover:underline flex items-center gap-1" onClick={() => setNewSup({ name: "", phone: "", email: "" })}><UserPlus className="h-3.5 w-3.5" />Нов добавувач</button>}
                 </div>
                 {newSup ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2">
+                  <div className="rounded-lg border border-primary/20 bg-primary/10 p-3 space-y-2">
                     <Input autoFocus placeholder="Назив на фирмата *" value={newSup.name} onChange={(e) => setNewSup({ ...newSup, name: e.target.value })} className="bg-white" />
                     <div className="grid grid-cols-2 gap-2">
                       <Input placeholder="Телефон" value={newSup.phone} onChange={(e) => setNewSup({ ...newSup, phone: e.target.value })} className="bg-white" />
@@ -146,7 +146,7 @@ export default function PurchaseOrderCreateDialog({ open, onOpenChange, onCreate
                     </div>
                     <div className="flex justify-end gap-2">
                       <Button type="button" size="sm" variant="ghost" onClick={() => setNewSup(null)}>Откажи</Button>
-                      <Button type="button" size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={!newSup.name.trim() || supCreate.isPending}
+                      <Button type="button" size="sm" disabled={!newSup.name.trim() || supCreate.isPending}
                         onClick={() => supCreate.mutate({ name: newSup.name.trim(), phone: newSup.phone || undefined, email: newSup.email || undefined, country: "Македонија" } as any)}>
                         {supCreate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}Зачувај и избери
                       </Button>
@@ -177,7 +177,7 @@ export default function PurchaseOrderCreateDialog({ open, onOpenChange, onCreate
                 <div className="flex flex-wrap gap-1.5">
                   {[{ l: "+3 дена", d: 3 }, { l: "+1 недела", d: 7 }, { l: "+2 недели", d: 14 }].map(x => (
                     <button key={x.l} type="button" onClick={() => setExpectedDate(addDays(x.d))}
-                      className="rounded-full border bg-white px-2.5 py-0.5 text-xs text-gray-600 hover:border-amber-400 hover:text-amber-700">{x.l}</button>
+                      className="rounded-full border bg-white px-2.5 py-0.5 text-xs text-gray-600 hover:border-primary/50 hover:text-primary">{x.l}</button>
                   ))}
                 </div>
               </div>
@@ -189,7 +189,7 @@ export default function PurchaseOrderCreateDialog({ open, onOpenChange, onCreate
                 <span className="font-medium text-sm text-gray-800">Ставки <span className="text-gray-400 font-normal">({filled.length})</span></span>
                 <div className="flex gap-2">
                   {lowStock.length > 0 && (
-                    <Button type="button" size="sm" variant="outline" className="h-8 text-amber-800 border-amber-300 hover:bg-amber-50" onClick={addLowStock}>
+                    <Button type="button" size="sm" variant="outline" className="h-8 text-foreground/80 border-primary/40 hover:bg-accent" onClick={addLowStock}>
                       <PackageSearch className="h-3.5 w-3.5 mr-1.5" />Под минимум ({lowStock.length})
                     </Button>
                   )}
@@ -262,18 +262,18 @@ export default function PurchaseOrderCreateDialog({ open, onOpenChange, onCreate
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="resize-none" placeholder="Услови за испорака, атести, сечење на мерка..." autoFocus />
               </div>
             ) : (
-              <button type="button" onClick={() => setShowNotes(true)} className="text-sm text-amber-700 hover:underline flex items-center gap-1.5"><StickyNote className="h-4 w-4" />Додади белешка</button>
+              <button type="button" onClick={() => setShowNotes(true)} className="text-sm text-primary hover:underline flex items-center gap-1.5"><StickyNote className="h-4 w-4" />Додади белешка</button>
             )}
           </div>
 
           {/* Подножје */}
           <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t bg-white px-6 py-4">
-            <span className={`text-sm flex items-center gap-1.5 ${blocker ? "text-amber-700" : "text-emerald-700"}`}>
+            <span className={`text-sm flex items-center gap-1.5 ${blocker ? "text-primary" : "text-emerald-700"}`}>
               {blocker ? <><AlertTriangle className="h-4 w-4" />{blocker}</> : <><Check className="h-4 w-4" />Спремно · {filled.length} {filled.length === 1 ? "ставка" : "ставки"}</>}
             </span>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Откажи</Button>
-              <Button type="submit" className="bg-amber-500 hover:bg-amber-600 min-w-[200px]" disabled={create.isPending || !!blocker}>
+              <Button type="submit" className="min-w-[200px]" disabled={create.isPending || !!blocker}>
                 {create.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-2" />}Креирај нарачка
               </Button>
             </div>

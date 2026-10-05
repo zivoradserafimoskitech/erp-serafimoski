@@ -137,7 +137,7 @@ export default function Assets() {
           <Button variant="outline" onClick={() => { setRunYear(thisYear); setRunOpen(true); }}>
             <Calculator className="h-4 w-4 mr-2" />Годишна амортизација
           </Button>
-          <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={openNew}>
+          <Button onClick={openNew}>
             <Plus className="h-4 w-4 mr-2" />Ново средство
           </Button>
         </div>
@@ -153,8 +153,8 @@ export default function Assets() {
           <div><p className="text-sm text-gray-500">Набавна вредност</p><p className="text-xl font-bold">{den(stats?.acquisition)}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="bg-amber-50 p-2.5 rounded-lg"><TrendingDown className="h-5 w-5 text-amber-600" /></div>
-          <div><p className="text-sm text-gray-500">Собрана амортизација</p><p className="text-xl font-bold text-amber-700">{den(stats?.accumulated)}</p></div>
+          <div className="bg-primary/10 p-2.5 rounded-lg"><TrendingDown className="h-5 w-5 text-primary" /></div>
+          <div><p className="text-sm text-gray-500">Собрана амортизација</p><p className="text-xl font-bold text-primary">{den(stats?.accumulated)}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="bg-emerald-50 p-2.5 rounded-lg"><Coins className="h-5 w-5 text-emerald-600" /></div>
@@ -226,13 +226,13 @@ export default function Assets() {
                     <div className="text-[11px] text-gray-400">
                       {ASSET_CATEGORIES[a.category]?.label ?? a.category}
                       {a.location ? ` · ${a.location}` : ""}
-                      {a.fullyDepreciated && <span className="text-amber-600"> · целосно амортизирано</span>}
+                      {a.fullyDepreciated && <span className="text-primary"> · целосно амортизирано</span>}
                     </div>
                   </TableCell>
                   <TableCell className="text-xs">{String(a.acquisitionDate).slice(0, 10)}</TableCell>
                   <TableCell className="text-right text-sm">{den(a.acquisitionValue)}</TableCell>
                   <TableCell className="text-right text-sm">
-                    <span className="text-amber-700">{den(a.accumulated)}</span>
+                    <span className="text-primary">{den(a.accumulated)}</span>
                     <div className="text-[11px] text-gray-400">{a.rate}% год.</div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -348,7 +348,7 @@ export default function Assets() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Откажи</Button>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+              <Button
                 disabled={!form.name || !form.inventoryNo || !form.acquisitionValue || createMut.isPending || updateMut.isPending}
                 onClick={submit}>
                 {createMut.isPending || updateMut.isPending ? "Зачувување..." : "Зачувај"}
@@ -369,9 +369,9 @@ export default function Assets() {
                   <div className="text-[11px] text-gray-500">Набавна</div>
                   <div className="font-bold">{den(detail.acquisitionValue)}</div>
                 </div>
-                <div className="bg-amber-50 rounded-lg px-3 py-2">
-                  <div className="text-[11px] text-amber-700">Собрана амортизација</div>
-                  <div className="font-bold text-amber-800">{den(detail.accumulated)}</div>
+                <div className="bg-primary/10 rounded-lg px-3 py-2">
+                  <div className="text-[11px] text-primary">Собрана амортизација</div>
+                  <div className="font-bold text-foreground/80">{den(detail.accumulated)}</div>
                 </div>
                 <div className="bg-emerald-50 rounded-lg px-3 py-2">
                   <div className="text-[11px] text-emerald-700">Сегашна вредност</div>
@@ -393,7 +393,7 @@ export default function Assets() {
                   {(detail.schedule ?? []).map((r: any) => {
                     const posted = (detail.posted ?? []).find((p: any) => p.year === r.year);
                     return (
-                      <TableRow key={r.year} className={r.year === thisYear ? "bg-amber-50/60" : ""}>
+                      <TableRow key={r.year} className={r.year === thisYear ? "bg-primary/10" : ""}>
                         <TableCell className="font-medium">{r.year}</TableCell>
                         <TableCell className="text-sm text-gray-500">{r.months}</TableCell>
                         <TableCell className="text-right">{den(r.amount)}</TableCell>
@@ -443,7 +443,7 @@ export default function Assets() {
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setDisposeFor(null)}>Откажи</Button>
-                <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+                <Button
                   onClick={() => disposeMut.mutate({
                     id: disposeFor.id, disposalDate: disposal.date,
                     disposalValue: disposal.value, disposalNote: disposal.note || undefined,
@@ -511,7 +511,7 @@ export default function Assets() {
                   onClick={() => { if (confirm(`Поништи ги записите за ${runYear}?`)) unpostMut.mutate({ year: runYear }); }}>
                   Поништи година
                 </Button>
-                <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+                <Button
                   disabled={!run || run.newCount === 0 || postMut.isPending}
                   onClick={() => postMut.mutate({ year: runYear })}>
                   {postMut.isPending ? "..." : `Проведи (${run?.newCount ?? 0})`}

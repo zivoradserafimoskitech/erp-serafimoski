@@ -85,8 +85,8 @@ export default function WorkOrderCreateDialog({ open, onOpenChange, onCreated }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col [&>button]:hidden">
         {/* Заглавие */}
-        <div className="flex items-start gap-3 px-6 py-5 bg-gradient-to-r from-amber-50 to-white border-b">
-          <div className="h-11 w-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm shrink-0"><Factory className="h-5 w-5" /></div>
+        <div className="flex items-start gap-3 px-6 py-5 bg-gradient-to-r from-primary/10 to-white border-b">
+          <div className="h-11 w-11 rounded-xl bg-primary text-white flex items-center justify-center shadow-sm shrink-0"><Factory className="h-5 w-5" /></div>
           <div className="flex-1 min-w-0">
             <DialogTitle className="text-lg font-semibold text-gray-900">Нов работен налог</DialogTitle>
             <DialogDescription className="text-sm text-gray-500 mt-0.5">Операциите и материјалите ги додаваш веднаш по креирањето</DialogDescription>
@@ -168,7 +168,7 @@ export default function WorkOrderCreateDialog({ open, onOpenChange, onCreated }:
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs text-gray-400 mr-1">Брзо:</span>
                 {[{ l: "Од денес", d: -1 }, { l: "+3 дена", d: 3 }, { l: "+1 недела", d: 7 }, { l: "+2 недели", d: 14 }, { l: "+1 месец", d: 30 }].map(x => (
-                  <button key={x.l} type="button" className="rounded-full border bg-white px-2.5 py-0.5 text-xs text-gray-600 hover:border-amber-400 hover:text-amber-700"
+                  <button key={x.l} type="button" className="rounded-full border bg-white px-2.5 py-0.5 text-xs text-gray-600 hover:border-primary/50 hover:text-primary"
                     onClick={() => { const start = form.plannedStart || todayIso(); x.d < 0 ? set({ plannedStart: todayIso() }) : set({ plannedStart: start, plannedEnd: addDays(start, x.d) }); }}>
                     {x.l}
                   </button>
@@ -190,14 +190,14 @@ export default function WorkOrderCreateDialog({ open, onOpenChange, onCreated }:
                 <Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} className="resize-none" placeholder="Напомени за подот, цртежи, посебни барања..." autoFocus />
               </div>
             ) : (
-              <button type="button" onClick={() => setShowNotes(true)} className="text-sm text-amber-700 hover:underline flex items-center gap-1.5"><StickyNote className="h-4 w-4" />Додади белешка</button>
+              <button type="button" onClick={() => setShowNotes(true)} className="text-sm text-primary hover:underline flex items-center gap-1.5"><StickyNote className="h-4 w-4" />Додади белешка</button>
             )}
           </div>
 
           {/* Подножје */}
           <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-white px-6 py-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Откажи</Button>
-            <Button type="submit" className="bg-amber-500 hover:bg-amber-600 min-w-[180px]" disabled={create.isPending || numberTaken || !form.description.trim()}>
+            <Button type="submit" className="min-w-[180px]" disabled={create.isPending || numberTaken || !form.description.trim()}>
               {create.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Factory className="h-4 w-4 mr-2" />}Креирај налог
             </Button>
           </div>

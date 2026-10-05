@@ -74,15 +74,15 @@ export default function EmailInvoicesTab() {
             </CardHeader>
             <CardContent>
               {!emailConfig?.configured && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 space-y-3">
-                  <p className="text-sm text-amber-800"><b>Конфигурирај е-маил</b> (IMAP) за автоматско примање на фактури од добавувачи:</p>
+                <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 mb-4 space-y-3">
+                  <p className="text-sm text-foreground/80"><b>Конфигурирај е-маил</b> (IMAP) за автоматско примање на фактури од добавувачи:</p>
                   <div className="grid grid-cols-2 gap-2">
                     <Input placeholder="IMAP сервер (пр. imap.gmail.com)" value={emailForm.host} onChange={e => setEmailForm({...emailForm, host: e.target.value})} />
                     <Input placeholder="Порта (993)" value={emailForm.port} onChange={e => setEmailForm({...emailForm, port: e.target.value})} />
                     <Input placeholder="Е-маил адреса" value={emailForm.username} onChange={e => setEmailForm({...emailForm, username: e.target.value})} />
                     <Input type="password" placeholder="Лозинка / App password" value={emailForm.password} onChange={e => setEmailForm({...emailForm, password: e.target.value})} />
                   </div>
-                  <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={!emailForm.host || !emailForm.username || !emailForm.password || saveEmailCfg.isPending}
+                  <Button size="sm" disabled={!emailForm.host || !emailForm.username || !emailForm.password || saveEmailCfg.isPending}
                     onClick={() => saveEmailCfg.mutate({ host: emailForm.host, port: Number(emailForm.port) || 993, secure: true, username: emailForm.username, password: emailForm.password })}>
                     Зачувај конфигурација
                   </Button>
@@ -160,7 +160,7 @@ export default function EmailInvoicesTab() {
                               </Button>
                             )}
                             {ei.status === "new" || ei.status === "parsed" ? (
-                              <Button size="sm" variant="outline" className="h-6 text-xs text-amber-600" onClick={() => {
+                              <Button size="sm" variant="outline" className="h-6 text-xs text-primary" onClick={() => {
                                 if (ei.matchedSupplierId) {
                                   if (confirm("Креирај влезна фактура од оваа email фактура?")) {
                                     approveEmailMutation.mutate({

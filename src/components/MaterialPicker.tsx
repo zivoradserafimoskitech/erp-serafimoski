@@ -40,7 +40,7 @@ export function MaterialPicker({
   return (
     <>
       {tile ? (
-        <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300"
+        <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-accent hover:border-primary/40"
           onClick={() => { setQ(""); setOpen(true); }}>
           <span className="text-lg leading-none">{tile.icon}</span>
           <span className="text-xs font-medium">{tile.label}</span>
@@ -78,7 +78,7 @@ export function MaterialPicker({
               <button
                 key={m.id}
                 type="button"
-                className="w-full text-left grid grid-cols-[3.5rem_1fr_2.5rem_5.5rem] gap-2 items-center border rounded-md px-2 py-2 hover:bg-amber-50 hover:border-amber-300 transition-colors"
+                className="w-full text-left grid grid-cols-[3.5rem_1fr_2.5rem_5.5rem] gap-2 items-center border rounded-md px-2 py-2 hover:bg-accent hover:border-primary/40 transition-colors"
                 onClick={() => { onSelect(m); setOpen(false); }}
               >
                 <span className="font-mono text-[10px] text-gray-400">{m.code}</span>

@@ -34,17 +34,17 @@ export default function IncomingAccountReview() {
   return (
     <>
       {items.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 mb-3">
-          <HelpCircle className="h-5 w-5 text-amber-600 shrink-0" />
-          <div className="flex-1 min-w-[220px] text-sm text-amber-900">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 mb-3">
+          <HelpCircle className="h-5 w-5 text-primary shrink-0" />
+          <div className="flex-1 min-w-[220px] text-sm text-warning-foreground">
             <b>{items.length} {items.length === 1 ? "влезна фактура чека" : "влезни фактури чекаат"} одговор</b> — програмата не знае што е купено (материјал, струја, закупнина...).
           </div>
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600" onClick={() => { setIdx(0); setOpen(true); }}>Одговори <ChevronRight className="h-4 w-4 ml-1" /></Button>
+          <Button size="sm" onClick={() => { setIdx(0); setOpen(true); }}>Одговори <ChevronRight className="h-4 w-4 ml-1" /></Button>
         </div>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogTitle className="flex items-center gap-2"><HelpCircle className="h-5 w-5 text-amber-600" />Што е купено со оваа фактура?</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><HelpCircle className="h-5 w-5 text-primary" />Што е купено со оваа фактура?</DialogTitle>
           <DialogDescription>Избери што најмногу одговара — не треба да знаеш конта. {items.length > 1 ? `(${Math.min(idx, items.length - 1) + 1} од ${items.length})` : ""}</DialogDescription>
           {cur ? (
             <div className="space-y-3">

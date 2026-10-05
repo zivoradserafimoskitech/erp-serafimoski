@@ -12,9 +12,9 @@ export default function PurchaseKindQuestion({ value, onChange, compact = false 
         const on = value === k.code;
         return (
           <button key={k.code} type="button" onClick={() => onChange(k.code)}
-            className={`relative text-left rounded-lg border p-2.5 transition ${on ? "border-amber-400 bg-amber-50 ring-1 ring-amber-300" : "bg-white hover:border-amber-300 hover:bg-amber-50/40"}`}>
-            {on && <Check className="absolute right-2 top-2 h-4 w-4 text-amber-600" />}
-            <div className="flex items-center gap-1.5 font-medium text-sm text-gray-900 pr-5 break-words"><Icon className="h-4 w-4 text-amber-600 shrink-0" />{k.title}</div>
+            className={`relative text-left rounded-lg border p-2.5 transition ${on ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30" : "bg-white hover:border-primary/40 hover:bg-accent/40"}`}>
+            {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
+            <div className="flex items-center gap-1.5 font-medium text-sm text-gray-900 pr-5 break-words"><Icon className="h-4 w-4 text-primary shrink-0" />{k.title}</div>
             <div className="text-[11px] text-gray-500 mt-0.5 leading-snug">{k.examples}</div>
           </button>
         );

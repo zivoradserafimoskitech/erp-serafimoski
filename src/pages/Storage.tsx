@@ -134,7 +134,7 @@ export default function Storage() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-amber-500 hover:bg-amber-600 text-white">
+            <Button>
               <Plus className="h-4 w-4 mr-2" />Нов материјал
             </Button>
           </DialogTrigger>
@@ -199,7 +199,7 @@ export default function Storage() {
               })()}
               <div className="space-y-2"><Label>Локација во склад</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="на пр. Ред 3, Полица Б" /></div>
               <div className="space-y-2"><Label>Опис</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-              <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createMutation.isPending}>
+              <Button type="submit" className="w-full" disabled={createMutation.isPending}>
                 {createMutation.isPending ? "Зачувување..." : "Зачувај материјал"}
               </Button>
             </form>
@@ -216,7 +216,7 @@ export default function Storage() {
           { key: "certs" as const, label: "Атести / шаржи", icon: ShieldCheck },
           { key: "popis" as const, label: "Попис", icon: ClipboardCheck },
         ].map(t => (
-          <button key={t.key} onClick={() => setMainTab(t.key)} className={`flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === t.key ? "border-amber-500 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+          <button key={t.key} onClick={() => setMainTab(t.key)} className={`flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
             <t.icon className="h-4 w-4" />{t.label}
           </button>
         ))}
@@ -331,7 +331,7 @@ export default function Storage() {
                         <span className={isLow ? "text-red-600 font-semibold" : ""}>{m.currentStock} {units[m.unit]}</span>
                         {Number((m as any).reservedQty ?? 0) > 0 && (
                           <div className="text-[11px] leading-tight mt-0.5" title={`Резервирано за ${(m as any).reservedWorkOrders} отворени налози`}>
-                            <span className="text-amber-700">рез. {parseFloat((m as any).reservedQty)}</span>
+                            <span className="text-primary">рез. {parseFloat((m as any).reservedQty)}</span>
                             <span className={Number((m as any).availableQty) < 0 ? "text-red-600 font-semibold" : "text-emerald-700"}> · слоб. {parseFloat((m as any).availableQty)}</span>
                           </div>
                         )}
@@ -398,7 +398,7 @@ export default function Storage() {
             </div>
             <div className="space-y-2"><Label>Референца</Label><Input value={txForm.reference} onChange={(e) => setTxForm({ ...txForm, reference: e.target.value })} placeholder="на пр. Нарачка #123" /></div>
             <div className="space-y-2"><Label>Белешки</Label><Textarea value={txForm.notes} onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })} /></div>
-            <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={txMutation.isPending}>
+            <Button type="submit" className="w-full" disabled={txMutation.isPending}>
               {txMutation.isPending ? "Зачувување..." : "Зачувај трансакција"}
             </Button>
           </form>
@@ -454,7 +454,7 @@ export default function Storage() {
                 const um = unitMeta(editForm.unit);
                 const val = um.locked ? (um.fixedValue ?? "0") : (editForm.weightPerUnit ?? "0");
                 return (
-                  <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                  <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/10 p-3">
                     {um.applicable && !um.locked && (
                       <div className="space-y-1.5">
                         <Label className="text-xs">Од кој материјал е</Label>
@@ -471,7 +471,7 @@ export default function Storage() {
                     )}
                     <div className="flex items-center justify-between">
                       <Label className="flex items-center gap-1.5">
-                        <Weight className="h-3.5 w-3.5 text-amber-600" />{um.label}
+                        <Weight className="h-3.5 w-3.5 text-primary" />{um.label}
                       </Label>
                       {um.applicable && !um.locked && (
                         <WeightCalculator defaultDensity={editForm.densityKey ?? "steel"}
@@ -482,7 +482,7 @@ export default function Storage() {
                       onChange={(e) => setEditForm({ ...editForm, weightPerUnit: e.target.value })} />
                     <p className="text-[11px] text-gray-400">{um.hint}</p>
                     {Number(val) > 0 && (
-                      <p className="text-[11px] text-gray-600 border-t border-amber-200 pt-1.5">
+                      <p className="text-[11px] text-gray-600 border-t border-primary/20 pt-1.5">
                         Тековна залиха {editForm.currentStock} {units[editForm.unit] ?? editForm.unit} ={" "}
                         <b>{lineWeightKg(val, editForm.currentStock).toLocaleString("mk-MK")} кг</b>
                       </p>
@@ -513,7 +513,7 @@ export default function Storage() {
 
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>Откажи</Button>
-                <Button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white" disabled={updateMutation.isPending}>
+                <Button type="submit" disabled={updateMutation.isPending}>
                   {updateMutation.isPending ? "Зачувување..." : "Зачувај"}
                 </Button>
               </div>

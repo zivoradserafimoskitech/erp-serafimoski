@@ -103,12 +103,12 @@ function PaymentOrders({ settings }: { settings: any }) {
           <div className="space-y-1"><Label className="text-xs text-gray-500">Датум на плаќање (валута)</Label><DateInput className="h-9 w-40" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></div>
           <span className="flex-1" />
           <span className="text-sm text-gray-600">Избрани {chosen.length} · <b>{fmt(total)} ден</b></span>
-          <Button className="h-9 bg-amber-500 hover:bg-amber-600" disabled={!chosen.length || badAcc.length > 0 || create.isPending}
+          <Button className="h-9" disabled={!chosen.length || badAcc.length > 0 || create.isPending}
             onClick={() => create.mutate({ payDate, items: chosen.map((r) => ({ incomingInvoiceId: r.id, amount: parseFloat(draft[r.id].amount) || 0, payeeAccount: draft[r.id].account, purpose: draft[r.id].purpose, reference: draft[r.id].reference || undefined, paymentCode: draft[r.id].code || undefined })) })}>
             Направи налози
           </Button>
         </div>
-        {!companyAccOk && <p className="text-xs text-amber-700 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />Внеси ја жиро-сметката на фирмата во Подесувања → Фирма (оди во секој налог како сметка на налогодавач).</p>}
+        {!companyAccOk && <p className="text-xs text-primary flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />Внеси ја жиро-сметката на фирмата во Подесувања → Фирма (оди во секој налог како сметка на налогодавач).</p>}
         {badAcc.length > 0 && <p className="text-xs text-red-600">Жиро-сметка недостасува или не е точна (15 цифри) за: {badAcc.map((r) => r.supplier).join(", ")}</p>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -121,9 +121,9 @@ function PaymentOrders({ settings }: { settings: any }) {
               {!rows.length ? <tr><td colSpan={8} className="py-8 text-center text-gray-400">Нема неплатени влезни фактури во денари што доспеваат до {fmtD(dueBy)}</td></tr> : rows.map((r) => {
                 const d = draft[r.id]; if (!d) return null;
                 return (
-                  <tr key={r.id} className={`border-b border-gray-100 ${d.on ? "bg-amber-50/40" : ""}`}>
+                  <tr key={r.id} className={`border-b border-gray-100 ${d.on ? "bg-primary/10" : ""}`}>
                     <td className="py-1.5"><input type="checkbox" checked={d.on} onChange={(e) => set(r.id, { on: e.target.checked })} /></td>
-                    <td><div className="font-medium">{r.supplier}</div><div className="text-xs text-gray-500 font-mono">{r.number}{r.inBatch ? <span className="ml-1.5 font-sans text-amber-700">· веќе во налог од {fmtD(r.inBatch.date)}</span> : null}</div></td>
+                    <td><div className="font-medium">{r.supplier}</div><div className="text-xs text-gray-500 font-mono">{r.number}{r.inBatch ? <span className="ml-1.5 font-sans text-primary">· веќе во налог од {fmtD(r.inBatch.date)}</span> : null}</div></td>
                     <td className={`text-xs whitespace-nowrap ${r.overdue ? "text-red-600 font-medium" : "text-gray-600"}`}>{fmtD(r.dueDate)}{r.overdue ? " · доцни" : ""}</td>
                     <td className="text-right tabular-nums">{fmt(r.open)}</td>
                     <td className="pl-2"><Input className="h-8 text-right" value={d.amount} onChange={(e) => set(r.id, { amount: e.target.value })} /></td>
@@ -161,7 +161,7 @@ function PaymentOrders({ settings }: { settings: any }) {
 
 // ───────────────────────── ИОС ─────────────────────────
 const IOS_STATUS: Record<string, { label: string; cls: string }> = {
-  sent: { label: "пратен, чека одговор", cls: "bg-amber-50 text-amber-800" },
+  sent: { label: "пратен, чека одговор", cls: "bg-primary/10 text-foreground/80" },
   confirmed: { label: "потврден", cls: "bg-emerald-50 text-emerald-700" },
   disputed: { label: "оспорен", cls: "bg-red-50 text-red-700" },
 };
@@ -208,7 +208,7 @@ function Ios({ settings }: { settings: any }) {
           const on = sel?.partnerType === p.partnerType && sel.partnerId === p.partnerId;
           return (
             <button key={`${p.partnerType}:${p.partnerId}`} onClick={() => setSel({ partnerType: p.partnerType, partnerId: p.partnerId })}
-              className={`w-full text-left px-3 py-2 border-b text-sm hover:bg-amber-50/50 ${on ? "bg-amber-50" : ""}`}>
+              className={`w-full text-left px-3 py-2 border-b text-sm hover:bg-accent/50 ${on ? "bg-primary/10" : ""}`}>
               <div className="flex justify-between gap-2"><span className="font-medium truncate">{p.name}</span><span className="tabular-nums">{fmt(p.balance)}</span></div>
               <div className="text-[11px] text-gray-500">{p.partnerType === "customer" ? "купувач — ни должи" : "добавувач — му должиме"}{p.lastIos ? <span className={`ml-1.5 rounded px-1 ${IOS_STATUS[p.lastIos.status]?.cls}`}>ИОС {fmtD(p.lastIos.asOf)}: {IOS_STATUS[p.lastIos.status]?.label}</span> : null}</div>
             </button>
@@ -228,7 +228,7 @@ function Ios({ settings }: { settings: any }) {
               <Button size="sm" variant="ghost" className="h-9" onClick={() => setAsOf(`${new Date().getFullYear() - 1}-12-31`)}>31.12.{new Date().getFullYear() - 1}</Button>
               <Button size="sm" variant="outline" className="h-9" onClick={pdf}><FileText className="h-3.5 w-3.5 mr-1" />PDF</Button>
               <Button size="sm" variant="outline" className="h-9" onClick={() => printHtml(iosHtml(d, sel.partnerType, settings))}><Printer className="h-3.5 w-3.5" /></Button>
-              <Button size="sm" className="h-9 bg-amber-500 hover:bg-amber-600" onClick={() => setMail(true)}><Mail className="h-3.5 w-3.5 mr-1" />Прати</Button>
+              <Button size="sm" className="h-9" onClick={() => setMail(true)}><Mail className="h-3.5 w-3.5 mr-1" />Прати</Button>
             </div>
           </div>
           <table className="w-full text-sm">
@@ -347,7 +347,7 @@ function Compensations({ settings }: { settings: any }) {
           <div className="space-y-1"><Label className="text-xs text-gray-500">Истата фирма како добавувач (ѝ должиме)</Label><SearchPick items={supItems} value={supplierId} onChange={setSupplierId} placeholder="Избери добавувач" /></div>
           <div className="space-y-1"><Label className="text-xs text-gray-500">Датум</Label><DateInput className="h-9 w-40" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         </div>
-        {cand && cand.suggestions.length > 0 && !supplierId && <p className="text-xs text-amber-700">Можеби: {cand.suggestions.map((s) => <button key={s.id} className="underline mr-2" onClick={() => setSupplierId(s.id)}>{s.name}{s.sameEdb ? " (ист ЕДБ)" : ""}</button>)}</p>}
+        {cand && cand.suggestions.length > 0 && !supplierId && <p className="text-xs text-primary">Можеби: {cand.suggestions.map((s) => <button key={s.id} className="underline mr-2" onClick={() => setSupplierId(s.id)}>{s.name}{s.sameEdb ? " (ист ЕДБ)" : ""}</button>)}</p>}
         {customerId && !supplierId && cand && !cand.suggestions.length && <p className="text-xs text-gray-500">Оваа фирма не е најдена меѓу добавувачите (по ЕДБ или име) — избери ја рачно. Купувачот има {cand.receivables.length} отворени фактури.</p>}
         {customerId && supplierId && cand && (
           <>
@@ -358,8 +358,8 @@ function Compensations({ settings }: { settings: any }) {
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" onClick={equalize}><Scale className="h-3.5 w-3.5 mr-1.5" />Изедначи автоматски</Button>
               <Input className="h-9 flex-1 min-w-[12rem]" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Забелешка (не е задолжително)" />
-              <span className={`text-sm ${Math.abs(sR - sP) < 0.005 && sR > 0 ? "text-emerald-700" : "text-amber-700"}`}>{Math.abs(sR - sP) < 0.005 && sR > 0 ? `Изедначено: ${fmt(sR)} ден` : `Разлика ${fmt(Math.abs(sR - sP))} ден — двете страни мора да се еднакви`}</span>
-              <Button className="h-9 bg-amber-500 hover:bg-amber-600" disabled={create.isPending || sR <= 0 || Math.abs(sR - sP) >= 0.005}
+              <span className={`text-sm ${Math.abs(sR - sP) < 0.005 && sR > 0 ? "text-emerald-700" : "text-primary"}`}>{Math.abs(sR - sP) < 0.005 && sR > 0 ? `Изедначено: ${fmt(sR)} ден` : `Разлика ${fmt(Math.abs(sR - sP))} ден — двете страни мора да се еднакви`}</span>
+              <Button className="h-9" disabled={create.isPending || sR <= 0 || Math.abs(sR - sP) >= 0.005}
                 onClick={() => create.mutate({ date, customerId, supplierId, items, note: note || undefined })}>Направи компензација</Button>
             </div>
           </>

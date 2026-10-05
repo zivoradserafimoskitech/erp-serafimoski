@@ -113,10 +113,10 @@ export default function UJPEFakturaTab() {
               <p className="text-emerald-700 text-xs">JSON со JWS потпис</p>
               <p className="text-emerald-600 text-xs mt-1">UBL 2.1 Invoice (ISO 20022)</p>
             </div>
-            <div className="bg-amber-50 p-3 rounded-lg">
-              <h4 className="font-semibold text-amber-800 mb-1">Статуси</h4>
-              <p className="text-amber-700 text-xs">00=Нацрт, 01=Поднесена</p>
-              <p className="text-amber-600 text-xs">03=Прифатена, 05=Одбиена, 07=Анулирана</p>
+            <div className="bg-primary/10 p-3 rounded-lg">
+              <h4 className="font-semibold text-foreground/80 mb-1">Статуси</h4>
+              <p className="text-primary text-xs">00=Нацрт, 01=Поднесена</p>
+              <p className="text-primary text-xs">03=Прифатена, 05=Одбиена, 07=Анулирана</p>
             </div>
           </div>
         </CardContent>
@@ -213,7 +213,7 @@ export default function UJPEFakturaTab() {
             </div>
             <div className="space-y-2"><Label>ДДВ број</Label><Input value={sendForm.sellerVatNumber} onChange={e => setSendForm({ ...sendForm, sellerVatNumber: e.target.value })} /></div>
 
-            <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700 mb-2 mt-4">
+            <div className="bg-primary/10 p-3 rounded-lg text-sm text-primary mb-2 mt-4">
               <b>Купувач (Клиент):</b>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -229,7 +229,7 @@ export default function UJPEFakturaTab() {
             {/* Certificate Selection */}
             <div className="space-y-2 border-t pt-3">
               <Label className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-amber-600" />
+                <FileText className="h-4 w-4 text-primary" />
                 Дигитален сертификат за потпис *
               </Label>
               <Select value={selectedCertId} onValueChange={setSelectedCertId}>
@@ -248,7 +248,7 @@ export default function UJPEFakturaTab() {
                 </SelectContent>
               </Select>
               {certificates && certificates.length === 0 && (
-                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                <p className="text-xs text-primary bg-primary/10 p-2 rounded">
                   Нема зачувани сертификати. За да испраќате фактури со правна важност,
                   додадете квалификуван дигитален сертификат во Подесувања → Сертификати.
                 </p>
@@ -264,7 +264,7 @@ export default function UJPEFakturaTab() {
                 {sendMutation.data.euid && <div className="mt-1">EUID: {sendMutation.data.euid}</div>}
                 {sendMutation.data.qr_link && <div className="mt-1"><a href={sendMutation.data.qr_link} target="_blank" rel="noopener noreferrer" className="underline">QR Линк</a></div>}
                 {selectedCertId === "test" && sendMutation.data.status === 200 && (
-                  <div className="mt-2 text-amber-600 text-xs">
+                  <div className="mt-2 text-primary text-xs">
                     ⚠️ Ова е тест режим - фактурата нема правна важност. За реално испраќање, користете квалификуван сертификат.
                   </div>
                 )}
@@ -307,7 +307,7 @@ export default function UJPEFakturaTab() {
           <DialogHeader><DialogTitle>УЈП XML Фактура</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <Textarea value={xmlContent} readOnly className="font-mono text-xs h-96" />
-            <Button onClick={handleDownloadXml} className="w-full bg-amber-500 hover:bg-amber-600">
+            <Button onClick={handleDownloadXml} className="w-full">
               <Download className="h-4 w-4 mr-2" />Превземи XML
             </Button>
           </div>

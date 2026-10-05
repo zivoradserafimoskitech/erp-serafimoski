@@ -104,7 +104,7 @@ export function DnCertificates({
           <div className="py-16 text-center text-gray-400">Се бараат партии...</div>
         ) : lots.length === 0 ? (
           <div className="py-12 text-center space-y-2">
-            <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
+            <AlertTriangle className="h-8 w-8 text-primary mx-auto" />
             <p className="text-sm text-gray-600">
               Нема партии со внесена шаржа за материјалите од оваа испорака.
             </p>
@@ -179,7 +179,7 @@ export function DnCertificates({
                   onClick={print}>
                   <Printer className="h-4 w-4 mr-2" />Печати изјава
                 </Button>
-                <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+                <Button
                   disabled={setMut.isPending} onClick={save}>
                   {setMut.isPending ? "Зачувување..." : "Зачувај"}
                 </Button>

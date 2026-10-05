@@ -53,8 +53,8 @@ export default function QualityIssueCreateDialog({ open, onOpenChange, preset, o
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
-        <div className="flex items-start gap-3 px-6 py-5 bg-gradient-to-r from-amber-50 to-white border-b">
-          <div className="h-11 w-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0"><ShieldAlert className="h-5 w-5" /></div>
+        <div className="flex items-start gap-3 px-6 py-5 bg-gradient-to-r from-primary/10 to-white border-b">
+          <div className="h-11 w-11 rounded-xl bg-primary text-white flex items-center justify-center shrink-0"><ShieldAlert className="h-5 w-5" /></div>
           <div><DialogTitle className="text-lg font-semibold">Нова неусогласеност</DialogTitle>
             <DialogDescription className="text-sm text-gray-500">Поврзи ја со налог, клиент или добавувач — потоа одовде се прави налог за доработка или се праќа рекламација.</DialogDescription></div>
         </div>
@@ -62,8 +62,8 @@ export default function QualityIssueCreateDialog({ open, onOpenChange, preset, o
           <div className="grid grid-cols-3 gap-2">
             {KINDS.map(k => { const I = k.icon; const on = f.kind === k.key; return (
               <button key={k.key} type="button" onClick={() => set({ kind: k.key })}
-                className={`text-left rounded-lg border p-3 transition ${on ? "border-amber-400 bg-amber-50 ring-1 ring-amber-300" : "hover:bg-gray-50"}`}>
-                <div className="flex items-center gap-1.5 text-sm font-medium"><I className={`h-4 w-4 ${on ? "text-amber-600" : "text-gray-400"}`} />{k.label}</div>
+                className={`text-left rounded-lg border p-3 transition ${on ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30" : "hover:bg-gray-50"}`}>
+                <div className="flex items-center gap-1.5 text-sm font-medium"><I className={`h-4 w-4 ${on ? "text-primary" : "text-gray-400"}`} />{k.label}</div>
                 <div className="text-[11px] text-gray-500 mt-0.5">{k.hint}</div>
               </button>); })}
           </div>
@@ -100,10 +100,10 @@ export default function QualityIssueCreateDialog({ open, onOpenChange, preset, o
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 border-t px-6 py-4">
-          <span className={`text-sm ${blocker ? "text-amber-700" : "text-emerald-700"}`}>{blocker ?? "Спремно"}</span>
+          <span className={`text-sm ${blocker ? "text-primary" : "text-emerald-700"}`}>{blocker ?? "Спремно"}</span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Откажи</Button>
-            <Button className="bg-amber-500 hover:bg-amber-600 min-w-[140px]" disabled={!!blocker || create.isPending}
+            <Button className="min-w-[140px]" disabled={!!blocker || create.isPending}
               onClick={() => create.mutate({ date: f.date, kind: f.kind as any, title: f.title.trim(), description: f.description || undefined,
                 workOrderId: f.workOrderId ?? undefined, customerId: f.customerId ?? undefined, supplierId: f.supplierId ?? undefined, materialId: f.materialId ?? undefined,
                 cost: parseFloat(f.cost) || 0, responsible: f.responsible || undefined })}>

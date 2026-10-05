@@ -182,11 +182,11 @@ export function WeightCalculator({
               ))}
             </div>
 
-            <div className={`rounded-lg px-4 py-3 text-center ${result ? "bg-amber-50 border border-amber-200" : "bg-gray-50 border border-gray-200"}`}>
+            <div className={`rounded-lg px-4 py-3 text-center ${result ? "bg-primary/10 border border-primary/20" : "bg-gray-50 border border-gray-200"}`}>
               {result ? (
                 <>
-                  <div className="text-2xl font-bold text-amber-700">
-                    {result.kg.toFixed(3)} <span className="text-sm font-semibold text-amber-600">{result.unitLabel}</span>
+                  <div className="text-2xl font-bold text-primary">
+                    {result.kg.toFixed(3)} <span className="text-sm font-semibold text-primary">{result.unitLabel}</span>
                   </div>
                   <div className="text-[11px] text-gray-500 mt-1">{shape.label} · {result.desc}</div>
                 </>
@@ -202,7 +202,7 @@ export function WeightCalculator({
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)}>Откажи</Button>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white" disabled={!result} onClick={apply}>
+              <Button disabled={!result} onClick={apply}>
                 Пренеси
               </Button>
             </div>

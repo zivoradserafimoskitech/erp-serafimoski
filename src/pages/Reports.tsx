@@ -92,7 +92,7 @@ export default function Reports() {
       <PageHeader
         title="Извештаи"
         description="Сите извештаи на едно место — продажба, финансии, CRM и операции."
-        icon={<BarChart3 className="h-6 w-6 text-amber-600" />}
+        icon={<BarChart3 className="h-6 w-6 text-primary" />}
       />
 
       {!view && (
@@ -124,9 +124,9 @@ export default function Reports() {
                       {rows.map((r) => {
                         const Icon = r.icon;
                         return (
-                          <Card key={r.id} className="hover:border-amber-300 transition-colors">
+                          <Card key={r.id} className="hover:border-primary/40 transition-colors">
                             <CardContent className="p-4 flex gap-3">
-                              <div className="h-10 w-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                                 <Icon className="h-5 w-5" />
                               </div>
                               <div className="min-w-0 flex-1">
@@ -134,7 +134,7 @@ export default function Reports() {
                                 <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{r.description}</p>
                                 <div className="mt-2">
                                   {r.view ? (
-                                    <Button size="sm" className="h-7 bg-amber-500 hover:bg-amber-600" onClick={() => openView(r.id, r.view)}>Отвори</Button>
+                                    <Button size="sm" className="h-7" onClick={() => openView(r.id, r.view)}>Отвори</Button>
                                   ) : (
                                     <Button size="sm" variant="outline" className="h-7" asChild>
                                       <Link to={r.href!}><ExternalLink className="h-3.5 w-3.5 mr-1" />Оди до модулот</Link>
@@ -248,7 +248,7 @@ function Yoy() {
         <tbody>{(data?.months ?? []).map((m) => (
           <tr key={m.month} className={`border-b border-gray-100 ${m.month > (data?.upToMonth ?? 12) ? "opacity-40" : ""}`}>
             <td className="py-1.5">{MONTHS[m.month - 1]}</td>
-            <td className="pr-3"><div className="space-y-0.5"><div className="h-2 rounded bg-amber-500" style={{ width: `${(m.current.revenue / max) * 100}%` }} /><div className="h-2 rounded bg-gray-300" style={{ width: `${(m.previous.revenue / max) * 100}%` }} /></div></td>
+            <td className="pr-3"><div className="space-y-0.5"><div className="h-2 rounded bg-primary/100" style={{ width: `${(m.current.revenue / max) * 100}%` }} /><div className="h-2 rounded bg-gray-300" style={{ width: `${(m.previous.revenue / max) * 100}%` }} /></div></td>
             <td className="text-right tabular-nums">{fmt(m.current.revenue)}</td><td className="text-right tabular-nums text-gray-500">{fmt(m.previous.revenue)}</td>
             <td className="text-right">{pct(change(m.current.revenue, m.previous.revenue))}</td>
             <td className="text-right tabular-nums text-gray-600">{fmt(m.current.expense)}</td>
@@ -277,7 +277,7 @@ function Budget() {
         <div className="flex items-center gap-2"><Label className="text-xs">Година</Label><Input type="number" className="h-8 w-24" value={year} onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())} /></div>
         <div className="flex items-center gap-2"><Label className="text-xs">Остварено до месец</Label><Input type="number" min={1} max={12} className="h-8 w-20" value={upTo} onChange={(e) => setUpTo(Math.max(1, Math.min(12, parseInt(e.target.value) || 12)))} /></div>
         <span className="flex-1" />
-        <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={save.isPending}
+        <Button size="sm"  disabled={save.isPending}
           onClick={() => save.mutate({ year, values: Object.entries(vals).map(([line, v]) => ({ line, month: 0, amount: parseFloat(v.replace(",", ".")) || 0 })) })}>Зачувај буџет</Button>
       </div>
       <p className="text-xs text-gray-500">Внеси годишен буџет по позиција (се дели рамномерно по месеци). Остварувањето е од главната книга; зелено = подобро од планот (повеќе приход / помал трошок).</p>

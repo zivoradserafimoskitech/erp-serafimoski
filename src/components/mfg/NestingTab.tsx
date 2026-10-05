@@ -76,12 +76,12 @@ export default function NestingTab() {
   return (
     <div className="space-y-4">
       <Card><CardContent className="p-4 space-y-3">
-        <p className="font-semibold flex items-center gap-2"><Layers className="h-4 w-4 text-amber-600" />1. Делови за распоредување</p>
+        <p className="font-semibold flex items-center gap-2"><Layers className="h-4 w-4 text-primary" />1. Делови за распоредување</p>
         <p className="text-xs text-gray-500">Избери ги налозите. Деловите се земаат од ставките во понудата што се направени од DXF цртеж (со дебелина и материјал).</p>
         <div className="flex flex-wrap gap-1.5">
           {open.map((w: any) => (
             <button key={w.id} type="button" onClick={() => setSel(sel.includes(w.id) ? sel.filter((x) => x !== w.id) : [...sel, w.id])}
-              className={`rounded-full border px-2.5 py-1 text-xs ${sel.includes(w.id) ? "bg-amber-100 border-amber-400" : "bg-white hover:border-amber-300"}`}>{w.woNumber}</button>
+              className={`rounded-full border px-2.5 py-1 text-xs ${sel.includes(w.id) ? "bg-warning/15 border-primary/50" : "bg-white hover:border-primary/40"}`}>{w.woNumber}</button>
           ))}
           {!open.length && <span className="text-sm text-gray-400">Нема отворени налози</span>}
         </div>
@@ -105,7 +105,7 @@ export default function NestingTab() {
       </CardContent></Card>
 
       <Card><CardContent className="p-4 space-y-3">
-        <p className="font-semibold flex items-center gap-2"><Upload className="h-4 w-4 text-amber-600" />2. Резултат од нестинг → издавање и остатоци</p>
+        <p className="font-semibold flex items-center gap-2"><Upload className="h-4 w-4 text-primary" />2. Резултат од нестинг → издавање и остатоци</p>
         <p className="text-xs text-gray-500">Внеси го резултатот (или вчитај CSV со колони: шифра на материјал; табли; дебелина; ширина; должина; искористеност %; остаток ширина; остаток должина; број остатоци). Таблите се издаваат на налогот (во кг/табли/m² — според единицата на материјалот), а остатоците се внесуваат во „Остатоци“ со своја шифра.</p>
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1"><Label className="text-xs">Налог</Label>
@@ -130,7 +130,7 @@ export default function NestingTab() {
         </div>
         <div className="flex justify-between">
           <Button size="sm" variant="ghost" onClick={() => setRows([...rows, { ...EMPTY }])}>+ табла</Button>
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={!valid || imp.isPending}
+          <Button size="sm" disabled={!valid || imp.isPending}
             onClick={() => imp.mutate({ jobId: jobId ?? undefined, workOrderId: Number(woId), sheets: rows.map((r) => ({
               materialId: Number(r.materialId), sheets: n(r.sheets), thicknessMm: n(r.thicknessMm), widthMm: n(r.widthMm), lengthMm: n(r.lengthMm), utilization: r.utilization ? n(r.utilization) : undefined,
               remnants: n(r.remW) > 0 && n(r.remL) > 0 ? [{ widthMm: n(r.remW), lengthMm: n(r.remL), quantity: Math.max(1, Math.round(n(r.remQ))) }] : [] })) })}>

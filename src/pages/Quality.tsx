@@ -27,7 +27,7 @@ const KIND: Record<string, { label: string; cls: string }> = {
   supplier: { label: "Проблем со добавувач", cls: "bg-purple-100 text-purple-700" },
 };
 const STATUS: Record<string, { label: string; cls: string }> = {
-  open: { label: "Отворена", cls: "bg-amber-100 text-amber-800" },
+  open: { label: "Отворена", cls: "bg-warning/15 text-foreground/80" },
   in_progress: { label: "Во решавање", cls: "bg-blue-100 text-blue-700" },
   closed: { label: "Затворена", cls: "bg-emerald-100 text-emerald-700" },
 };
@@ -59,7 +59,7 @@ function QualityTab() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Отворени</p><p className="text-2xl font-bold text-amber-700">{stats?.open ?? 0}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Отворени</p><p className="text-2xl font-bold text-primary">{stats?.open ?? 0}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Рекламации оваа година</p><p className="text-2xl font-bold text-red-600">{stats?.complaintsYear ?? 0}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Трошок на грешки (год.)</p><p className="text-2xl font-bold">{fmt(stats?.costYear ?? 0)} <span className="text-sm">ден</span></p></CardContent></Card>
       </div>
@@ -71,7 +71,7 @@ function QualityTab() {
             {Object.entries(STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => { setPreset(null); setNewOpen(true); }}><Plus className="h-4 w-4 mr-1.5" />Нова неусогласеност</Button>
+        <Button onClick={() => { setPreset(null); setNewOpen(true); }}><Plus className="h-4 w-4 mr-1.5" />Нова неусогласеност</Button>
       </div>
 
       <Card><CardContent className="p-0">
@@ -112,15 +112,15 @@ function MaintenanceTab() {
   const createPlan = trpc.ops.maintenancePlanCreate.useMutation({ onSuccess: () => { toast.success("Планот е внесен"); setPlanOpen(false); inv(); }, onError: (e) => toast.error(e.message) });
   const delPlan = trpc.ops.maintenancePlanDelete.useMutation({ onSuccess: inv });
   const createLog = trpc.ops.maintenanceLogCreate.useMutation({ onSuccess: () => { toast.success("Сервисот е забележан"); setLogFor(null); inv(); }, onError: (e) => toast.error(e.message) });
-  const ST: Record<string, string> = { overdue: "border-red-300 bg-red-50", soon: "border-amber-300 bg-amber-50", ok: "" };
+  const ST: Record<string, string> = { overdue: "border-red-300 bg-red-50", soon: "border-primary/40 bg-primary/10", ok: "" };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" onClick={() => { setL({ date: today(), kind: "breakdown", description: "", cost: "", downtime: "", by: "" }); setLogFor({ machineId: "" }); }}>Пријави дефект / поправка</Button>
-        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => { setP({ machineId: "", title: "", intervalDays: "90", lastDone: "" }); setPlanOpen(true); }}><Plus className="h-4 w-4 mr-1.5" />План за сервис</Button>
+        <Button onClick={() => { setP({ machineId: "", title: "", intervalDays: "90", lastDone: "" }); setPlanOpen(true); }}><Plus className="h-4 w-4 mr-1.5" />План за сервис</Button>
       </div>
-      {!machines?.length && <p className="text-sm text-amber-700">Нема машини — внеси ги во Каталог → Машини.</p>}
+      {!machines?.length && <p className="text-sm text-primary">Нема машини — внеси ги во Каталог → Машини.</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {plans?.map(pl => (
           <Card key={pl.id} className={ST[pl.state]}><CardContent className="p-4 space-y-2">
@@ -130,7 +130,7 @@ function MaintenanceTab() {
             </div>
             <div className="text-sm">
               <span className="text-gray-500">Последно: </span>{fmtDate(pl.lastDone)} · <span className="text-gray-500">Следно: </span>
-              <b className={pl.state === "overdue" ? "text-red-600" : pl.state === "soon" ? "text-amber-700" : ""}>{fmtDate(pl.nextDue)}</b>
+              <b className={pl.state === "overdue" ? "text-red-600" : pl.state === "soon" ? "text-primary" : ""}>{fmtDate(pl.nextDue)}</b>
               <span className="text-xs text-gray-500"> ({pl.daysLeft < 0 ? `доцни ${-pl.daysLeft} дена` : pl.daysLeft === 0 ? "денес" : `за ${pl.daysLeft} дена`})</span>
             </div>
             <Button size="sm" variant="outline" className="w-full" onClick={() => { setL({ date: today(), kind: "planned", description: "", cost: "", downtime: "", by: "" }); setLogFor({ machineId: String(pl.machineId), planId: pl.id, title: pl.title }); }}>
@@ -170,7 +170,7 @@ function MaintenanceTab() {
               <div className="space-y-1"><Label className="text-xs">На секои (дена)</Label><Input type="number" value={p.intervalDays} onChange={(e) => setP({ ...p, intervalDays: e.target.value })} /></div>
               <div className="space-y-1"><Label className="text-xs">Последно направено</Label><DateInput value={p.lastDone} onChange={(e) => setP({ ...p, lastDone: e.target.value })} /></div>
             </div>
-            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={!p.machineId || p.title.length < 3 || !(parseInt(p.intervalDays) > 0)}
+            <Button className="w-full" disabled={!p.machineId || p.title.length < 3 || !(parseInt(p.intervalDays) > 0)}
               onClick={() => createPlan.mutate({ machineId: Number(p.machineId), title: p.title, intervalDays: parseInt(p.intervalDays), lastDone: p.lastDone || undefined })}>Зачувај</Button>
           </div>
         </DialogContent>
@@ -196,7 +196,7 @@ function MaintenanceTab() {
               </div>
               <Input placeholder="Опис" value={l.description} onChange={(e) => setL({ ...l, description: e.target.value })} />
               <Input placeholder="Направил (сервисер / вработен)" value={l.by} onChange={(e) => setL({ ...l, by: e.target.value })} />
-              <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={!logFor.machineId}
+              <Button className="w-full" disabled={!logFor.machineId}
                 onClick={() => createLog.mutate({ machineId: Number(logFor.machineId), planId: logFor.planId, date: l.date, kind: (logFor.planId ? "planned" : l.kind) as any,
                   description: l.description || undefined, cost: parseFloat(l.cost) || 0, downtimeHours: parseFloat(l.downtime) || 0, performedBy: l.by || undefined })}>Зачувај</Button>
             </div>
@@ -218,7 +218,7 @@ export default function Quality() {
         <p className="text-gray-500 mt-1">Неусогласености и рекламации (со 8D), сервис и застои на машините (OEE), мерни инструменти, план на контрола и оценка на добавувачите</p>
       </div>
       <Tabs defaultValue="quality">
-        <TabsList className="bg-amber-50">
+        <TabsList className="bg-primary/10">
           <TabsTrigger value="quality"><ShieldAlert className="h-4 w-4 mr-1.5" />Квалитет</TabsTrigger>
           <TabsTrigger value="maintenance"><Wrench className="h-4 w-4 mr-1.5" />Одржување{due?.dueSoon ? <Badge className="ml-1.5 bg-red-500 text-white text-[10px] px-1.5">{due.dueSoon}</Badge> : null}</TabsTrigger>
           <TabsTrigger value="oee"><Gauge className="h-4 w-4 mr-1.5" />Застои и OEE</TabsTrigger>

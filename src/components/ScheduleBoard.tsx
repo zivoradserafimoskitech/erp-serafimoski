@@ -70,14 +70,14 @@ export default function ScheduleBoard() {
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setCfgOpen(true)}><Settings2 className="h-3.5 w-3.5 mr-1.5" />Машини и капацитет</Button>
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600" onClick={() => auto.mutate({})} disabled={auto.isPending}>
+          <Button size="sm" onClick={() => auto.mutate({})} disabled={auto.isPending}>
             <Wand2 className="h-3.5 w-3.5 mr-1.5" />Закажи автоматски
           </Button>
         </div>
       </div>
 
       {noMachines && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm text-warning-foreground">
           Нема внесени машини. Внеси ги во <b>Каталог → Машини</b>, па овде постави колку часа дневно работат и кои операции ги прават.
         </div>
       )}
@@ -92,7 +92,7 @@ export default function ScheduleBoard() {
                   const w = new Date(d + "T00:00:00Z").getUTCDay();
                   const we = w === 0 || w === 6;
                   const isToday = d === iso(new Date());
-                  return <th key={d} className={`px-1 py-2 border-b font-medium ${we ? "bg-gray-50 text-gray-300" : "text-gray-500"} ${isToday ? "text-amber-700" : ""}`}>
+                  return <th key={d} className={`px-1 py-2 border-b font-medium ${we ? "bg-gray-50 text-gray-300" : "text-gray-500"} ${isToday ? "text-primary" : ""}`}>
                     {DAY[w]}<div className="font-normal">{dm(d)}</div></th>;
                 })}
               </tr>
@@ -102,17 +102,17 @@ export default function ScheduleBoard() {
                 const row = data.cells.find(c => c.machineId === l.id)!;
                 return (
                   <tr key={l.id}>
-                    <td className={`sticky left-0 z-10 px-3 py-2 border-b align-top ${l.id === 0 ? "bg-amber-50" : "bg-white"}`}>
+                    <td className={`sticky left-0 z-10 px-3 py-2 border-b align-top ${l.id === 0 ? "bg-primary/10" : "bg-white"}`}>
                       <div className="font-medium text-gray-800 text-sm">{l.name}</div>
                       {l.id === 0
-                        ? <button className="text-[10.5px] text-amber-700 hover:underline text-left leading-tight mt-0.5" onClick={() => setCfgOpen(true)}>Означи која машина ги работи →</button>
+                        ? <button className="text-[10.5px] text-primary hover:underline text-left leading-tight mt-0.5" onClick={() => setCfgOpen(true)}>Означи која машина ги работи →</button>
                         : <div className="text-gray-400">{l.hoursPerDay} ч/ден</div>}
                     </td>
                     {row.days.map(cell => {
                       const w = new Date(cell.date + "T00:00:00Z").getUTCDay();
                       const we = w === 0 || w === 6;
                       const pct = l.hoursPerDay ? cell.hours / l.hoursPerDay : 0;
-                      const bar = pct > 1 ? "bg-red-500" : pct > 0.8 ? "bg-amber-400" : "bg-emerald-500";
+                      const bar = pct > 1 ? "bg-red-500" : pct > 0.8 ? "bg-warning" : "bg-emerald-500";
                       return (
                         <td key={cell.date} className={`border-b border-l align-top p-1 w-[7%] ${we ? "bg-gray-50" : ""}`}>
                           {cell.hours > 0 && (
@@ -123,7 +123,7 @@ export default function ScheduleBoard() {
                           )}
                           <div className="space-y-1">
                             {cell.items.map(it => (
-                              <button key={it.opId} className={`w-full text-left rounded px-1.5 py-1 border text-[10.5px] leading-tight hover:ring-2 hover:ring-amber-300
+                              <button key={it.opId} className={`w-full text-left rounded px-1.5 py-1 border text-[10.5px] leading-tight hover:ring-2 hover:ring-primary/30
                                 ${it.status === "in_progress" ? "bg-blue-50 border-blue-200" : it.priority === "urgent" ? "bg-red-50 border-red-200" : it.priority === "high" ? "bg-orange-50 border-orange-200" : "bg-white border-gray-200"}
                                 ${it.parts > 1 ? (it.part === 1 ? "border-l-4" : "border-dashed") : ""}`}
                                 title={it.parts > 1 ? `Вкупно ${it.totalHours} ч, ден ${it.part} од ${it.parts}` : undefined}
@@ -153,7 +153,7 @@ export default function ScheduleBoard() {
           {!data?.unscheduled.length ? <p className="text-sm text-gray-400">Сите отворени операции се закажани.</p> : (
             <div className="space-y-1 max-h-72 overflow-y-auto">
               {data.unscheduled.map(u => (
-                <div key={u.opId} className="flex items-center gap-1 border rounded-lg hover:bg-amber-50">
+                <div key={u.opId} className="flex items-center gap-1 border rounded-lg hover:bg-accent">
                   <button className="flex-1 min-w-0 flex items-center gap-2 text-left text-sm px-3 py-1.5" title="Закажи"
                     onClick={() => setEdit({ opId: u.opId, label: `${u.woNumber} · ${OPS[u.operation] ?? u.operation}`, machineId: u.machineId ? String(u.machineId) : "", date: from })}>
                     <span className="font-mono text-xs font-semibold w-28 shrink-0">{u.woNumber}</span>
@@ -200,7 +200,7 @@ export default function ScheduleBoard() {
               </Select>
               <DateInput value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} />
               <div className="flex gap-2">
-                <Button className="flex-1 bg-amber-500 hover:bg-amber-600" onClick={() => { setOp.mutate({ opId: edit.opId, machineId: edit.machineId ? Number(edit.machineId) : null, plannedDate: edit.date }); setEdit(null); }}>Закажи</Button>
+                <Button className="flex-1" onClick={() => { setOp.mutate({ opId: edit.opId, machineId: edit.machineId ? Number(edit.machineId) : null, plannedDate: edit.date }); setEdit(null); }}>Закажи</Button>
                 <Button variant="outline" onClick={() => { setOp.mutate({ opId: edit.opId, machineId: edit.machineId ? Number(edit.machineId) : null, plannedDate: null }); setEdit(null); }}>Отстрани од распоред</Button>
               </div>
               <button className="w-full text-sm text-red-600 hover:underline" onClick={() => { const [wo, ...rest] = edit.label.split(" · "); skip({ opId: edit.opId, woNumber: wo, operation: rest.join(" · ") }); setEdit(null); }}>
@@ -231,7 +231,7 @@ export default function ScheduleBoard() {
                     const auto = !m.operations.length && machineDoes(m, k); // препознаено по името
                     return (
                       <button key={k} title={auto ? "Препознаено по името на машината — кликни за да го потврдиш" : undefined}
-                        className={`text-xs rounded-full px-2.5 py-1 border ${on ? "bg-amber-100 border-amber-300 text-amber-900" : auto ? "bg-amber-50 border-dashed border-amber-300 text-amber-800" : "bg-white text-gray-500"}`}
+                        className={`text-xs rounded-full px-2.5 py-1 border ${on ? "bg-warning/15 border-primary/40 text-warning-foreground" : auto ? "bg-primary/10 border-dashed border-primary/40 text-foreground/80" : "bg-white text-gray-500"}`}
                         onClick={() => {
                           const base = m.operations.length ? m.operations : Object.keys(OPS).filter(x => machineDoes(m, x));
                           const next = base.includes(k) ? base.filter((x: any) => x !== k) : [...base, k];

@@ -116,7 +116,7 @@ export default function UsersTab() {
   if (!isAdmin) {
     return (
       <div className="py-16 text-center space-y-2">
-        <ShieldAlert className="h-10 w-10 text-amber-500 mx-auto" />
+        <ShieldAlert className="h-10 w-10 text-primary mx-auto" />
         <p className="font-medium">Само администратор може да ги менува корисниците</p>
         <p className="text-sm text-gray-500">
           Твојата улога е {ROLES[(me?.role ?? "viewer") as Role]?.label}.
@@ -148,7 +148,7 @@ export default function UsersTab() {
         <p className="text-sm text-gray-500">
           Секој корисник влегува со свој код. Кодот се внесува на екранот за најава.
         </p>
-        <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={openNew}>
+        <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-2" />Нов корисник
         </Button>
       </div>
@@ -258,7 +258,7 @@ export default function UsersTab() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-amber-600" />
+              <UserPlus className="h-5 w-5 text-primary" />
               {editing ? `Измени: ${editing.name}` : "Нов корисник"}
             </DialogTitle>
           </DialogHeader>
@@ -300,7 +300,7 @@ export default function UsersTab() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Откажи</Button>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+              <Button
                 disabled={!form.name || (!editing && form.passcode.length < 4) || createMut.isPending || updateMut.isPending}
                 onClick={submit}>
                 {createMut.isPending || updateMut.isPending ? "Зачувување..." : "Зачувај"}

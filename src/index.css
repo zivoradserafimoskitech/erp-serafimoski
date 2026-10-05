@@ -2,66 +2,106 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Serafimoski Tech design tokens
+  Brand: industrial warm amber on slate surfaces (matches existing logo / CTAs).
+  All interactive "primary" chrome should read hsl(var(--primary)).
+*/
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    /* Surfaces */
+    --background: 40 20% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Brand primary ≈ amber-600 (readable white text) */
+    --primary: 32 95% 44%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 20% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 40 14% 94%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 40 30% 94%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 60% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 45%;
+    --warning-foreground: 222 47% 11%;
+    --info: 199 89% 40%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 32 95% 44%;
     --radius: 0.625rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* App chrome */
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 32 95% 44%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 217 33% 20%;
+    --sidebar-ring: 32 95% 44%;
+    --sidebar-muted: 215 16% 55%;
+
+    --header-background: 0 0% 100%;
+    --header-foreground: 222 47% 11%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 222 47% 7%;
+    --foreground: 210 20% 96%;
+    --card: 222 40% 10%;
+    --card-foreground: 210 20% 96%;
+    --popover: 222 40% 10%;
+    --popover-foreground: 210 20% 96%;
+
+    --primary: 36 95% 52%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 16%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 16% 65%;
+    --accent: 217 33% 16%;
+    --accent-foreground: 210 20% 96%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 55% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+    --info: 199 80% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 217 33% 18%;
+    --input: 217 33% 18%;
+    --ring: 36 95% 52%;
+
+    --sidebar-background: 222 47% 8%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 36 95% 52%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 217 33% 14%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 217 33% 16%;
+    --sidebar-ring: 36 95% 52%;
+    --sidebar-muted: 215 16% 55%;
+
+    --header-background: 222 40% 10%;
+    --header-foreground: 210 20% 96%;
   }
 }
 
@@ -70,6 +110,15 @@
     @apply border-border;
   }
   body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer utilities {
+  .surface-page {
     @apply bg-background text-foreground;
+  }
+  .surface-card {
+    @apply bg-card text-card-foreground border border-border rounded-xl shadow-xs;
   }
 }

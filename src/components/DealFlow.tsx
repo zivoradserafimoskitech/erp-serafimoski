@@ -13,7 +13,7 @@ export function DealFlowMini({ stages }: { stages: DealStage[] }) {
     <div className="flex items-center gap-1">
       {stages.map((s, i) => (
         <div key={s.key} className="flex items-center gap-1" title={`${s.label}: ${s.detail}`}>
-          <span className={`h-2.5 w-2.5 rounded-full ${s.status === "done" ? "bg-emerald-500" : s.status === "current" ? "bg-amber-500 ring-4 ring-amber-100" : s.status === "skipped" ? "bg-gray-200" : "bg-gray-300"}`} />
+          <span className={`h-2.5 w-2.5 rounded-full ${s.status === "done" ? "bg-emerald-500" : s.status === "current" ? "bg-primary ring-4 ring-primary/20" : s.status === "skipped" ? "bg-gray-200" : "bg-gray-300"}`} />
           {i < stages.length - 1 && <span className={`h-0.5 w-3 ${s.status === "done" || s.status === "skipped" ? "bg-emerald-300" : "bg-gray-200"}`} />}
         </div>
       ))}
@@ -71,14 +71,14 @@ export default function DealFlow({ quotationId, onProforma, compact = false }: {
           const done = s.status === "done", cur = s.status === "current", skip = s.status === "skipped";
           return (
             <button key={s.key} onClick={() => s.href && navigate(s.href)} disabled={!s.href}
-              className={`relative text-left px-3 py-2.5 border-r last:border-r-0 ${cur ? "bg-amber-50" : ""} ${s.href ? "hover:bg-gray-50" : "cursor-default"}`}
+              className={`relative text-left px-3 py-2.5 border-r last:border-r-0 ${cur ? "bg-primary/10" : ""} ${s.href ? "hover:bg-gray-50" : "cursor-default"}`}
               title={s.detail}>
               <div className="flex items-start gap-1.5">
                 <span className={`h-5 w-5 shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold
-                  ${done ? "bg-emerald-500 text-white" : cur ? "bg-amber-500 text-white" : skip ? "bg-gray-100 text-gray-300" : "bg-gray-200 text-gray-500"}`}>
+                  ${done ? "bg-emerald-500 text-white" : cur ? "bg-primary text-white" : skip ? "bg-gray-100 text-gray-300" : "bg-gray-200 text-gray-500"}`}>
                   {done ? <Check className="h-3 w-3" /> : skip ? <Minus className="h-3 w-3" /> : i + 1}
                 </span>
-                <span className={`text-[11.5px] font-semibold leading-tight ${skip ? "text-gray-300" : cur ? "text-amber-800" : done ? "text-gray-700" : "text-gray-400"}`}>{s.label}</span>
+                <span className={`text-[11.5px] font-semibold leading-tight ${skip ? "text-gray-300" : cur ? "text-foreground/80" : done ? "text-gray-700" : "text-gray-400"}`}>{s.label}</span>
               </div>
               {!compact && <p className={`text-[10.5px] mt-1 leading-tight line-clamp-2 ${skip ? "text-gray-300" : "text-gray-500"}`}>{s.detail}</p>}
             </button>
@@ -94,7 +94,7 @@ export default function DealFlow({ quotationId, onProforma, compact = false }: {
           ) : <span />}
           <div className="flex gap-2">
             {current?.action && (
-              <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={busy} onClick={() => run(current)}>
+              <Button size="sm" disabled={busy} onClick={() => run(current)}>
                 {busy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <ChevronRight className="h-4 w-4 mr-1" />}{current.actionLabel}
               </Button>
             )}
