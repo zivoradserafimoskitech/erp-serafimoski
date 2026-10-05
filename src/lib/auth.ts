@@ -1,6 +1,6 @@
 // Најава: кодот се праќа еднаш, серверот враќа сесија (токен) што се чува наместо кодот.
 
-export type LoginResult = { ok: boolean; gate?: boolean; name?: string; role?: string; token?: string; wait?: number; message?: string };
+export type LoginResult = { ok: boolean; gate?: boolean; needsSetup?: boolean; name?: string; role?: string; token?: string; wait?: number; message?: string };
 
 export async function login(code: string): Promise<LoginResult> {
   const res = await fetch("/api/auth-check", {

@@ -496,7 +496,7 @@ export const orderItems = pgTable("order_items", {
   orderId: bigint("order_id", { mode: "number" }).notNull(),
   description: varchar("description", { length: 500 }).notNull(),
   drawingNumber: varchar("drawing_number", { length: 100 }),
-  quantity: integer("quantity").notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
   unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull().default("0"),
   totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default("0"),
   costPrice: decimal("cost_price", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -1089,3 +1089,81 @@ export const emailInvoices = pgTable("email_invoices", {
 });
 
 export type EmailInvoice = typeof emailInvoices.$inferSelect;
+
+
+// ============= CRM / SALES CONDITIONS (also created in init-db-v2) =============
+export const crmOpportunities = pgTable("crm_opportunities", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id"),
+  company: varchar("company", { length: 255 }),
+  contactName: varchar("contact_name", { length: 255 }),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 60 }),
+  title: varchar("title", { length: 300 }).notNull(),
+  value: decimal("value", { precision: 16, scale: 2 }).notNull().default("0"),
+  currency: varchar("currency", { length: 10 }).notNull().default("MKD"),
+  probability: integer("probability").notNull().default(30),
+  stage: varchar("stage", { length: 20 }).notNull().default("new"),
+  expectedClose: date("expected_close"),
+  source: varchar("source", { length: 30 }),
+  lostReason: varchar("lost_reason", { length: 40 }),
+  quotationId: integer("quotation_id"),
+  owner: varchar("owner", { length: 160 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type CrmOpportunity = typeof crmOpportunities.$inferSelect;
+
+export const crmActivities = pgTable("crm_activities", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id"),
+  opportunityId: integer("opportunity_id"),
+  quotationId: integer("quotation_id"),
+  kind: varchar("kind", { length: 20 }).notNull(),
+  subject: varchar("subject", { length: 300 }).notNull(),
+  notes: text("notes"),
+  dueDate: date("due_date"),
+  doneAt: timestamp("done_at"),
+  createdBy: varchar("created_by", { length: 160 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type CrmActivity = typeof crmActivities.$inferSelect;
+
+export const crmFiles = pgTable("crm_files", {
+  id: serial("id").primaryKey(),
+  opportunityId: integer("opportunity_id").notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  mime: varchar("mime", { length: 120 }),
+  data: text("data").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type CrmFile = typeof crmFiles.$inferSelect;
+
+export const customerPortalTokens = pgTable("customer_portal_tokens", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull(),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
+  createdBy: varchar("created_by", { length: 160 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"),
+  revokedAt: timestamp("revoked_at"),
+  lastUsedAt: timestamp("last_used_at"),
+});
+
+export type CustomerPortalToken = typeof customerPortalTokens.$inferSelect;
+
+export const customerPrices = pgTable("customer_prices", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull(),
+  itemType: varchar("item_type", { length: 20 }).notNull(),
+  refId: integer("ref_id").notNull(),
+  price: decimal("price", { precision: 14, scale: 2 }),
+  discountPct: decimal("discount_pct", { precision: 5, scale: 2 }),
+  note: varchar("note", { length: 300 }),
+});
+
+export type CustomerPrice = typeof customerPrices.$inferSelect;

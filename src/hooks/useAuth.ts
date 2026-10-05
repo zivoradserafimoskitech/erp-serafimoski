@@ -1,58 +1,27 @@
+import { useCallback, useMemo } from "react";
 import { trpc } from "@/providers/trpc";
-import { useCallback, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router";
-import { LOGIN_PATH } from "@/const";
+import { logout as appLogout } from "@/lib/auth";
 
-type UseAuthOptions = {
-  redirectOnUnauthenticated?: boolean;
-  redirectPath?: string;
-};
-
-export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = LOGIN_PATH } =
-    options ?? {};
-
-  const navigate = useNavigate();
-
-  const utils = trpc.useUtils();
-
-  const {
-    data: user,
-    isLoading,
-    error,
-    refetch,
-  } = trpc.auth.me.useQuery(undefined, {
+/** Автентикација преку PasswordGate / x-app-key сесија (не Kimi OAuth). */
+export function useAuth(_options?: { redirectOnUnauthenticated?: boolean; redirectPath?: string }) {
+  const { data: me, isLoading, error, refetch } = trpc.appUsers.appUsersMe.useQuery(undefined, {
     staleTime: 1000 * 60 * 5,
     retry: false,
   });
 
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: async () => {
-      await utils.invalidate();
-      navigate(redirectPath);
-    },
-  });
-
-  const logout = useCallback(() => logoutMutation.mutate(), [logoutMutation]);
-
-  useEffect(() => {
-    if (redirectOnUnauthenticated && !isLoading && !user) {
-      const currentPath = window.location.pathname;
-      if (currentPath !== redirectPath) {
-        navigate(redirectPath);
-      }
-    }
-  }, [redirectOnUnauthenticated, isLoading, user, navigate, redirectPath]);
+  const logout = useCallback(() => {
+    void appLogout();
+  }, []);
 
   return useMemo(
     () => ({
-      user: user ?? null,
-      isAuthenticated: !!user,
-      isLoading: isLoading || logoutMutation.isPending,
+      user: me ? { name: me.name, role: me.role, id: me.id } : null,
+      isAuthenticated: !!me && me.gate !== false ? !!me.name : !!me,
+      isLoading,
       error,
       logout,
       refresh: refetch,
     }),
-    [user, isLoading, logoutMutation.isPending, error, logout, refetch],
+    [me, isLoading, error, logout, refetch],
   );
 }

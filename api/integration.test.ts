@@ -14,6 +14,8 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     process.env.DATABASE_URL = url;
     process.env.DATABASE_SSL = "false";
     delete process.env.APP_PASSWORD;
+    // Интеграциските тестови користат createCaller со actor; отвори ја капијата експлицитно.
+    process.env.DISABLE_USER_GATE = "true";
     process.env.DISABLE_AUTO_LEDGER = "true"; // тестот сам ја повикува синхронизацијата и ги брои промените
     const { getPool } = await import("./queries/connection");
     const pool = getPool();
@@ -452,18 +454,35 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     await caller.finance.ledgerSync();
   });
 
-  it("ревизија: апликацијата бара најава штом постои администратор со код", async () => {
-    const { gateActive, clearActorCache, resolveActor } = await import("./context");
+  it("ревизија: fail-safe затворена капија; DISABLE_USER_GATE ја отвора; админ се најавува со код", async () => {
+    const { gateActive, needsSetup, clearActorCache, resolveActor } = await import("./context");
     clearActorCache();
+    // со DISABLE_USER_GATE=true (beforeAll) капијата е отворена
     expect(await gateActive()).toBe(false);
     expect((await resolveActor(null))?.role).toBe("admin");
+    // без DISABLE_USER_GATE → затворено; без админ → needsSetup
+    delete process.env.DISABLE_USER_GATE;
+    clearActorCache();
+    expect(await gateActive()).toBe(true);
+    expect(await needsSetup()).toBe(true);
+    expect(await resolveActor(null)).toBeUndefined();
+    process.env.DISABLE_USER_GATE = "true";
+    clearActorCache();
     const r: any = await caller.appUsers.appUsersCreate({ name: "Шеф", passcode: "tajna-1234", role: "admin" });
-    expect(r.gateActivated).toBe(true);
+    delete process.env.DISABLE_USER_GATE;
+    clearActorCache();
+    expect(await needsSetup()).toBe(false);
+    expect(await gateActive()).toBe(true);
     expect(await resolveActor(null)).toBeUndefined();
     expect((await resolveActor("tajna-1234"))?.name).toBe("Шеф");
-    await caller.appUsers.appUsersUpdate({ id: r.id, isActive: "inactive" });
+    process.env.DISABLE_USER_GATE = "true";
     clearActorCache();
-    expect(await gateActive()).toBe(false);
+    await caller.appUsers.appUsersUpdate({ id: r.id, isActive: "inactive" });
+    delete process.env.DISABLE_USER_GATE;
+    clearActorCache();
+    expect(await needsSetup()).toBe(true);
+    process.env.DISABLE_USER_GATE = "true";
+    clearActorCache();
   });
   it("ревизија (средно): залихи на производи, месечна амортизација, затворање година, ЕЦД", async () => {
     const { getPool } = await import("./queries/connection");
