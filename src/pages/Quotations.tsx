@@ -76,7 +76,7 @@ export default function Quotations() {
     currency !== "MKD" || !isDomesticCountry(customers?.find((c: any) => String(c.id) === String(customerId))?.country);
   const [qForm, setQForm] = useState({
     quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14",
-    paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18",
+    paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18", salesperson: "",
   });
   const [qItems, setQItems] = useState<Array<{
     itemType: "material" | "service" | "product"; referenceId: number | null;
@@ -234,7 +234,7 @@ export default function Quotations() {
   }, [prodDialog]);
 
   const resetQForm = () => {
-    setQForm({ quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14", paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18" });
+    setQForm({ quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14", paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18", salesperson: "" });
     setQSchedule(DEFAULT_SCHEDULE);
     setQItems([]);
   };
@@ -251,6 +251,7 @@ export default function Quotations() {
       currency: qDetail.currency ?? "MKD",
       // странски клиент / валута -> без ДДВ; инаку стапката од понудата („18.00“ -> „18“)
       vatRate: isForeign(qDetail.customerId, qDetail.currency ?? "MKD") ? "0" : String(Number(qDetail.vatRate ?? 18)),
+      salesperson: (qDetail as any).salesperson ?? "",
     });
     setQSchedule(scheduleFrom(qDetail.paymentSchedule, qDetail.paymentTerms));
     setQItems((qDetail.items ?? []).map((i: any) => ({
@@ -354,6 +355,7 @@ export default function Quotations() {
     if (scheduleTotal(qSchedule) !== 100) { toast.error("Ратите за плаќање мора да се вкупно 100%"); return; }
     const payTerms = { paymentTerms: describeSchedule(qSchedule, "mk").slice(0, 255), paymentSchedule: JSON.stringify(qSchedule) };
     if (editingId) {
+      if (credit?.blocked) { toast.error("Кредитниот лимит е надминат — зачувувањето е блокирано (CREDIT_LIMIT_STRICT)"); return; }
       updateQFull.mutate({
         id: editingId,
         customerId: parseInt(qForm.customerId),
@@ -363,10 +365,12 @@ export default function Quotations() {
         notes: qForm.notes || undefined,
         vatRate: qForm.vatRate,
         currency: qForm.currency,
+        salesperson: qForm.salesperson || null,
         items: qItems.map(i => ({ ...i, referenceId: i.referenceId ?? undefined })),
       });
       return;
     }
+    if (credit?.blocked) { toast.error("Кредитниот лимит е надминат — зачувувањето е блокирано (CREDIT_LIMIT_STRICT)"); return; }
     createQ.mutate({
       quoteNumber: qForm.quoteNumber,
       customerId: parseInt(qForm.customerId),
@@ -379,6 +383,7 @@ export default function Quotations() {
       vatAmount: t.vatAmount,
       totalAmount: t.total,
       currency: qForm.currency,
+      salesperson: qForm.salesperson || undefined,
       items: qItems.map(i => ({ ...i, referenceId: i.referenceId ?? undefined })),
     });
   };
@@ -419,6 +424,7 @@ export default function Quotations() {
                     <div className="space-y-2"><Label>Испорака (денови)</Label><Input value={qForm.deliveryDays} onChange={e => setQForm({ ...qForm, deliveryDays: e.target.value })} /></div>
                     <div className="space-y-2"><Label>Валута</Label><Select value={qForm.currency} onValueChange={v => setQForm({ ...qForm, currency: v, vatRate: isForeign(qForm.customerId, v) ? "0" : (Number(qForm.vatRate) === 0 ? "18" : qForm.vatRate) })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MKD">MKD</SelectItem><SelectItem value="EUR">EUR</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                   </div>
+                  <div className="space-y-2"><Label>Продавач</Label><Input value={qForm.salesperson} onChange={e => setQForm({ ...qForm, salesperson: e.target.value })} placeholder="Име на продавач / комерцијалист" /></div>
                   <div className="flex flex-wrap items-center gap-4 rounded-md border px-3 py-2 bg-gray-50">
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={Number(qForm.vatRate) === 0} onChange={e => setQForm({ ...qForm, vatRate: e.target.checked ? "0" : "18" })} />
@@ -429,8 +435,8 @@ export default function Quotations() {
                         <Input type="number" className="w-20 h-8" value={qForm.vatRate} onChange={e => setQForm({ ...qForm, vatRate: e.target.value })} />
                       </label>
                     )}
-                    {credit && (credit.over || credit.overdueCount > 0) && (
-                      <span className="text-xs text-red-700 block">{credit.over ? `Над кредитниот лимит: отворено ${Math.round(credit.open).toLocaleString("mk-MK")} + оваа понуда > лимит ${Math.round(credit.limit ?? 0).toLocaleString("mk-MK")} ден. ` : ""}{credit.overdueCount ? `${credit.overdueCount} фактури по рок (${Math.round(credit.overdueMkd).toLocaleString("mk-MK")} ден).` : ""}</span>
+                    {credit && (credit.over || credit.overdueCount > 0 || credit.blocked) && (
+                      <span className="text-xs text-red-700 block">{credit.blocked ? "БЛОКИРАНО: строг кредитен лимит (CREDIT_LIMIT_STRICT). " : ""}{credit.over ? `Над кредитниот лимит: отворено ${Math.round(credit.open).toLocaleString("mk-MK")} + оваа понуда > лимит ${Math.round(credit.limit ?? 0).toLocaleString("mk-MK")} ден. ` : ""}{credit.overdueCount ? `${credit.overdueCount} фактури по рок (${Math.round(credit.overdueMkd).toLocaleString("mk-MK")} ден).` : ""}</span>
                     )}
                     {qForm.customerId && isForeign(qForm.customerId, qForm.currency) && Number(qForm.vatRate) !== 0 && (
                       <span className="text-xs text-amber-700">Клиентот е од странство / валутата не е денари — обично без ДДВ</span>
@@ -532,7 +538,7 @@ export default function Quotations() {
 
                   <div className="space-y-2"><Label>Белешки / Опис на понуда</Label><Textarea value={qForm.notes} onChange={e => setQForm({ ...qForm, notes: e.target.value })} placeholder="Технички детали, услови, напомени..." /></div>
                   <div className="space-y-1">
-                    <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createQ.isPending || updateQFull.isPending || !qForm.customerId || qItems.length === 0}>
+                    <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createQ.isPending || updateQFull.isPending || !qForm.customerId || qItems.length === 0 || !!credit?.blocked}>
                       {editingId ? (updateQFull.isPending ? "Зачувување..." : "Зачувај измени") : (createQ.isPending ? "Зачувување..." : "Креирај понуда")}
                     </Button>
                     {!qForm.customerId && <p className="text-xs text-red-500 text-center">Избери клиент за да продолжиш</p>}

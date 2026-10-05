@@ -162,6 +162,50 @@ export const crmRouter = createRouter({
     return { success: true };
   }),
 
+
+  /** Еден клик: можност → нацрт понуда (предпополнет клиент/наслов/вредност). */
+  oppToQuotation: publicQuery
+    .input(z.object({ opportunityId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const opp = (await q(`SELECT * FROM crm_opportunities WHERE id = $1`, [input.opportunityId]))[0];
+      if (!opp) throw bad("Можноста не постои");
+      if (opp.quotation_id) return { id: Number(opp.quotation_id), quoteNumber: null as string | null, existing: true };
+      let customerId = opp.customer_id ? Number(opp.customer_id) : null;
+      if (!customerId) {
+        if (!opp.company && !opp.contact_name) throw bad("Избери клиент или внеси име на фирма пред понуда");
+        const name = (opp.company || opp.contact_name || "Нов клиент").slice(0, 255);
+        const ins = await q(
+          `INSERT INTO customers (name, company, contact_person, email, phone, is_active) VALUES ($1,$2,$3,$4,$5,'active') RETURNING id`,
+          [name, opp.company ?? name, opp.contact_name ?? null, opp.email ?? null, opp.phone ?? null],
+        );
+        customerId = Number(ins[0].id);
+        await q(`UPDATE crm_opportunities SET customer_id = $2 WHERE id = $1`, [input.opportunityId, customerId]);
+      }
+      const { getNextDocNumber } = await import("./counters-helper");
+      const quoteNumber = await getNextDocNumber("quote");
+      const vatRate = 18;
+      const sub = Number(opp.value) || 0;
+      const vat = Math.round(sub * vatRate) / 100;
+      const notes = [opp.notes, opp.title ? `Од можност: ${opp.title}` : null].filter(Boolean).join("\n") || null;
+      const r = await q(
+        `INSERT INTO quotations (quote_number, customer_id, status, subtotal, vat_rate, vat_amount, total_amount, currency, notes, payment_terms, created_by)
+         VALUES ($1,$2,'draft',$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [quoteNumber, customerId, sub.toFixed(2), vatRate, vat.toFixed(2), (sub + vat).toFixed(2), opp.currency || "MKD", notes, "14 дена", actor(ctx)],
+      );
+      const id = Number(r[0].id);
+      if (sub > 0) {
+        await q(
+          `INSERT INTO quotation_items (quotation_id, item_type, description, quantity, unit, unit_price, total_price, vat_rate, sort_order)
+           VALUES ($1,'service',$2,1,'ком',$3,$3,$4,0)`,
+          [id, (opp.title || "Услуга").slice(0, 500), sub.toFixed(2), vatRate],
+        );
+      }
+      await q(`UPDATE crm_opportunities SET quotation_id = $2, stage = 'quoted', updated_at = now() WHERE id = $1`, [input.opportunityId, id]);
+      await q(`INSERT INTO crm_activities (customer_id, opportunity_id, quotation_id, kind, subject, created_by)
+        VALUES ($1,$2,$3,'note',$4,$5)`, [customerId, input.opportunityId, id, `Креирана понуда ${quoteNumber}`, actor(ctx)]);
+      return { id, quoteNumber, existing: false };
+    }),
+
   // ===== Продажни услови =====
   customerTerms: publicQuery.input(z.object({ customerId: z.number() })).query(async ({ input }) => {
     const c = (await q(`SELECT id, COALESCE(company, name) AS name, discount_pct, credit_limit, payment_days FROM customers WHERE id = $1`, [input.customerId]))[0];
@@ -215,7 +259,9 @@ export const crmRouter = createRouter({
     const overdue = (await openDocs()).filter((d) => d.docType === "invoice" && d.partnerId === input.customerId && d.dueDate && d.dueDate < new Date().toISOString().slice(0, 10));
     const overdueMkd = Math.round(overdue.reduce((s, d) => s + d.openMkd, 0) * 100) / 100;
     const after = Math.round((open + input.amount) * 100) / 100;
-    return { limit, open, after, over: limit !== null && after > limit, overdueMkd, overdueCount: overdue.length };
+    const over = limit !== null && after > limit;
+    const strict = process.env.CREDIT_LIMIT_STRICT === "true";
+    return { limit, open, after, over, blocked: strict && over, overdueMkd, overdueCount: overdue.length, strict };
   }),
 });
 

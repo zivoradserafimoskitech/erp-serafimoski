@@ -10,6 +10,7 @@ import {
   LayoutDashboard, Warehouse, Factory, Users, ShoppingCart, LogOut, Menu, X,
   ShieldCheck, Calculator, FileText, ClipboardCheck, Settings, BookOpen,
   Building2, Landmark, Search, Workflow, Contact, Target, BarChart3, Truck,
+  ShoppingBag, Tags,
 } from "lucide-react";
 
 type NavItem = { path: string; label: string; icon: typeof LayoutDashboard };
@@ -26,8 +27,10 @@ const navGroups: NavGroup[] = [
     id: "sales",
     label: "Продажба",
     items: [
+      { path: "/prodazba", label: "Продажба (hub)", icon: ShoppingBag },
       { path: "/crm", label: "Можности (CRM)", icon: Target },
       { path: "/ponudi", label: "Понуди", icon: FileText },
+      { path: "/cenovnici", label: "Ценовници", icon: Tags },
       { path: "/klienti", label: "Клиенти и нарачки", icon: Users },
       { path: "/tek", label: "Тек на нарачки", icon: Workflow },
       { path: "/ispratnici", label: "Испратници", icon: Truck },

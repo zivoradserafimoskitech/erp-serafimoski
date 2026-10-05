@@ -562,5 +562,21 @@ export function getExtraSql(): string[] {
     `CREATE UNIQUE INDEX IF NOT EXISTS "budgets_uq" ON "budgets" ("year", "line", "month")`,
     // безбедна миграција: количините на нарачка усогласени со понудите (decimal)
     `ALTER TABLE "order_items" ALTER COLUMN "quantity" TYPE numeric(12, 3) USING ("quantity"::numeric(12, 3))`,
+    `ALTER TABLE "quotations" ADD COLUMN IF NOT EXISTS "salesperson" varchar(160)`,
+    `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "salesperson" varchar(160)`,
+    `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "delivered_qty" numeric(12, 3) DEFAULT 0`,
+    `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "reserved_qty" numeric(12, 3) DEFAULT 0`,
+    `CREATE TABLE IF NOT EXISTS "sales_returns" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "number" varchar(50) NOT NULL UNIQUE,
+      "customer_id" integer NOT NULL,
+      "order_id" integer,
+      "invoice_id" integer,
+      "status" varchar(20) DEFAULT 'draft' NOT NULL,
+      "reason" varchar(40),
+      "notes" text,
+      "issue_date" date,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
   ];
 }

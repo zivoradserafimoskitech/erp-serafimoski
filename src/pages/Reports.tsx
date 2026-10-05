@@ -12,7 +12,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/layout/EmptyState";
 import {
   BarChart3, Users, Package, Cog, CalendarRange, Target, Download, Search,
-  Landmark, Receipt, TrendingUp, Scale, BookOpen, Warehouse, Factory, ExternalLink,
+  Landmark, Receipt, TrendingUp, Scale, BookOpen, Warehouse, Factory, ExternalLink, ShoppingBag, Tags,
 } from "lucide-react";
 
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : Math.round(n).toLocaleString("mk-MK"));
@@ -39,6 +39,9 @@ const CATALOG: ReportDef[] = [
   { id: "sales-budget", category: "sales", title: "Буџет vs остварување", description: "План и отстапувања", view: "budget", icon: Target },
   { id: "crm-pipeline", category: "crm", title: "CRM pipeline", description: "Можности, win-rate, изгубени причини", href: "/crm", icon: Target },
   { id: "deal-flow", category: "sales", title: "Тек на нарачки", description: "Од понуда до наплата", href: "/tek", icon: TrendingUp },
+  { id: "sales-summary", category: "sales", title: "Продажба по купувач / продавач", description: "Фактуриран промет и нарачки по продавач", view: "salesSummary", icon: ShoppingBag },
+  { id: "price-lists", category: "sales", title: "Ценовници", description: "Попусти и цени по клиент", href: "/cenovnici", icon: Tags },
+
   { id: "vat", category: "finance", title: "ДДВ (КИФ / КУФ)", description: "Книги и рекапитулација", href: "/finansii?tab=vat", icon: Receipt },
   { id: "statements", category: "finance", title: "Биланси", description: "Биланс на состојба / успех", href: "/finansii?tab=statements", icon: BookOpen },
   { id: "trial", category: "finance", title: "Бруто биланс", description: "Салда по конта", href: "/finansii?tab=trial", icon: Scale },
@@ -61,7 +64,7 @@ export default function Reports() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("all");
-  const view = (params.get("view") || "") as "customer" | "product" | "machine" | "yoy" | "budget" | "";
+  const view = (params.get("view") || "") as "customer" | "product" | "machine" | "yoy" | "budget" | "salesSummary" | "";
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(ymd(new Date()));
 
@@ -159,7 +162,7 @@ export default function Reports() {
               ← Назад кон сите извештаи
             </Button>
             <p className="text-sm font-medium text-gray-700">{active?.title ?? "Извештај"}</p>
-            {["customer", "product", "machine"].includes(view) && (
+            {["customer", "product", "machine", "salesSummary"].includes(view) && (
               <div className="flex gap-2">
                 <div className="space-y-1"><Label className="text-xs">Од</Label><DateInput className="h-9 w-40" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">До</Label><DateInput className="h-9 w-40" value={to} onChange={(e) => setTo(e.target.value)} /></div>
@@ -170,6 +173,7 @@ export default function Reports() {
           {view === "machine" && <ByMachine from={from} to={to} />}
           {view === "yoy" && <Yoy />}
           {view === "budget" && <Budget />}
+          {view === "salesSummary" && <SalesSummary from={from} to={to} />}
         </div>
       )}
     </div>
@@ -292,5 +296,57 @@ function Budget() {
       </table>
       {bva && <p className="text-sm">Приходи: {fmt(bva.totals.revenue.actual)} од планирани {fmt(bva.totals.revenue.budget)} · Расходи: {fmt(bva.totals.expense.actual)} од планирани {fmt(bva.totals.expense.budget)}</p>}
     </CardContent></Card>
+  );
+}
+
+function SalesSummary({ from, to }: { from: string; to: string }) {
+  const { data, isLoading } = trpc.reports.salesSummary.useQuery({ from, to });
+  const byC = data?.byCustomer ?? [];
+  const byS = data?.bySalesperson ?? [];
+  const xlsx = () => downloadTableXlsx(`prodazba-${from}-${to}.xlsx`, "Продажба",
+    [["Купувач", "Фактури", "Приход"], ...byC.map((r) => [r.customer, r.invoices, r.revenue])],
+  );
+  const xlsxSp = () => downloadTableXlsx(`prodavaci-${from}-${to}.xlsx`, "Продавачи",
+    [["Продавач", "Нарачки", "Вредност"], ...byS.map((r) => [r.salesperson, r.orders, r.orderTotal])],
+  );
+  return (
+    <div className="space-y-4">
+      <Card><CardContent className="p-4 flex flex-wrap gap-6 text-sm">
+        <div><p className="text-[11px] uppercase text-gray-400 font-semibold">Фактури</p><p className="text-xl font-bold">{data?.totals.invoices ?? "—"}</p></div>
+        <div><p className="text-[11px] uppercase text-gray-400 font-semibold">Приход (без ДДВ)</p><p className="text-xl font-bold">{fmt(data?.totals.revenue)}</p></div>
+        <div><p className="text-[11px] uppercase text-gray-400 font-semibold">ДДВ</p><p className="text-xl font-bold">{fmt(data?.totals.vat)}</p></div>
+        <div className="flex-1" />
+        <Button size="sm" variant="outline" onClick={xlsx} disabled={!byC.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel купувачи</Button>
+        <Button size="sm" variant="outline" onClick={xlsxSp} disabled={!byS.length}><Download className="h-3.5 w-3.5 mr-1.5" />Excel продавачи</Button>
+      </CardContent></Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card><CardContent className="p-4 space-y-2">
+          <p className="text-sm font-semibold">По купувач</p>
+          <table className="w-full text-sm">
+            <thead><tr className="text-xs text-gray-500 border-b"><th className="text-left font-medium py-2">Купувач</th><th className="text-right font-medium">Фактури</th><th className="text-right font-medium">Приход</th></tr></thead>
+            <tbody>
+              {isLoading ? <tr><td colSpan={3} className="py-8 text-center text-gray-400">Вчитување...</td></tr>
+                : !byC.length ? <tr><td colSpan={3} className="py-8 text-center text-gray-400">Нема податоци</td></tr>
+                : byC.map((r, i) => (
+                  <tr key={i} className="border-b border-gray-100"><td className="py-1.5 font-medium">{r.customer}</td><td className="text-right">{r.invoices}</td><td className="text-right tabular-nums">{fmt(r.revenue)}</td></tr>
+                ))}
+            </tbody>
+          </table>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 space-y-2">
+          <p className="text-sm font-semibold">По продавач</p>
+          <table className="w-full text-sm">
+            <thead><tr className="text-xs text-gray-500 border-b"><th className="text-left font-medium py-2">Продавач</th><th className="text-right font-medium">Нарачки</th><th className="text-right font-medium">Вредност</th></tr></thead>
+            <tbody>
+              {isLoading ? <tr><td colSpan={3} className="py-8 text-center text-gray-400">Вчитување...</td></tr>
+                : !byS.length ? <tr><td colSpan={3} className="py-8 text-center text-gray-400">Нема податоци (пополнете поле „Продавач“ на понуда/нарачка)</td></tr>
+                : byS.map((r, i) => (
+                  <tr key={i} className="border-b border-gray-100"><td className="py-1.5 font-medium">{r.salesperson}</td><td className="text-right">{r.orders}</td><td className="text-right tabular-nums">{fmt(r.orderTotal)}</td></tr>
+                ))}
+            </tbody>
+          </table>
+        </CardContent></Card>
+      </div>
+    </div>
   );
 }
