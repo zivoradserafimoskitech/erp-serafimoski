@@ -213,7 +213,7 @@ export const crmRouter = createRouter({
       const r = await q(
         `INSERT INTO quotations (quote_number, customer_id, status, subtotal, vat_rate, vat_amount, total_amount, currency, notes, payment_terms, created_by, salesperson, opportunity_id)
          VALUES ($1,$2,'draft',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
-        [quoteNumber, customerId, sub.toFixed(2), vatRate, vat.toFixed(2), (sub + vat).toFixed(2), opp.currency || "MKD", notes, "14 дена", actor(ctx), opp.owner ?? actor(ctx), input.opportunityId],
+        [quoteNumber, customerId, sub.toFixed(2), vatRate, vat.toFixed(2), (sub + vat).toFixed(2), opp.currency || "MKD", notes, "14 дена", ctx?.actor?.id ?? null, opp.owner ?? actor(ctx), input.opportunityId],
       );
       const id = Number(r[0].id);
       if (sub > 0) {
