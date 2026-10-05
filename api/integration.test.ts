@@ -998,8 +998,10 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect((await caller.crm.firmById({ id: firm.id })).overview.openDeals).toBe(0);
 
     // задачи: доцна / денес / наскоро; поврзување преку контакт ја наоѓа фирмата
-    const today = new Date().toISOString().slice(0, 10);
-    const plus = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    // датум во Скопје (како серверот), не UTC — инаку тестот паѓа меѓу полноќ локално и полноќ UTC
+    const skDay = (n: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Skopje" }).format(new Date(Date.now() + n * 86400000));
+    const today = skDay(0);
+    const plus = skDay;
     await caller.crm.activityUpsert({ contactId: c1.id, kind: "task", subject: "Доцни задача", dueDate: plus(-2), assignee: "test" });
     await caller.crm.activityUpsert({ contactId: c1.id, kind: "task", subject: "Денешна задача", dueDate: today, assignee: "test" });
     await caller.crm.activityUpsert({ contactId: c1.id, kind: "task", subject: "Наскоро", dueDate: plus(3), assignee: "test" });
