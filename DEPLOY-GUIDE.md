@@ -1,151 +1,99 @@
-# Deploy Guide - ERP Serafimoski Tek
+# Deploy Guide — ERP Серафимоски Тек
 
-## Ваша ситуација: Постоечки домен
+## Архитектура (препорачано)
 
-Ако имате домен: `vashdomain.mk`
-
-## Архитектура
+Еден Node сервис што служи **и** API **и** статичкиот frontend (`dist/public`):
 
 ```
-erp.vashdomain.mk      → Frontend (Cloudflare Pages)
-api.vashdomain.mk      → Backend (Railway.app)
+erp.vashdomain.mk  →  Railway / Render  (Node 20 + PostgreSQL)
 ```
 
-## Чекор 1: Backend на Railway (бесплатно)
+Алтернатива (разделен frontend) е можна, но не е потребна — `api/railway.ts` веќе ја служи SPA.
 
-### 1.1 Направете GitHub репозитори
+## Барања
+
+- Node.js 20+
+- **PostgreSQL** (не MySQL)
+- Environment: најмалку `DATABASE_URL`
+
+## 1. PostgreSQL
+
+Креирај база, на пр.:
+
+```text
+DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/serafimoski
+```
+
+На облак провајдери SSL е обично вклучен. За локално:
+
+```text
+DATABASE_SSL=false
+```
+
+Шемата се усогласува **автоматски при старт** (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`). Не треба рачен `drizzle-kit push` за стандарден deploy.
+
+## 2. Railway
+
+1. New Project → Deploy from GitHub → одбери го овој репозиториум.
+2. Add Plugin / Database → **PostgreSQL** (не MySQL).
+3. Variables на веб-сервисот:
+
+| Променлива | Вредност |
+|------------|----------|
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (или копија од Postgres) |
+| `APP_PASSWORD` | силна лозинка (или создај админ преку setup UI по прв deploy) |
+| `CERT_ENCRYPTION_KEY` | `openssl rand -hex 32` |
+| `NODE_ENV` | `production` |
+| `PORT` | го поставува Railway |
+
+4. Build / Start (ако не се детектираат од `package.json` / `Procfile`):
+
+```text
+buildCommand: npm install && npm run build
+startCommand: npm start
+```
+
+5. Custom Domain: `erp.vashdomain.mk` → CNAME според Railway.
+
+## 3. Render
+
+`render.yaml` е вклучен. Креирај Web Service од repo:
+
+- Build: `npm install && npm run build`
+- Start: `npm start`
+- Додај **PostgreSQL** инстанца и поврзи `DATABASE_URL`.
+
+## 4. Cloudflare Pages + посебен API (опционално)
+
+Ако сакаш статички frontend на Pages:
+
+1. Build: `npm run build` — artifact `dist/public`
+2. `VITE_API_URL=https://api.vashdomain.mk/api/trpc` при build
+3. API на Railway како погоре, само CORS/домейн
+
+За повеќето инсталации **не е потребно** — монолитниот сервер е поедноставен.
+
+## 5. Автентикација на продукција
+
+- **Не** поставувај `DISABLE_USER_GATE=true` на продукција.
+- Или `APP_PASSWORD`, или отвори ја апликацијата еднаш и создај администратор на setup екранот.
+- Потоа: Подесувања → Корисници за улоги (admin / manager / accountant / operator / viewer).
+
+## 6. По deploy — проверка
+
 ```bash
-cd /mnt/agents/output/app
-git init
-git add .
-git commit -m "Initial ERP system"
-git branch -M main
+curl -s https://erp.vashdomain.mk/api/trpc/ping
+# или health ако е изложен
 ```
 
-Направете нов приватен репозитори на github.com и:
-```bash
-git remote add origin https://github.com/VASHE-KORISNICKO-IME/erp-serafimoski.git
-git push -u origin main
-```
+1. Најава / setup админ  
+2. Подесувања → податоци за фирма (ЕДБ, банка, ДДВ)  
+3. Склад / клиенти — smoke test  
 
-### 1.2 Креирајте Railway проект
-1. Отидете на [railway.app](https://railway.app)
-2. Login со GitHub
-3. "New Project" → "Deploy from GitHub repo"
-4. Одберете го вашиот репозитори
-5. Railway автоматски ќе го препознае Node.js проектот
+## 7. Бекап
 
-### 1.3 Додадете MySQL база
-1. Во Railway проектот → "New" → "Database" → "Add MySQL"
-2. Railway автоматски креира база и ја поставува `DATABASE_URL`
+Во апликацијата: Подесувања → Бекап (ако е вклучен scheduler). Дополнително: редовен dump на PostgreSQL од провајдерот.
 
-### 1.4 Environment Variables
-Во Railway → вашиот сервис → "Variables", додадете:
-```
-DATABASE_URL=${{MySQL.DATABASE_URL}}
-JWT_SECRET=(openssl rand -base64 32)
-CERT_ENCRYPTION_KEY=(openssl rand -hex 32)
-NODE_ENV=production
-PORT=3000
-```
+## Застарено (не следи)
 
-### 1.5 Deploy
-Railway автоматски deploy-ира при секој push на `main`.
-
-Добивате URL: `https://erp-serafimoski-production.up.railway.app`
-
-### 1.6 Поддомен (api.vashdomain.mk)
-1. Во Railway → Settings → "Domains"
-2. "Custom Domain" → внесете `api.vashdomain.mk`
-3. Railway ќе ви даде CNAME запис
-4. Во вашиот домен провајдер (МАРФ, Сектор, ГоДеди):
-   ```
-   Type: CNAME
-   Name: api
-   Value: (што даде Railway)
-   ```
-
-## Чекор 2: Frontend на Cloudflare Pages (веќе деплојиран)
-
-### 2.1 Подесете го API URL-от
-Отворете `/mnt/agents/output/app/.env.production`:
-```env
-VITE_API_URL=https://api.vashdomain.mk/api/trpc
-```
-
-### 2.2 Build
-```bash
-cd /mnt/agents/output/app
-npm run build
-```
-
-### 2.3 Deploy на Cloudflare Pages
-1. Отидете на [dash.cloudflare.com](https://dash.cloudflare.com)
-2. Pages → Create a project → Upload assets
-3. Upload ја содржината на `dist/public` папката
-4. Подесете го поддоменот `erp.vashdomain.mk`
-
-## Чекор 3: Поврзување на домените
-
-### CORS подесувања
-Backend-от веќе дозволува сите origins преко `CORS_ORIGIN="*"`.
-
-Ако сакате строга безбедност, сменете во:
-```env
-CORS_ORIGIN=https://erp.vashdomain.mk
-```
-
-## Чекор 4: Пуштање на системот
-
-### Прв пат - seed на податоци
-```bash
-# На вашиот компјутер:
-cd /mnt/agents/output/app
-export DATABASE_URL=mysql://...(од Railway)
-npx tsx db/seed-metalnet.ts
-npx tsx db/seed-defaults.ts
-```
-
-### Логин за тестирање
-| Улога | Е-маил | Лозинка |
-|-------|--------|---------|
-| Админ | admin@serafimoski.mk | admin123 |
-| Канцеларија | office@serafimoski.mk | office123 |
-| Производство | prod@serafimoski.mk | prod123 |
-| Магацин | warehouse@serafimoski.mk | warehouse123 |
-
-## Чекор 5: Е-маил за фактури (опционално)
-
-Ако сакате автоматско примање на влезни фактури по е-маил:
-
-Во апликацијата → Подесувања → Фирма → Е-маил IMAP:
-- IMAP Сервер: `mail.vashdomain.mk` (или `imap.gmail.com` за Gmail)
-- Порт: `993`
-- Корисник: `erp@vashdomain.mk`
-- Лозинка: (лозинката за е-маилот)
-
-## Чекор 6: УЈП е-Фактура сертификат (опционално)
-
-За испраќање фактури до УЈП со правна важност:
-1. Купете квалификуван дигитален сертификат (Семос, Кибермет, КЕП)
-2. Во апликацијата → Подесувања → Сертификати
-3. Прикачете го PEM сертификатот и приватниот клуч
-4. Тестирајте на `efakturatest.ujp.gov.mk`
-5. Префрлете на продукција `efaktura.ujp.gov.mk`
-
-## Troubleshooting
-
-### Backend не се поврзува со база
-```bash
-# Проверете DATABASE_URL
-railway logs
-```
-
-### Frontend не ја наоѓа API-то
-- Проверете `VITE_API_URL` во `.env.production`
-- Проверете дали CORS е подесен
-- Отворете `https://api.vashdomain.mk/api/trpc/ping` во browser
-
-### SSL/HTTPS проблеми
-- Осигурајте се дека и frontend и backend користат HTTPS
-- На Cloudflare вклучете "Always Use HTTPS"
+Претходни верзии од овој водич спомнуваа **MySQL** и разделен Cloudflare Pages + API. Тековниот код е **PostgreSQL** + монолитен Node сервер.
