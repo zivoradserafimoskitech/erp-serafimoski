@@ -45,6 +45,20 @@ DATABASE_SSL=false
 | `CERT_ENCRYPTION_KEY` | `openssl rand -hex 32` |
 | `NODE_ENV` | `production` |
 | `PORT` | го поставува Railway |
+| `CREDIT_LIMIT_STRICT` | `false` (default) или `true` за блок на понуди над кредитен лимит |
+| `UJP_ENV` | `test` (default) или `production` |
+| `UJP_API_KEY` | клуч од УЈП (задолжително за продукциско испраќање) |
+| `SKIP_AUTO_MIGRATE` | само ако мораш да го исклучиш boot migrate (`true`) — **не** на продукција |
+
+### Автоматски миграции
+
+При секој `npm start` / boot, `api/railway.ts` ја повикува `runMigrations()` → `getInitSql()` (вклучува `getExtraSql()` од `init-db-v2.ts`):
+
+- `invoices.salesperson`, `orders`/`quotations.salesperson`
+- `order_items.delivered_qty` / `reserved_qty`
+- `sales_returns` (+ `credit_note_id`), `sales_return_items`
+
+Сите се `IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` — идемпотентни. Рачен `/api/init-db?key=...` е резерва.
 
 4. Build / Start (ако не се детектираат од `package.json` / `Procfile`):
 
@@ -62,6 +76,9 @@ startCommand: npm start
 - Build: `npm install && npm run build`
 - Start: `npm start`
 - Додај **PostgreSQL** инстанца и поврзи `DATABASE_URL`.
+- Истите Variables како погоре (`APP_PASSWORD`, `CERT_ENCRYPTION_KEY`, опционално `CREDIT_LIMIT_STRICT`, `UJP_*`).
+
+Постоечки CORS цели во кодот: `*.up.railway.app`, `erp-serafimoski.onrender.com` (види `api/railway.ts`). Примерен custom domain во водичот: `erp.vashdomain.mk`.
 
 ## 4. Cloudflare Pages + посебен API (опционално)
 

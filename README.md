@@ -22,7 +22,8 @@ npm install
 cp .env.example .env
 # Уреди DATABASE_URL=postgres://user:pass@localhost:5432/serafimoski
 
-# 3) API сервер (автоматски ги применува IF NOT EXISTS миграциите при старт)
+# 3) API сервер (автоматски IF NOT EXISTS миграции при старт: init-db-sql + init-db-v2,
+#    вкл. salesperson, delivered/reserved qty, sales_returns / sales_return_items)
 npm run dev
 # → http://127.0.0.1:3000  (служи API; frontend по build во dist/public)
 
@@ -82,3 +83,13 @@ npm start
 ## Лиценца
 
 Private — © Серафимоски Тек
+
+
+## Клучни env (детали во `.env.example` / DEPLOY-GUIDE)
+
+| Променлива | Значење |
+|------------|---------|
+| `DATABASE_URL` | PostgreSQL (задолжително) |
+| `CREDIT_LIMIT_STRICT` | `false` = предупредување; `true` = блок на понуда над лимит |
+| `UJP_ENV` / `UJP_API_KEY` | е-фактура; продукција бара и двете + сертификат |
+| `SKIP_AUTO_MIGRATE` | исклучи boot migrate (не за продукција) |
