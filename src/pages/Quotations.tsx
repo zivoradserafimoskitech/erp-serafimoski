@@ -238,6 +238,16 @@ export default function Quotations() {
     setQSchedule(DEFAULT_SCHEDULE);
     setQItems([]);
   };
+  // ?new=1&customerId=ID — нова понуда за фирма (од CRM 360° преглед)
+  useEffect(() => {
+    if (params.get("new") !== "1") return;
+    const cid = params.get("customerId");
+    resetQForm();
+    if (cid) setQForm((f) => ({ ...f, customerId: cid }));
+    setEditingId(null);
+    setQDialog(true);
+    params.delete("new"); params.delete("customerId"); setParams(params, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openEditQ = () => {
     if (!qDetail) return;

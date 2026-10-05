@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import MyTasksWidget from "@/components/crm/MyTasksWidget";
 
 export default function Dashboard() {
   // Таблата се освежува сама на 30 секунди (и веднаш по секое зачувување во апликацијата)
@@ -65,6 +66,8 @@ export default function Dashboard() {
           {isFetching ? "Се освежува..." : ago === null ? "Освежи" : ago < 5 ? "Освежено сега" : `Освежено пред ${ago < 60 ? ago + " сек" : Math.round(ago / 60) + " мин"}`}
         </button>
       </div>
+
+      <MyTasksWidget limit={5} />
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

@@ -37,7 +37,9 @@ const CATALOG: ReportDef[] = [
   { id: "profit-order", category: "sales", title: "Добивка по нарачка", description: "План vs стварно по нарачка", href: "/finansii?tab=profit", icon: TrendingUp },
   { id: "sales-yoy", category: "sales", title: "Година спрема година", description: "Промет и тренд по месеци", view: "yoy", icon: CalendarRange },
   { id: "sales-budget", category: "sales", title: "Буџет vs остварување", description: "План и отстапувања", view: "budget", icon: Target },
-  { id: "crm-pipeline", category: "crm", title: "CRM pipeline", description: "Потенцијални продажби, win-rate, изгубени причини", href: "/crm", icon: Target },
+  { id: "crm-report", category: "crm", title: "CRM преглед", description: "Pipeline по фаза, win-rate, понуда → нарачка, време до затворање, активности по продавач", view: "crm", icon: Target },
+  { id: "crm-pipeline", category: "crm", title: "Зделки (pipeline)", description: "Kanban на зделки, drag & drop", href: "/crm", icon: Target },
+  { id: "crm-activities", category: "crm", title: "Активности и задачи", description: "Мои задачи / денес, доцнат", href: "/crm/aktivnosti", icon: CalendarRange },
   { id: "deal-flow", category: "sales", title: "Тек на нарачки", description: "Од понуда до наплата", href: "/tek", icon: TrendingUp },
   { id: "sales-summary", category: "sales", title: "Продажба по купувач / продавач", description: "Фактуриран промет и нарачки по продавач", view: "salesSummary", icon: ShoppingBag },
   { id: "price-lists", category: "sales", title: "Ценовници", description: "Попусти и цени по клиент", href: "/cenovnici", icon: Tags },
@@ -64,7 +66,7 @@ export default function Reports() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("all");
-  const view = (params.get("view") || "") as "customer" | "product" | "machine" | "yoy" | "budget" | "salesSummary" | "";
+  const view = (params.get("view") || "") as "customer" | "product" | "machine" | "yoy" | "budget" | "salesSummary" | "crm" | "";
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(ymd(new Date()));
 
@@ -162,7 +164,7 @@ export default function Reports() {
               ← Назад кон сите извештаи
             </Button>
             <p className="text-sm font-medium text-gray-700">{active?.title ?? "Извештај"}</p>
-            {["customer", "product", "machine", "salesSummary"].includes(view) && (
+            {["customer", "product", "machine", "salesSummary", "crm"].includes(view) && (
               <div className="flex gap-2">
                 <div className="space-y-1"><Label className="text-xs">Од</Label><DateInput className="h-9 w-40" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">До</Label><DateInput className="h-9 w-40" value={to} onChange={(e) => setTo(e.target.value)} /></div>
@@ -174,6 +176,7 @@ export default function Reports() {
           {view === "yoy" && <Yoy />}
           {view === "budget" && <Budget />}
           {view === "salesSummary" && <SalesSummary from={from} to={to} />}
+          {view === "crm" && <CrmReport from={from} to={to} />}
         </div>
       )}
     </div>
@@ -345,6 +348,56 @@ function SalesSummary({ from, to }: { from: string; to: string }) {
                 ))}
             </tbody>
           </table>
+        </CardContent></Card>
+      </div>
+    </div>
+  );
+}
+
+const ACT_LABEL: Record<string, string> = { call: "Повици", meeting: "Средби", email: "Е-пошта", visit: "Посети", note: "Белешки", task: "Задачи" };
+
+function CrmReport({ from, to }: { from: string; to: string }) {
+  const { data, isLoading } = trpc.crm.crmReport.useQuery({ from, to });
+  if (isLoading || !data) return <p className="text-sm text-gray-500">Се вчитува…</p>;
+  const maxV = Math.max(1, ...data.pipeline.map((p) => p.value));
+  const xlsx = () => downloadTableXlsx(`crm-${from}-${to}.xlsx`, "CRM", [
+    ["Фаза", "Зделки", "Вредност", "Пондерирано"], ...data.pipeline.map((p) => [p.label, p.count, p.value, p.weighted]), [],
+    ["Продавач", "Добиени", "Изгубени", "Win-rate", "Добиена вредност"], ...data.winBySalesperson.map((r) => [r.who, r.won, r.lost, r.winRate == null ? "" : Math.round(r.winRate * 100) + "%", r.wonValue]), [],
+    ["Продавач", "Вкупно активности", "Завршени задачи", ...Object.values(ACT_LABEL)], ...data.activitiesBySalesperson.map((r) => [r.who, r.total, r.tasksDone, ...Object.keys(ACT_LABEL).map((k) => r.byKind[k] ?? 0)]),
+  ]);
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end"><Button size="sm" variant="outline" onClick={xlsx}><Download className="h-4 w-4 mr-1" />Excel</Button></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card><CardContent className="p-4"><p className="text-[11px] uppercase text-gray-400 font-semibold">Win-rate (зделки)</p><p className="text-2xl font-bold">{pct(data.deals.winRate)}</p><p className="text-xs text-gray-500">{data.deals.won} добиени / {data.deals.lost} изгубени</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-[11px] uppercase text-gray-400 font-semibold">Понуда → нарачка</p><p className="text-2xl font-bold">{pct(data.quoteToOrder.rate)}</p><p className="text-xs text-gray-500">{data.quoteToOrder.converted} од {data.quoteToOrder.quotes} понуди</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-[11px] uppercase text-gray-400 font-semibold">Просечно до затворање</p><p className="text-2xl font-bold">{data.deals.avgDaysToClose == null ? "—" : `${data.deals.avgDaysToClose} дена`}</p><p className="text-xs text-gray-500">само добиени зделки</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-[11px] uppercase text-gray-400 font-semibold">Добиена вредност</p><p className="text-2xl font-bold">{fmt(data.deals.wonValue)} <span className="text-sm">ден</span></p></CardContent></Card>
+      </div>
+      <Card><CardContent className="p-4 space-y-2">
+        <p className="font-semibold text-sm">Pipeline по фаза (отворени, сега)</p>
+        {data.pipeline.map((p) => (
+          <div key={p.stage} className="flex items-center gap-3 text-sm">
+            <span className="w-36">{p.label}</span>
+            <div className="flex-1 h-3 rounded bg-muted"><div className="h-3 rounded bg-primary" style={{ width: `${(p.value / maxV) * 100}%` }} /></div>
+            <span className="w-16 text-right tabular-nums">{p.count}</span>
+            <span className="w-32 text-right tabular-nums">{fmt(p.value)} ден</span>
+            <span className="w-32 text-right tabular-nums text-gray-500">≈ {fmt(p.weighted)}</span>
+          </div>
+        ))}
+      </CardContent></Card>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card><CardContent className="p-4">
+          <p className="font-semibold text-sm mb-2">Резултат по продавач</p>
+          <table className="w-full text-sm"><thead><tr className="text-xs text-gray-500 border-b"><th className="text-left font-medium py-1">Продавач</th><th className="text-right font-medium">Добиени</th><th className="text-right font-medium">Изгубени</th><th className="text-right font-medium">Win-rate</th><th className="text-right font-medium">Вредност</th></tr></thead>
+            <tbody>{data.winBySalesperson.map((r) => <tr key={r.who} className="border-b last:border-0"><td className="py-1">{r.who}</td><td className="text-right">{r.won}</td><td className="text-right">{r.lost}</td><td className="text-right">{pct(r.winRate)}</td><td className="text-right tabular-nums">{fmt(r.wonValue)}</td></tr>)}
+              {!data.winBySalesperson.length && <tr><td colSpan={5} className="text-center text-gray-400 py-4">Нема затворени зделки во периодот</td></tr>}</tbody></table>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 overflow-x-auto">
+          <p className="font-semibold text-sm mb-2">Активности по продавач</p>
+          <table className="w-full text-sm"><thead><tr className="text-xs text-gray-500 border-b"><th className="text-left font-medium py-1">Продавач</th><th className="text-right font-medium">Вкупно</th>{Object.values(ACT_LABEL).map((l) => <th key={l} className="text-right font-medium">{l}</th>)}<th className="text-right font-medium">Завршени задачи</th></tr></thead>
+            <tbody>{data.activitiesBySalesperson.map((r) => <tr key={r.who} className="border-b last:border-0"><td className="py-1">{r.who}</td><td className="text-right font-semibold">{r.total}</td>{Object.keys(ACT_LABEL).map((k) => <td key={k} className="text-right">{r.byKind[k] ?? 0}</td>)}<td className="text-right">{r.tasksDone}</td></tr>)}
+              {!data.activitiesBySalesperson.length && <tr><td colSpan={9} className="text-center text-gray-400 py-4">Нема активности во периодот</td></tr>}</tbody></table>
         </CardContent></Card>
       </div>
     </div>

@@ -22,10 +22,10 @@ export default function CustomerCrmDialog({ customer, onClose }: { customer: { i
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto">
-        <DialogTitle>{customer.name}</DialogTitle>
+        <DialogTitle className="flex flex-wrap items-center gap-3">{customer.name}<a href={`/crm/firmi/${customer.id}`} className="text-xs font-normal text-primary hover:underline">Отвори 360° преглед →</a></DialogTitle>
         <div className="flex flex-wrap gap-1 rounded-lg border bg-white p-0.5 w-fit">
           <Button size="sm" variant={tab === "terms" ? "default" : "ghost"} className="h-8" onClick={() => setTab("terms")}>Услови и цени</Button>
-          <Button size="sm" variant={tab === "sales" ? "default" : "ghost"} className="h-8" onClick={() => setTab("sales")}>Потенцијални продажби</Button>
+          <Button size="sm" variant={tab === "sales" ? "default" : "ghost"} className="h-8" onClick={() => setTab("sales")}>Зделки</Button>
           <Button size="sm" variant={tab === "activity" ? "default" : "ghost"} className="h-8" onClick={() => setTab("activity")}>Активности</Button>
           <Button size="sm" variant={tab === "portal" ? "default" : "ghost"} className="h-8" onClick={() => setTab("portal")}>Портал</Button>
         </div>
@@ -45,14 +45,14 @@ function PotentialSales({ customerId }: { customerId: number }) {
   if (!data?.length) {
     return (
       <p className="text-sm text-gray-500 py-4">
-        Нема потенцијални продажби за овој клиент. Додајте од менито{" "}
-        <a className="text-primary hover:underline" href="/crm">Потенцијални продажби</a>.
+        Нема зделки за овој клиент.{" "}
+        <a className="text-primary hover:underline" href={`/crm?new=1&customerId=${customerId}`}>Додај зделка</a>.
       </p>
     );
   }
   return (
     <div className="space-y-2 text-sm">
-      <p className="text-xs text-muted-foreground">Отворени и затворени потенцијални продажби поврзани со клиентот.</p>
+      <p className="text-xs text-muted-foreground">Отворени и затворени зделки поврзани со клиентот.</p>
       {data.map((o) => (
         <div key={o.id} className="flex items-start justify-between gap-2 border rounded-lg px-3 py-2">
           <div>
@@ -64,7 +64,7 @@ function PotentialSales({ customerId }: { customerId: number }) {
               {o.owner ? ` · ${o.owner}` : ""}
             </p>
           </div>
-          <a className="text-xs text-primary hover:underline shrink-0" href="/crm">CRM</a>
+          <a className="text-xs text-primary hover:underline shrink-0" href={`/crm?deal=${o.id}`}>Отвори</a>
         </div>
       ))}
     </div>

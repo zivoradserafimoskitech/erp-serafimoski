@@ -955,4 +955,71 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     expect(bva.rows.find((r: any) => r.key === "x_material").budget).toBe(5000);
     expect((await caller.reports.profitByMachine({ from: "2026-01-01", to: "2026-12-31" })).length).toBeGreaterThan(0);
   });
+  it("CRM: фирми, контакти, зделки (pipeline), задачи и извештаи", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    // фирма со ознаки и одговорен продавач
+    const firm = await caller.crm.firmSave({ name: "Метал Про ДООЕЛ", company: "Метал Про", edb: "4080012345678", city: "Битола", tags: ["VIP", "ограда", "VIP"], owner: "Марко", paymentDays: 30 });
+    const f: any = await caller.crm.firmById({ id: firm.id });
+    expect(f.tags).toEqual(["VIP", "ограда"]);
+    expect(f.owner).toBe("Марко");
+    expect(f.overview.openDeals).toBe(0);
+    expect((await caller.crm.firmList({ tag: "VIP" })).some((x: any) => x.id === firm.id)).toBe(true);
+    expect((await caller.crm.firmTagsList()).find((x: any) => x.tag === "VIP")).toBeTruthy();
+
+    // контакти: првиот е секогаш главен; нов главен го тргнува стариот
+    const c1 = await caller.crm.contactSave({ customerId: firm.id, name: "Ана Петрова", position: "Набавка", email: "ana@metalpro.mk" });
+    const c2 = await caller.crm.contactSave({ customerId: firm.id, name: "Иван Иванов", email: "ivan@metalpro.mk", isPrimary: true });
+    const contacts: any[] = await caller.crm.contactList({ customerId: firm.id });
+    expect(contacts.find((c) => c.id === c2.id).isPrimary).toBe(true);
+    expect(contacts.find((c) => c.id === c1.id).isPrimary).toBe(false);
+
+    // зделка со контакт од друга фирма → грешка
+    await expect(caller.crm.oppSave({ customerId: ids.cust, contactId: c1.id, title: "Погрешен контакт", value: 1, stage: "new" })).rejects.toThrow(/контакт/i);
+    const deal = await caller.crm.oppSave({ customerId: firm.id, contactId: c1.id, title: "Ограда 120 m", value: 480000, stage: "new", probability: 10, owner: "Марко", expectedClose: "2026-11-30" });
+    // drag & drop: изгубена без причина → грешка; добиена → затворена со closed_at
+    await expect(caller.crm.dealMove({ id: deal.id, stage: "lost" })).rejects.toThrow(/зошто/);
+    const mv: any = await caller.crm.dealMove({ id: deal.id, stage: "quoted" });
+    expect(mv.probability).toBe(60); // автоматска веројатност по фаза
+    const d1: any = (await caller.crm.oppList({ id: deal.id }))[0];
+    expect(d1.contact).toBe("Ана Петрова");
+    expect(d1.closedAt).toBeNull();
+
+    // зделка → понуда (врска назад), конверзија во нарачка → зделката станува добиена
+    const qt: any = await caller.crm.oppToQuotation({ opportunityId: deal.id });
+    expect(Number((await pool.query(`SELECT opportunity_id FROM quotations WHERE id = $1`, [qt.id])).rows[0].opportunity_id)).toBe(deal.id);
+    const conv: any = await caller.quotation.quotationConvert({ quotationId: qt.id, orderNumber: "НР-CRM-1/2026" });
+    expect(conv.success).toBe(true);
+    const won: any = (await caller.crm.oppList({ id: deal.id }))[0];
+    expect(won.stage).toBe("won");
+    expect(won.closedAt).not.toBeNull();
+    const tl: any = await caller.crm.oppTimeline({ id: deal.id });
+    expect(tl.steps.some((s: any) => s.kind === "order")).toBe(true);
+    expect((await caller.crm.firmById({ id: firm.id })).overview.openDeals).toBe(0);
+
+    // задачи: доцна / денес / наскоро; поврзување преку контакт ја наоѓа фирмата
+    const today = new Date().toISOString().slice(0, 10);
+    const plus = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    await caller.crm.activityUpsert({ contactId: c1.id, kind: "task", subject: "Доцни задача", dueDate: plus(-2), assignee: "test" });
+    await caller.crm.activityUpsert({ contactId: c1.id, kind: "task", subject: "Денешна задача", dueDate: today, assignee: "test" });
+    await caller.crm.activityUpsert({ contactId: c1.id, kind: "task", subject: "Наскоро", dueDate: plus(3), assignee: "test" });
+    const call = await caller.crm.activityUpsert({ contactId: c1.id, kind: "call", subject: "Повик за мерки" });
+    expect(Number((await pool.query(`SELECT customer_id FROM crm_activities WHERE id = $1`, [call.id])).rows[0].customer_id)).toBe(firm.id);
+    const mine: any = await caller.crm.myTasksList({ assignee: "test" });
+    expect(mine.overdue.some((t: any) => t.subject === "Доцни задача")).toBe(true);
+    expect(mine.today.some((t: any) => t.subject === "Денешна задача")).toBe(true);
+    expect(mine.upcoming.some((t: any) => t.subject === "Наскоро")).toBe(true);
+    const contact: any = await caller.crm.contactById({ id: c1.id });
+    expect(contact.activities.length).toBeGreaterThanOrEqual(4);
+    expect((await caller.crm.activityFeedList({ customerId: firm.id })).length).toBeGreaterThanOrEqual(4);
+
+    // извештај
+    const rep: any = await caller.crm.crmReport({ from: "2026-01-01", to: "2026-12-31" });
+    expect(rep.pipeline.length).toBe(4);
+    expect(rep.quoteToOrder.quotes).toBeGreaterThan(0);
+    expect(rep.activitiesBySalesperson.length).toBeGreaterThan(0);
+    // бришење контакт ги чисти врските
+    await caller.crm.contactDelete({ id: c2.id });
+    expect((await caller.crm.contactList({ customerId: firm.id })).length).toBe(1);
+  });
 });

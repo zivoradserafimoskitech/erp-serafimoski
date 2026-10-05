@@ -595,6 +595,64 @@ export function getExtraSql(): string[] {
     `ALTER TABLE "crm_opportunities" ADD COLUMN IF NOT EXISTS "products" text`,
     `ALTER TABLE "quotations" ADD COLUMN IF NOT EXISTS "opportunity_id" integer`,
     `CREATE INDEX IF NOT EXISTS "quotations_opportunity_idx" ON "quotations" ("opportunity_id")`,
+    // ===== CRM rework: фирми, контакт лица, зделки, активности, е-пошта =====
+    `ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "tags" text`,
+    `ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "owner" varchar(160)`,
+    `ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "website" varchar(255)`,
+    `CREATE TABLE IF NOT EXISTS "crm_contacts" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "customer_id" integer NOT NULL,
+      "name" varchar(255) NOT NULL,
+      "position" varchar(160),
+      "email" varchar(320),
+      "phone" varchar(60),
+      "is_primary" boolean DEFAULT false NOT NULL,
+      "notes" text,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "crm_contacts_customer_idx" ON "crm_contacts" ("customer_id")`,
+    // постоечко „контакт лице“ од клиентот → прв контакт (само ако фирмата уште нема контакти)
+    `INSERT INTO "crm_contacts" ("customer_id", "name", "email", "phone", "is_primary")
+      SELECT c.id, c.contact_person, c.email, c.phone, true FROM "customers" c
+      WHERE COALESCE(TRIM(c.contact_person), '') <> '' AND NOT EXISTS (SELECT 1 FROM "crm_contacts" x WHERE x.customer_id = c.id)`,
+    `ALTER TABLE "crm_opportunities" ADD COLUMN IF NOT EXISTS "contact_id" integer`,
+    `ALTER TABLE "crm_opportunities" ADD COLUMN IF NOT EXISTS "closed_at" timestamp`,
+    `ALTER TABLE "crm_opportunities" ADD COLUMN IF NOT EXISTS "lost_note" text`,
+    `ALTER TABLE "crm_activities" ADD COLUMN IF NOT EXISTS "contact_id" integer`,
+    `ALTER TABLE "crm_activities" ADD COLUMN IF NOT EXISTS "assignee" varchar(160)`,
+    `ALTER TABLE "crm_activities" ADD COLUMN IF NOT EXISTS "auto_key" varchar(160)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "crm_activities_auto_key_uq" ON "crm_activities" ("auto_key")`,
+    `CREATE INDEX IF NOT EXISTS "crm_activities_open_idx" ON "crm_activities" ("kind", "done_at", "due_date")`,
+    // лог на е-пошта (излезна сега; „in“ е подготвено за идна IMAP синхронизација)
+    `CREATE TABLE IF NOT EXISTS "crm_email_log" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "direction" varchar(10) DEFAULT 'out' NOT NULL,
+      "customer_id" integer,
+      "contact_id" integer,
+      "opportunity_id" integer,
+      "quotation_id" integer,
+      "to_addr" text NOT NULL,
+      "cc_addr" text,
+      "subject" varchar(300) NOT NULL,
+      "body" text,
+      "attachment" varchar(160),
+      "message_id" varchar(255),
+      "sent_by" varchar(160),
+      "sent_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "crm_email_log_customer_idx" ON "crm_email_log" ("customer_id")`,
+    `CREATE TABLE IF NOT EXISTS "crm_notifications" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "recipient" varchar(160),
+      "kind" varchar(40) NOT NULL,
+      "title" varchar(300) NOT NULL,
+      "link" varchar(300),
+      "dedupe_key" varchar(160),
+      "read_at" timestamp,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "crm_notifications_dedupe_uq" ON "crm_notifications" ("dedupe_key")`,
 
   ];
 }

@@ -24,6 +24,11 @@ import DeliveryNotes from "@/pages/DeliveryNotes";
 import Portal from "@/pages/Portal";
 import SalesHub from "@/pages/SalesHub";
 import PriceLists from "@/pages/PriceLists";
+import Firms from "@/pages/crm/Firms";
+import FirmDetail from "@/pages/crm/FirmDetail";
+import Contacts from "@/pages/crm/Contacts";
+import ContactDetail from "@/pages/crm/ContactDetail";
+import Activities from "@/pages/crm/Activities";
 
 export default function App() {
   return (
@@ -36,6 +41,11 @@ export default function App() {
       <Route path="/prodazba" element={<Layout><SalesHub /></Layout>} />
       <Route path="/cenovnici" element={<Layout><PriceLists /></Layout>} />
       <Route path="/crm" element={<Layout><Crm /></Layout>} />
+      <Route path="/crm/firmi" element={<Layout><Firms /></Layout>} />
+      <Route path="/crm/firmi/:id" element={<Layout><FirmDetail /></Layout>} />
+      <Route path="/crm/kontakti" element={<Layout><Contacts /></Layout>} />
+      <Route path="/crm/kontakti/:id" element={<Layout><ContactDetail /></Layout>} />
+      <Route path="/crm/aktivnosti" element={<Layout><Activities /></Layout>} />
       <Route path="/izvestai" element={<Layout><Reports /></Layout>} />
       <Route
         path="/"
