@@ -703,11 +703,11 @@ export const accountingRouter = createRouter({
             if (qty - rem > 0.0005) throw new Error(`„${item.description}“: бараш ${qty}, остануваат ${rem} (backorder)`);
           }
           if (item.itemType === "product" && item.productId) {
-            await deductFg(item.productId, 0); // no-op check path — real deduct after insert
-            const { physicalFgQty } = await import("./fg-stock-helper");
+            const { physicalFgQty, ensureFgStockRow } = await import("./fg-stock-helper");
+            await ensureFgStockRow(item.productId);
             const totalStock = await physicalFgQty(item.productId);
             if (totalStock < qty) {
-              throw new Error(`Нема доволно залиха на готов производ „${item.description}". На залиха: ${totalStock.toFixed(3)}, потребно: ${qty.toFixed(3)}`);
+              throw new Error(`Нема доволно FG залиха за „${item.description}“ (на залиха: ${totalStock.toFixed(3)}, потребно: ${qty.toFixed(3)}). Заведи производство во ГЛ-ПРОД или намали ја количината.`);
             }
           }
         }
@@ -1282,6 +1282,62 @@ export const accountingRouter = createRouter({
     }).from(services).where(eq(services.isActive, "active"));
   }),
 
+  /** Ставки што може да се вратат (испорачано − веќе вратено) од нарачка и/или фактура. */
+  salesReturnableLines: publicQuery
+    .input(z.object({
+      orderId: z.number().optional(),
+      invoiceId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      if (!input.orderId && !input.invoiceId) return { lines: [] as any[] };
+      const { returnableQty, alreadyReturnedQty } = await import("./fg-stock-helper");
+      const lines: any[] = [];
+
+      if (input.orderId) {
+        const items = (await getPool().query(
+          `SELECT oi.id, oi.description, oi.product_id, oi.quantity, oi.unit_price,
+                  COALESCE(oi.delivered_qty,0) AS delivered_qty
+           FROM order_items oi WHERE oi.order_id = $1 ORDER BY oi.id`, [input.orderId])).rows;
+        for (const it of items) {
+          const delivered = Number(it.delivered_qty);
+          const returned = await alreadyReturnedQty({ orderItemId: it.id });
+          const ret = returnableQty(delivered, returned);
+          if (ret <= 0.0005) continue;
+          lines.push({
+            source: "order", orderItemId: it.id, productId: it.product_id ? Number(it.product_id) : null,
+            description: it.description, unitPrice: String(it.unit_price ?? "0"),
+            delivered, alreadyReturned: returned, returnable: ret, unit: "ком",
+          });
+        }
+      }
+
+      if (input.invoiceId) {
+        const items = (await getPool().query(
+          `SELECT di.id, di.description, di.product_id, di.quantity, di.unit_price, di.unit, di.vat_rate
+           FROM document_items di
+           WHERE di.document_id = $1 AND di.document_type = 'invoice' AND di.item_type IN ('product','manual','service')
+           ORDER BY di.id`, [input.invoiceId])).rows;
+        for (const it of items) {
+          const qty = Number(it.quantity);
+          const returned = it.product_id
+            ? await alreadyReturnedQty({ productId: Number(it.product_id), invoiceId: input.invoiceId })
+            : 0;
+          // за фактура без order_item: returnable = qty − returned (pretpostavka faktura = isporacano)
+          const ret = returnableQty(qty, returned);
+          if (ret <= 0.0005) continue;
+          // skip if already covered by order line with same product
+          if (input.orderId && it.product_id && lines.some((l) => l.productId === Number(it.product_id))) continue;
+          lines.push({
+            source: "invoice", documentItemId: it.id, productId: it.product_id ? Number(it.product_id) : null,
+            description: it.description, unitPrice: String(it.unit_price ?? "0"),
+            delivered: qty, alreadyReturned: returned, returnable: ret,
+            unit: it.unit || "ком", vatRate: String(it.vat_rate ?? "18"),
+          });
+        }
+      }
+      return { lines };
+    }),
+
   /** Поврат: книжно одобрување (опционално) + враќање на FG залиха. */
   salesReturnCreate: publicQuery
     .input(z.object({
@@ -1323,14 +1379,38 @@ export const accountingRouter = createRouter({
       );
       const returnId = Number(r.rows[0].id);
 
+      const { returnableQty, alreadyReturnedQty } = await import("./fg-stock-helper");
       for (const it of input.items) {
+        const qty = parseFloat(it.quantity) || 0;
+        if (qty <= 0) throw new Error(`Невалидна количина за „${it.description}“`);
+        if (it.orderItemId) {
+          const oi = (await getPool().query(
+            `SELECT description, COALESCE(delivered_qty,0) AS delivered_qty FROM order_items WHERE id = $1`, [it.orderItemId])).rows[0];
+          if (!oi) throw new Error(`Ставка од нарачка #${it.orderItemId} не постои`);
+          const returned = await alreadyReturnedQty({ orderItemId: it.orderItemId });
+          const max = returnableQty(Number(oi.delivered_qty), returned);
+          if (qty - max > 0.0005) {
+            throw new Error(`„${it.description}“: бараш ${qty}, може да се врати најмногу ${max} (испорачано ${oi.delivered_qty}, веќе вратено ${returned})`);
+          }
+        } else if (it.productId && input.invoiceId) {
+          const returned = await alreadyReturnedQty({ productId: it.productId, invoiceId: input.invoiceId });
+          // soft check against invoice line qty
+          const invLine = (await getPool().query(
+            `SELECT COALESCE(SUM(quantity),0) AS q FROM document_items
+             WHERE document_id = $1 AND document_type = 'invoice' AND product_id = $2`,
+            [input.invoiceId, it.productId])).rows[0];
+          const max = returnableQty(Number(invLine?.q ?? 0), returned);
+          if (max > 0 && qty - max > 0.0005) {
+            throw new Error(`„${it.description}“: бараш ${qty}, може да се врати најмногу ${max} од фактурата`);
+          }
+        }
         await getPool().query(
           `INSERT INTO sales_return_items (return_id, description, quantity, unit, unit_price, total_price, product_id, order_item_id, restock)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [returnId, it.description, it.quantity, it.unit, it.unitPrice, it.totalPrice, it.productId ?? null, it.orderItemId ?? null, it.restock !== false],
         );
         if (it.restock !== false && it.productId) {
-          await restockFg(it.productId, parseFloat(it.quantity) || 0, { notes: `поврат ${number}` });
+          await restockFg(it.productId, qty, { notes: `поврат ${number}` });
         }
       }
 

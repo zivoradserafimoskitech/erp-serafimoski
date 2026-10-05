@@ -281,11 +281,16 @@ export const customersRouter = createRouter({
         const delivered = Number(it.delivered_qty);
         const remaining = remainingToDeliver(ordered, delivered);
         let available: number | null = null;
-        if (it.product_id) available = await availableFgQty(Number(it.product_id), input.orderId);
+        let stockWarning: string | undefined;
+        if (it.product_id) {
+          const a = await availableFgQty(Number(it.product_id), input.orderId);
+          available = a.available;
+          stockWarning = a.warning;
+        }
         out.push({
           id: it.id, description: it.description, quantity: ordered, deliveredQty: delivered, remaining,
           reservedQty: Number(it.reserved_qty), unitPrice: it.unit_price, totalPrice: it.total_price,
-          productId: it.product_id ? Number(it.product_id) : null, available,
+          productId: it.product_id ? Number(it.product_id) : null, available, stockWarning,
         });
       }
       return {
