@@ -95,6 +95,13 @@ export default function UJPEFakturaTab() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground/80">
+        <b>УЈП е-фактура:</b> тест окружувањето работи без сертификат (симулација).
+        За продукција потребни се <code className="font-mono">UJP_ENV=production</code>, важечки API клуч
+        (<code className="font-mono">UJP_API_KEY</code>) и дигитален сертификат во Подесувања.
+        Статус callback / масовно испраќање зависат од УЈП пристап — потврдете со реални креденцијали.
+      </div>
+
       {/* Info Card */}
       <Card>
         <CardContent className="p-6">

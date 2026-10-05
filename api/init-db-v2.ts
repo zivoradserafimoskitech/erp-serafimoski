@@ -578,5 +578,19 @@ export function getExtraSql(): string[] {
       "issue_date" date,
       "created_at" timestamp DEFAULT now() NOT NULL
     )`,
+    `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "salesperson" varchar(160)`,
+    `ALTER TABLE "sales_returns" ADD COLUMN IF NOT EXISTS "credit_note_id" integer`,
+    `CREATE TABLE IF NOT EXISTS "sales_return_items" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "return_id" integer NOT NULL,
+      "description" varchar(500) NOT NULL,
+      "quantity" numeric(12, 3) DEFAULT 0 NOT NULL,
+      "unit" varchar(20) DEFAULT 'ком' NOT NULL,
+      "unit_price" numeric(12, 2) DEFAULT 0 NOT NULL,
+      "total_price" numeric(12, 2) DEFAULT 0 NOT NULL,
+      "product_id" bigint,
+      "order_item_id" bigint,
+      "restock" boolean DEFAULT true NOT NULL
+    )`,
   ];
 }

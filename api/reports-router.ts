@@ -151,9 +151,12 @@ export const reportsRouter = createRouter({
       WHERE i.invoice_type IN ('standard','credit_note') AND i.status NOT IN ('draft','cancelled')
         AND i.issue_date BETWEEN $1 AND $2
       GROUP BY 1 ORDER BY revenue DESC LIMIT 100`, [input.from, input.to]);
-    const bySalesperson = await q(`SELECT COALESCE(NULLIF(o.salesperson, ''), NULLIF(qt.salesperson, ''), '—') AS salesperson,
-      COUNT(DISTINCT o.id)::int AS orders, COALESCE(SUM(o.total_amount), 0) AS order_total
-      FROM orders o LEFT JOIN quotations qt ON qt.id = o.quote_id OR qt.converted_order_id = o.id
+    const bySalesperson = await q(`SELECT COALESCE(NULLIF(o.salesperson, ''), NULLIF(qt.salesperson, ''), NULLIF(i.salesperson, ''), '—') AS salesperson,
+      COUNT(DISTINCT o.id)::int AS orders, COALESCE(SUM(o.total_amount), 0) AS order_total,
+      COUNT(DISTINCT i.id)::int AS invoices, COALESCE(SUM(CASE WHEN i.invoice_type = 'credit_note' THEN -ABS(i.subtotal) ELSE i.subtotal END), 0) AS invoice_revenue
+      FROM orders o
+      LEFT JOIN quotations qt ON qt.id = o.quote_id OR qt.converted_order_id = o.id
+      LEFT JOIN invoices i ON i.order_id = o.id AND i.invoice_type IN ('standard','credit_note') AND i.status NOT IN ('draft','cancelled')
       WHERE o.status <> 'cancelled' AND o.created_at::date BETWEEN $1 AND $2
       GROUP BY 1 ORDER BY order_total DESC LIMIT 50`, [input.from, input.to]).catch(() => []);
     const totals = await q(`SELECT COUNT(*)::int AS n,
@@ -164,7 +167,7 @@ export const reportsRouter = createRouter({
       from: input.from, to: input.to,
       totals: { invoices: totals[0]?.n ?? 0, revenue: Number(totals[0]?.revenue ?? 0), vat: Number(totals[0]?.vat ?? 0) },
       byCustomer: byCustomer.map((r) => ({ customer: r.customer, invoices: r.invoices, revenue: Number(r.revenue) })),
-      bySalesperson: bySalesperson.map((r) => ({ salesperson: r.salesperson, orders: r.orders, orderTotal: Number(r.order_total) })),
+      bySalesperson: bySalesperson.map((r) => ({ salesperson: r.salesperson, orders: r.orders, orderTotal: Number(r.order_total), invoices: Number(r.invoices ?? 0), invoiceRevenue: Number(r.invoice_revenue ?? 0) })),
     };
   }),
 });

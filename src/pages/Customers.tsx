@@ -82,8 +82,7 @@ export default function Customers() {
   const [editingCustId, setEditingCustId] = useState<number | null>(null);
 
   const [orderForm, setOrderForm] = useState({
-    orderNumber: "", customerId: "", priority: "normal",
-    deliveryDate: "", notes: "",
+    orderNumber: "", customerId: "", priority: "normal", deliveryDate: "", notes: "", salesperson: "",
   });
 
   const [items, setItems] = useState<Array<{
@@ -144,7 +143,7 @@ export default function Customers() {
       utils.customers.orderList.invalidate();
       utils.dashboard.stats.invalidate();
       setOrderDialog(false);
-      setOrderForm({ orderNumber: "", customerId: "", priority: "normal", deliveryDate: "", notes: "" });
+      setOrderForm({ orderNumber: "", customerId: "", priority: "normal", deliveryDate: "", notes: "", salesperson: "" });
       setItems([]);
     },
   });
@@ -181,6 +180,8 @@ export default function Customers() {
       priority: orderForm.priority as "low" | "normal" | "high" | "urgent",
       deliveryDate: orderForm.deliveryDate || undefined,
       notes: orderForm.notes || undefined,
+      salesperson: orderForm.salesperson || undefined,
+      status: "confirmed",
       items: items.map((i) => ({ ...i, totalPrice: i.totalPrice })),
     });
   };
@@ -374,6 +375,10 @@ export default function Customers() {
                   )}
                 </div>
 
+                <div className="space-y-2">
+                  <Label>Продавач</Label>
+                  <Input value={orderForm.salesperson} onChange={(e) => setOrderForm({ ...orderForm, salesperson: e.target.value })} placeholder="Комерцијалист" />
+                </div>
                 <div className="space-y-2">
                   <Label>Белешки</Label>
                   <Textarea value={orderForm.notes} onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })} />

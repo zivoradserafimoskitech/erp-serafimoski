@@ -26,6 +26,7 @@ export default function SalesHub() {
     { to: "/tek", title: "Тек на нарачки", desc: "Понуда → наплата (DealFlow)", icon: Workflow, color: "text-amber-700 bg-amber-50" },
     { to: "/smetkovodstvo?tab=delivery", title: "Испратници", desc: "Испорака и атести", icon: Truck, color: "text-orange-700 bg-orange-50" },
     { to: "/smetkovodstvo", title: "Фактури", desc: "Про-фактура, фактура, книжно", icon: Calculator, color: "text-emerald-700 bg-emerald-50" },
+    { to: "/smetkovodstvo?tab=returns", title: "Поврати", desc: "Враќање + книжно + залиха", icon: Calculator, color: "text-rose-700 bg-rose-50" },
     { to: "/cenovnici", title: "Ценовници", desc: "Попуст и цени по клиент", icon: Tags, color: "text-indigo-700 bg-indigo-50" },
     { to: "/izvestai?view=salesSummary&r=sales-summary", title: "Извештаи", desc: "Продажба по купувач/продавач", icon: BarChart3, color: "text-rose-700 bg-rose-50" },
   ];

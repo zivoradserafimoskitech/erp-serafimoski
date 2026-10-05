@@ -840,6 +840,7 @@ export const invoices = pgTable("invoices", {
   // извоз (0% ДДВ): број и датум на царинската декларација (ЕЦД) — доказ за ослободувањето
   customsDeclaration: varchar("customs_declaration", { length: 60 }),
   customsDate: date("customs_date"),
+  salesperson: varchar("salesperson", { length: 160 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1035,6 +1036,35 @@ export const finishedGoodsStock = pgTable("finished_goods_stock", {
 });
 
 export type FinishedGoodsStock = typeof finishedGoodsStock.$inferSelect;
+
+
+// ============= SALES RETURNS =============
+export const salesReturns = pgTable("sales_returns", {
+  id: serial("id").primaryKey(),
+  number: varchar("number", { length: 50 }).notNull().unique(),
+  customerId: integer("customer_id").notNull(),
+  orderId: integer("order_id"),
+  invoiceId: integer("invoice_id"),
+  creditNoteId: integer("credit_note_id"),
+  status: varchar("status", { length: 20 }).notNull().default("draft"),
+  reason: varchar("reason", { length: 40 }),
+  notes: text("notes"),
+  issueDate: date("issue_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const salesReturnItems = pgTable("sales_return_items", {
+  id: serial("id").primaryKey(),
+  returnId: integer("return_id").notNull(),
+  description: varchar("description", { length: 500 }).notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("0"),
+  unit: varchar("unit", { length: 20 }).notNull().default("ком"),
+  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default("0"),
+  productId: bigint("product_id", { mode: "number" }),
+  orderItemId: bigint("order_item_id", { mode: "number" }),
+  restock: boolean("restock").notNull().default(true),
+});
 
 // ============= DIGITAL CERTIFICATES (for UJP e-Faktura signing) =============
 export const digitalCertificates = pgTable("digital_certificates", {

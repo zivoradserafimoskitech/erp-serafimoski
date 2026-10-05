@@ -110,6 +110,7 @@ export const accountingRouter = createRouter({
       totalAmount: z.string().default("0"),
       currency: z.string().default("MKD"),
       notes: z.string().optional(),
+      salesperson: z.string().max(160).optional(),
       originalInvoiceId: z.number().optional(),
       items: z.array(z.object({
         description: z.string().min(1),
@@ -673,6 +674,7 @@ export const accountingRouter = createRouter({
         notes: z.string().optional(),
         productId: z.number().optional(),
         materialId: z.number().optional(),
+        orderItemId: z.number().optional(),
         weightKg: z.string().optional(),
         itemType: z.enum(["product", "material", "manual"]).default("manual"),
       })).optional(),
@@ -684,14 +686,26 @@ export const accountingRouter = createRouter({
       }
       const db = getDb();
       const { items, ...data } = input;
+      const { deductFg, applyDeliveryToOrderItem, remainingToDeliver } = await import("./fg-stock-helper");
 
-      // Валидација на залиха за готови производи ПРЕД да се креира документот
+      // Валидација: FG залиха + остаток на нарачка
       if (items) {
         for (const item of items) {
+          const qty = parseFloat(item.quantity) || 0;
+          if (qty <= 0) continue;
+          if (item.orderItemId) {
+            const row = (await getPool().query(
+              `SELECT quantity, COALESCE(delivered_qty,0) AS delivered_qty FROM order_items WHERE id = $1 AND ($2::int IS NULL OR order_id = $2)`,
+              [item.orderItemId, data.orderId ?? null],
+            )).rows[0];
+            if (!row) throw new Error(`Ставка од нарачка #${item.orderItemId} не постои`);
+            const rem = remainingToDeliver(Number(row.quantity), Number(row.delivered_qty));
+            if (qty - rem > 0.0005) throw new Error(`„${item.description}“: бараш ${qty}, остануваат ${rem} (backorder)`);
+          }
           if (item.itemType === "product" && item.productId) {
-            const stock = await db.select().from(finishedGoodsStock).where(eq(finishedGoodsStock.productId, item.productId));
-            const totalStock = stock.reduce((sum: any, s: any) => sum + parseFloat(String(s.quantity)), 0);
-            const qty = parseFloat(item.quantity) || 0;
+            await deductFg(item.productId, 0); // no-op check path — real deduct after insert
+            const { physicalFgQty } = await import("./fg-stock-helper");
+            const totalStock = await physicalFgQty(item.productId);
             if (totalStock < qty) {
               throw new Error(`Нема доволно залиха на готов производ „${item.description}". На залиха: ${totalStock.toFixed(3)}, потребно: ${qty.toFixed(3)}`);
             }
@@ -706,47 +720,50 @@ export const accountingRouter = createRouter({
         orderId: data.orderId ?? null,
       } as any);
       const insertId = Number(result[0].insertId);
+      const backorders: { orderItemId?: number; description: string; remaining: number }[] = [];
       if (items && items.length > 0) {
-        await db.insert(documentItems).values(items.map(i => ({ ...i, documentId: insertId, documentType: "delivery_note" as const })));
+        await db.insert(documentItems).values(items.map(i => ({
+          description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice,
+          totalPrice: i.totalPrice, notes: i.notes, productId: i.productId, materialId: i.materialId,
+          weightKg: i.weightKg, itemType: i.itemType, documentId: insertId, documentType: "delivery_note" as const,
+        })));
 
-        // Одземи ја залихата на готови производи од ГЛ-ПРОД (FIFO по записи)
         for (const item of items) {
+          const qty = parseFloat(item.quantity) || 0;
+          if (qty <= 0) continue;
           if (item.itemType === "product" && item.productId) {
-            const stockEntries = await db.select().from(finishedGoodsStock)
-              .where(eq(finishedGoodsStock.productId, item.productId))
-              .orderBy(finishedGoodsStock.id);
-            let remainingQty = parseFloat(item.quantity) || 0;
-            for (const entry of stockEntries) {
-              if (remainingQty <= 0) break;
-              const entryQty = parseFloat(String(entry.quantity));
-              const deduct = Math.min(entryQty, remainingQty);
-              await db.update(finishedGoodsStock)
-                .set({ quantity: (entryQty - deduct).toFixed(3), updatedAt: new Date() } as any)
-                .where(eq(finishedGoodsStock.id, entry.id));
-              remainingQty -= deduct;
+            await deductFg(item.productId, qty);
+          }
+          if (item.orderItemId) {
+            const { backorder } = await applyDeliveryToOrderItem(item.orderItemId, qty);
+            if (backorder > 0.0005) backorders.push({ orderItemId: item.orderItemId, description: item.description, remaining: backorder });
+          } else if (data.orderId && item.productId) {
+            // legacy match by product_id
+            const oi = (await getPool().query(
+              `SELECT id FROM order_items WHERE order_id = $1 AND product_id = $2
+               AND (quantity::numeric - COALESCE(delivered_qty,0)) > 0.0005 ORDER BY id LIMIT 1`,
+              [data.orderId, item.productId],
+            )).rows[0];
+            if (oi) {
+              const { backorder } = await applyDeliveryToOrderItem(oi.id, qty);
+              if (backorder > 0.0005) backorders.push({ orderItemId: oi.id, description: item.description, remaining: backorder });
             }
           }
         }
       }
 
-      
-      // делумна испорака: зголеми delivered_qty на ставки од нарачката (ако има productId/опис)
-      if (data.orderId && items?.length) {
-        for (const it of items) {
-          const qty = parseFloat(String(it.quantity)) || 0;
-          if (qty <= 0) continue;
-          if (it.productId) {
-            await getPool().query(
-              `UPDATE order_items SET delivered_qty = COALESCE(delivered_qty, 0) + $1,
-                reserved_qty = GREATEST(0, COALESCE(reserved_qty, 0) - $1)
-               WHERE order_id = $2 AND product_id = $3`,
-              [qty, data.orderId, it.productId],
-            ).catch(() => {});
-          }
+      // Ако нарачката е целосно испорачана — статусот delivered
+      if (data.orderId) {
+        const open = (await getPool().query(
+          `SELECT COUNT(*)::int AS n FROM order_items WHERE order_id = $1
+           AND (quantity::numeric - COALESCE(delivered_qty,0)) > 0.0005`, [data.orderId])).rows[0]?.n ?? 0;
+        if (Number(open) === 0) {
+          await getPool().query(`UPDATE orders SET status = 'delivered', updated_at = now() WHERE id = $1 AND status <> 'cancelled'`, [data.orderId]);
         }
       }
+
       await logAudit({ action: "CREATE", entityType: "delivery_note", entityId: insertId, description: `Креирана испратница ${data.dnNumber}` }).catch(() => {});
-      return { success: true, id: insertId };
+      return { success: true, id: insertId, backorders };
     }),
 
   deliveryNoteDelete: publicQuery
@@ -1265,7 +1282,7 @@ export const accountingRouter = createRouter({
     }).from(services).where(eq(services.isActive, "active"));
   }),
 
-  /** Враќање / рекламација (scaffold): запис + опционално книжно. Целосен склад-врат — follow-up. */
+  /** Поврат: книжно одобрување (опционално) + враќање на FG залиха. */
   salesReturnCreate: publicQuery
     .input(z.object({
       customerId: z.number(),
@@ -1274,30 +1291,84 @@ export const accountingRouter = createRouter({
       reason: z.string().max(40).optional(),
       notes: z.string().optional(),
       issueDate: z.string(),
-      createCreditNote: z.boolean().default(false),
+      createCreditNote: z.boolean().default(true),
+      items: z.array(z.object({
+        description: z.string().min(1),
+        quantity: z.string(),
+        unit: z.string().default("ком"),
+        unitPrice: z.string().default("0"),
+        totalPrice: z.string(),
+        productId: z.number().optional(),
+        orderItemId: z.number().optional(),
+        restock: z.boolean().default(true),
+        vatRate: z.string().default("18"),
+      })).min(1),
     }))
     .mutation(async ({ input }) => {
       const { getNextDocNumber } = await import("./counters-helper");
+      const { restockFg } = await import("./fg-stock-helper");
       const number = await getNextDocNumber("salesReturn").catch(async () => {
         const y = new Date().getFullYear();
         return `ВР-001/${y}`;
       });
+      const subtotal = input.items.reduce((s, i) => s + (parseFloat(i.totalPrice) || 0), 0);
+      const vatRate = parseFloat(input.items[0]?.vatRate ?? "18") || 18;
+      const vatAmount = Math.round(subtotal * vatRate) / 100;
+      const totalAmount = Math.round((subtotal + vatAmount) * 100) / 100;
+
       const r = await getPool().query(
         `INSERT INTO sales_returns (number, customer_id, order_id, invoice_id, status, reason, notes, issue_date)
-         VALUES ($1,$2,$3,$4,'draft',$5,$6,$7) RETURNING id`,
+         VALUES ($1,$2,$3,$4,'completed',$5,$6,$7) RETURNING id`,
         [number, input.customerId, input.orderId ?? null, input.invoiceId ?? null, input.reason ?? null, input.notes ?? null, input.issueDate],
       );
+      const returnId = Number(r.rows[0].id);
+
+      for (const it of input.items) {
+        await getPool().query(
+          `INSERT INTO sales_return_items (return_id, description, quantity, unit, unit_price, total_price, product_id, order_item_id, restock)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [returnId, it.description, it.quantity, it.unit, it.unitPrice, it.totalPrice, it.productId ?? null, it.orderItemId ?? null, it.restock !== false],
+        );
+        if (it.restock !== false && it.productId) {
+          await restockFg(it.productId, parseFloat(it.quantity) || 0, { notes: `поврат ${number}` });
+        }
+      }
+
       let creditNoteId: number | null = null;
       if (input.createCreditNote && input.invoiceId) {
-        const num = await (await import("./invoice-numbering")).nextSequential("creditNote", new Date(input.issueDate).getFullYear());
-        const cn = await getPool().query(`SELECT id FROM invoices WHERE id = $1`, [input.invoiceId]);
-        if (cn.rows[0]) {
-          // делегирај на creditNoteCreate преку caller би било подобро; овде само го бележиме линкот
-          creditNoteId = null;
+        const year = new Date(input.issueDate).getFullYear();
+        const kn = await (await import("./invoice-numbering")).nextSequential("creditNote", year);
+        // повикај ја истата валидација преку внатрешна логика — директно insert со assert
+        const { assertOpen } = await import("./period-lock");
+        const { assertSequential } = await import("./invoice-numbering");
+        await assertOpen(input.issueDate, "Книжно одобрување");
+        const knNum = await assertSequential("creditNote", kn, input.issueDate);
+        const orig = (await getPool().query(`SELECT * FROM invoices WHERE id = $1`, [input.invoiceId])).rows[0];
+        if (!orig) throw new Error("Фактурата за книжно не постои");
+        const prev = (await getPool().query(
+          `SELECT COALESCE(SUM(ABS(subtotal)),0) s, COALESCE(SUM(ABS(total_amount)),0) t FROM invoices
+           WHERE invoice_type = 'credit_note' AND original_invoice_id = $1 AND status <> 'cancelled'`, [input.invoiceId])).rows[0];
+        const leftBase = Math.round((Math.abs(Number(orig.subtotal)) - Number(prev.s)) * 100) / 100;
+        if (subtotal - leftBase > 0.005) throw new Error(`Книжното (${subtotal}) ја надминува остатокот од фактурата (${leftBase})`);
+        const ins = await getPool().query(
+          `INSERT INTO invoices (invoice_number, customer_id, order_id, status, invoice_type, issue_date, subtotal, vat_rate, vat_amount, total_amount, currency, notes, original_invoice_id, salesperson)
+           VALUES ($1,$2,$3,'issued','credit_note',$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+          [knNum, input.customerId, orig.order_id, input.issueDate, subtotal.toFixed(2), String(vatRate), vatAmount.toFixed(2), totalAmount.toFixed(2),
+           orig.currency, input.notes ?? `Поврат ${number}`, input.invoiceId, orig.salesperson ?? null],
+        );
+        creditNoteId = Number(ins.rows[0].id);
+        for (const it of input.items) {
+          await getPool().query(
+            `INSERT INTO document_items (document_id, document_type, description, quantity, unit, unit_price, total_price, vat_rate, product_id, item_type)
+             VALUES ($1,'invoice',$2,$3,$4,$5,$6,$7,$8,'product')`,
+            [creditNoteId, it.description, it.quantity, it.unit, it.unitPrice, it.totalPrice, it.vatRate ?? "18", it.productId ?? null],
+          );
         }
-        void num;
+        await getPool().query(`UPDATE sales_returns SET credit_note_id = $1 WHERE id = $2`, [creditNoteId, returnId]);
       }
-      return { id: Number(r.rows[0].id), number, creditNoteId };
+
+      await logAudit({ action: "CREATE", entityType: "sales_return", entityId: returnId, description: `Поврат ${number}` }).catch(() => {});
+      return { id: returnId, number, creditNoteId, subtotal, vatAmount, totalAmount };
     }),
 
   salesReturnList: publicQuery.query(async () => {
@@ -1307,8 +1378,8 @@ export const accountingRouter = createRouter({
     ).then((x) => x.rows).catch(() => []);
     return rows.map((r: any) => ({
       id: r.id, number: r.number, customerId: r.customer_id, customer: r.customer,
-      orderId: r.order_id, invoiceId: r.invoice_id, status: r.status, reason: r.reason,
-      notes: r.notes, issueDate: r.issue_date, createdAt: r.created_at,
+      orderId: r.order_id, invoiceId: r.invoice_id, creditNoteId: r.credit_note_id,
+      status: r.status, reason: r.reason, notes: r.notes, issueDate: r.issue_date, createdAt: r.created_at,
     }));
   }),
 });
