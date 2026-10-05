@@ -646,16 +646,18 @@ export const quotationRouter = createRouter({
 
       const items = await db.select().from(quotationItems).where(eq(quotationItems.quotationId, quotationId)).orderBy(quotationItems.sortOrder);
 
+      // deliveryDate се остава празно — рокот на важност на понудата не е датум на испорака
       const orderResult = await db.insert(orders).values({
         orderNumber,
         customerId: q[0].customerId,
+        quoteId: quotationId,
         status: "confirmed",
         priority: "normal",
         totalAmount: q[0].totalAmount,
         costAmount: q[0].costAmount,
         marginAmount: q[0].marginAmount,
         marginPercent: q[0].marginPercent,
-        deliveryDate: q[0].validUntil,
+        deliveryDate: null,
         notes: q[0].notes ? `Конвертирано од понуда ${q[0].quoteNumber}. ${q[0].notes}` : `Конвертирано од понуда ${q[0].quoteNumber}`,
       } as any);
       const orderId = Number(orderResult[0].insertId);
@@ -664,7 +666,7 @@ export const quotationRouter = createRouter({
         await db.insert(orderItems).values(items.map((i: any) => ({
           orderId,
           description: i.description,
-          quantity: Number(i.quantity),
+          quantity: String(i.quantity),
           unitPrice: i.unitPrice,
           totalPrice: i.totalPrice,
           costPrice: i.totalCost,

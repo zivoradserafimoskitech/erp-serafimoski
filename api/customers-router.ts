@@ -176,7 +176,7 @@ export const customersRouter = createRouter({
           z.object({
             description: z.string().min(1),
             drawingNumber: z.string().optional(),
-            quantity: z.number().min(1),
+            quantity: z.number().positive(),
             unitPrice: z.string(),
             totalPrice: z.string(),
             material: z.string().optional(),
@@ -259,7 +259,7 @@ export const customersRouter = createRouter({
         orderId: z.number(),
         description: z.string().min(1),
         drawingNumber: z.string().optional(),
-        quantity: z.number().min(1),
+        quantity: z.number().positive(),
         unitPrice: z.string(),
         totalPrice: z.string(),
         material: z.string().optional(),

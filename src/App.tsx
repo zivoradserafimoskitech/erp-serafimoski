@@ -10,7 +10,6 @@ import Quotations from "@/pages/Quotations";
 import Receipts from "@/pages/Receipts";
 import SettingsPage from "@/pages/Settings";
 import CatalogPage from "@/pages/Catalog";
-import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 import RemnantScan from "@/pages/RemnantScan";
 import WorkOrderScan from "@/pages/WorkOrderScan";
@@ -28,7 +27,6 @@ import PriceLists from "@/pages/PriceLists";
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
       {/* Скенирање на етикета — без Layout, за телефон */}
       <Route path="/o/:code" element={<RemnantScan />} />
       <Route path="/n/:id" element={<WorkOrderScan />} />
