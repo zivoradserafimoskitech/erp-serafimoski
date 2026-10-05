@@ -687,6 +687,9 @@ export const quotationRouter = createRouter({
       const res = await reserveOrderItems(orderId, { strict: false });
 
       await db.update(quotations).set({ status: "converted", convertedOrderId: orderId }).where(eq(quotations.id, quotationId));
+      // CRM: поврзаната зделка станува „Добиена“
+      await kvq(`UPDATE crm_opportunities SET stage = 'won', probability = 100, closed_at = COALESCE(closed_at, now()), updated_at = now()
+        WHERE (quotation_id = $1 OR id = (SELECT opportunity_id FROM quotations WHERE id = $1)) AND stage <> 'won'`, [quotationId]).catch(() => {});
       await logAudit({ action: "CONVERT", entityType: "quotation", entityId: quotationId, description: `Конвертирана понуда ${q[0].quoteNumber} во нарачка ${orderNumber}` });
       return { success: true, orderId, warnings: res.warnings };
     }),

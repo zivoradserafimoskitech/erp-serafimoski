@@ -10,8 +10,8 @@ import ThemeToggle from "@/components/ThemeToggle";
 import {
   LayoutDashboard, Warehouse, Factory, Users, ShoppingCart, LogOut, Menu, X,
   ShieldCheck, Calculator, FileText, ClipboardCheck, Settings, BookOpen,
-  Building2, Landmark, Search, Workflow, Contact, Target, BarChart3, Truck,
-  ShoppingBag, Tags,
+  Building2, Landmark, Search, Workflow, Contact, BarChart3, Truck,
+  ShoppingBag, Tags, Handshake, CalendarCheck,
 } from "lucide-react";
 
 type NavItem = { path: string; label: string; icon: typeof LayoutDashboard };
@@ -25,11 +25,20 @@ const navGroups: NavGroup[] = [
     items: [{ path: "/", label: "Контролна табла", icon: LayoutDashboard }],
   },
   {
+    id: "crm",
+    label: "CRM",
+    items: [
+      { path: "/crm", label: "Зделки", icon: Handshake },
+      { path: "/crm/firmi", label: "Фирми", icon: Building2 },
+      { path: "/crm/kontakti", label: "Контакти", icon: Contact },
+      { path: "/crm/aktivnosti", label: "Активности", icon: CalendarCheck },
+    ],
+  },
+  {
     id: "sales",
     label: "Продажба",
     items: [
       { path: "/prodazba", label: "Продажба (hub)", icon: ShoppingBag },
-      { path: "/crm", label: "Можности (CRM)", icon: Target },
       { path: "/ponudi", label: "Понуди", icon: FileText },
       { path: "/cenovnici", label: "Ценовници", icon: Tags },
       { path: "/klienti", label: "Клиенти и нарачки", icon: Users },
@@ -183,7 +192,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Menu className="h-6 w-6" />
           </button>
           <h1 className="text-lg font-semibold text-foreground truncate">
-            {flatNav.find((n) => n.path === location.pathname)?.label || "ERP Систем"}
+            {flatNav.find((n) => n.path === location.pathname)?.label
+              || [...flatNav].filter((n) => n.path !== "/" && location.pathname.startsWith(n.path + "/")).sort((a, b) => b.path.length - a.path.length)[0]?.label
+              || "ERP Систем"}
           </h1>
           <button
             onClick={() => setSearchOpen(true)}

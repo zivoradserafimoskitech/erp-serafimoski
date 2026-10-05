@@ -3,6 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import PageHeader from "@/components/layout/PageHeader";
+import MyTasksWidget from "@/components/crm/MyTasksWidget";
 import {
   Target, FileText, Users, Workflow, Truck, Calculator, Tags, BarChart3,
   ShoppingBag, ExternalLink, Info,
@@ -10,6 +11,7 @@ import {
 
 const fmt = (n: number) => n.toLocaleString("mk-MK", { maximumFractionDigits: 0 });
 const today = () => new Date().toISOString().slice(0, 10);
+const STAGE_MK: Record<string, string> = { new: "Ново барање", contacted: "Во контакт", quoting: "Се прави понуда", quoted: "Понуда пратена" };
 
 /** Центар за продажба: брзи акции + преглед + линкови кон тек/извештаи. */
 export default function SalesHub() {
@@ -20,7 +22,9 @@ export default function SalesHub() {
   const weighted = (stats?.pipeline ?? []).reduce((s, p) => s + p.weighted, 0);
 
   const tiles = [
-    { to: "/crm", title: "Можности (CRM)", desc: "Барања, задачи, win-rate", icon: Target, color: "text-sky-700 bg-sky-50" },
+    { to: "/crm", title: "Зделки", desc: "Pipeline, drag & drop, следен чекор", icon: Target, color: "text-sky-700 bg-sky-50" },
+    { to: "/crm/firmi", title: "Фирми", desc: "360° преглед на купувач", icon: Users, color: "text-cyan-700 bg-cyan-50" },
+    { to: "/crm/aktivnosti", title: "Активности", desc: "Мои задачи / денес", icon: Workflow, color: "text-lime-700 bg-lime-50" },
     { to: "/ponudi", title: "Понуди", desc: "Креирај / испрати / конвертирај", icon: FileText, color: "text-violet-700 bg-violet-50" },
     { to: "/klienti", title: "Клиенти и нарачки", desc: "SO и контакти", icon: Users, color: "text-teal-700 bg-teal-50" },
     { to: "/tek", title: "Тек на нарачки", desc: "Понуда → наплата (DealFlow)", icon: Workflow, color: "text-amber-700 bg-amber-50" },
@@ -35,11 +39,11 @@ export default function SalesHub() {
     <div className="space-y-6">
       <PageHeader
         title="Продажба"
-        description="Работно место за комерцијала — од можност до наплата. DealFlow е во „Тек на нарачки“."
+        description="Работно место за комерцијала — од зделка до наплата. DealFlow е во „Тек на нарачки“."
         icon={<ShoppingBag className="h-6 w-6 text-amber-600" />}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button asChild className="bg-amber-500 hover:bg-amber-600"><Link to="/crm">Нова можност</Link></Button>
+            <Button asChild className="bg-amber-500 hover:bg-amber-600"><Link to="/crm?new=1">Нова зделка</Link></Button>
             <Button asChild variant="outline"><Link to="/ponudi">Нова понуда</Link></Button>
             <Button asChild variant="outline"><Link to="/tek">Отвори тек →</Link></Button>
           </div>
@@ -51,6 +55,17 @@ export default function SalesHub() {
         <Card><CardContent className="p-4"><p className="text-[11px] uppercase text-gray-400 font-semibold">Добиени понуди</p><p className="text-2xl font-bold text-emerald-700">{stats?.quotes.won ?? 0}<span className="text-sm text-gray-400"> / {stats?.quotes.total ?? 0}</span></p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-[11px] uppercase text-gray-400 font-semibold">Win-rate</p><p className="text-2xl font-bold">{stats?.quotes.winRate == null ? "—" : `${Math.round(stats.quotes.winRate * 100)}%`}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-[11px] uppercase text-gray-400 font-semibold">Нарачки во тек</p><p className="text-2xl font-bold">{openDeals}</p></CardContent></Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <MyTasksWidget />
+        <Card><CardContent className="p-4 space-y-2 text-sm">
+          <p className="font-semibold">Pipeline по фаза</p>
+          {(stats?.pipeline ?? []).length === 0 ? <p className="text-xs text-gray-500">Нема отворени зделки.</p> : (stats?.pipeline ?? []).map((p) => (
+            <div key={p.stage} className="flex justify-between border-t pt-1"><span>{STAGE_MK[p.stage] ?? p.stage} ({p.count})</span><span className="tabular-nums">{fmt(p.value)} ден</span></div>
+          ))}
+          <Link to="/izvestai?view=crm&r=crm-report" className="text-xs text-primary hover:underline">CRM извештаи →</Link>
+        </CardContent></Card>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">

@@ -463,6 +463,9 @@ export const customers = pgTable("customers", {
   discountPct: decimal("discount_pct", { precision: 5, scale: 2 }), // општ попуст за купувачот
   creditLimit: decimal("credit_limit", { precision: 16, scale: 2 }), // кредитен лимит (предупредување)
   paymentDays: integer("payment_days"), // рок на плаќање
+  tags: text("tags"), // ознаки, одделени со запирка
+  owner: varchar("owner", { length: 160 }), // одговорен продавач
+  website: varchar("website", { length: 255 }),
 });
 
 export type Customer = typeof customers.$inferSelect;
@@ -778,6 +781,7 @@ export const quotations = pgTable("quotations", {
   paymentSchedule: text("payment_schedule"), // JSON: [{ percent, when, days? }] — види contracts/payment-terms.ts
   notes: text("notes"),
   convertedOrderId: bigint("converted_order_id", { mode: "number" }),
+  opportunityId: integer("opportunity_id"),
   salesperson: varchar("salesperson", { length: 160 }),
   createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1144,6 +1148,10 @@ export const crmOpportunities = pgTable("crm_opportunities", {
   quotationId: integer("quotation_id"),
   owner: varchar("owner", { length: 160 }),
   notes: text("notes"),
+  products: text("products"),
+  contactId: integer("contact_id"),
+  closedAt: timestamp("closed_at"),
+  lostNote: text("lost_note"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1162,9 +1170,53 @@ export const crmActivities = pgTable("crm_activities", {
   doneAt: timestamp("done_at"),
   createdBy: varchar("created_by", { length: 160 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  contactId: integer("contact_id"),
+  assignee: varchar("assignee", { length: 160 }),
+  autoKey: varchar("auto_key", { length: 160 }),
 });
 
 export type CrmActivity = typeof crmActivities.$inferSelect;
+
+export const crmContacts = pgTable("crm_contacts", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  position: varchar("position", { length: 160 }),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 60 }),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const crmEmailLog = pgTable("crm_email_log", {
+  id: serial("id").primaryKey(),
+  direction: varchar("direction", { length: 10 }).notNull().default("out"),
+  customerId: integer("customer_id"),
+  contactId: integer("contact_id"),
+  opportunityId: integer("opportunity_id"),
+  quotationId: integer("quotation_id"),
+  toAddr: text("to_addr").notNull(),
+  ccAddr: text("cc_addr"),
+  subject: varchar("subject", { length: 300 }).notNull(),
+  body: text("body"),
+  attachment: varchar("attachment", { length: 160 }),
+  messageId: varchar("message_id", { length: 255 }),
+  sentBy: varchar("sent_by", { length: 160 }),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+});
+
+export const crmNotifications = pgTable("crm_notifications", {
+  id: serial("id").primaryKey(),
+  recipient: varchar("recipient", { length: 160 }),
+  kind: varchar("kind", { length: 40 }).notNull(),
+  title: varchar("title", { length: 300 }).notNull(),
+  link: varchar("link", { length: 300 }),
+  dedupeKey: varchar("dedupe_key", { length: 160 }),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 export const crmFiles = pgTable("crm_files", {
   id: serial("id").primaryKey(),
