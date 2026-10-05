@@ -20,7 +20,7 @@ export default function SalesHub() {
   const weighted = (stats?.pipeline ?? []).reduce((s, p) => s + p.weighted, 0);
 
   const tiles = [
-    { to: "/crm", title: "Можности (CRM)", desc: "Барања, задачи, win-rate", icon: Target, color: "text-sky-700 bg-sky-50" },
+    { to: "/crm", title: "Потенцијални продажби", desc: "Барања пред понуда, задачи, win-rate", icon: Target, color: "text-sky-700 bg-sky-50" },
     { to: "/ponudi", title: "Понуди", desc: "Креирај / испрати / конвертирај", icon: FileText, color: "text-violet-700 bg-violet-50" },
     { to: "/klienti", title: "Клиенти и нарачки", desc: "SO и контакти", icon: Users, color: "text-teal-700 bg-teal-50" },
     { to: "/tek", title: "Тек на нарачки", desc: "Понуда → наплата (DealFlow)", icon: Workflow, color: "text-amber-700 bg-amber-50" },
@@ -35,11 +35,11 @@ export default function SalesHub() {
     <div className="space-y-6">
       <PageHeader
         title="Продажба"
-        description="Работно место за комерцијала — од можност до наплата. DealFlow е во „Тек на нарачки“."
+        description="Работно место за комерцијала — од потенцијална продажба до наплата. DealFlow е во „Тек на нарачки“."
         icon={<ShoppingBag className="h-6 w-6 text-amber-600" />}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button asChild className="bg-amber-500 hover:bg-amber-600"><Link to="/crm">Нова можност</Link></Button>
+            <Button asChild className="bg-amber-500 hover:bg-amber-600"><Link to="/crm">Нова потенцијална продажба</Link></Button>
             <Button asChild variant="outline"><Link to="/ponudi">Нова понуда</Link></Button>
             <Button asChild variant="outline"><Link to="/tek">Отвори тек →</Link></Button>
           </div>
