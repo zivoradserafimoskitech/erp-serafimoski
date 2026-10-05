@@ -24,9 +24,10 @@ import { formatDate } from "@/lib/utils";
 import AccountantPackActions from "@/components/AccountantPackActions";
 import { DnCertificates } from "@/components/DnCertificates";
 import InvoiceItemForm from "./accounting/InvoiceItemForm";
+import SalesReturnsTab from "@/pages/accounting/SalesReturnsTab";
 import UJPEFakturaTab from "./accounting/UJPEFakturaTab";
 import EmailInvoicesTab from "./accounting/EmailInvoicesTab";
-import { Search, Plus, Trash2, Eye, FileText, Download, FileUp, Truck, ArrowUpRight, ArrowDownLeft, Calculator, Upload, Building2, ShieldCheck, Undo2, BarChart3 } from "lucide-react";
+import { Search, Plus, Trash2, Eye, FileText, Download, FileUp, Truck, ArrowUpRight, ArrowDownLeft, Calculator, Upload, Building2, ShieldCheck, Undo2, BarChart3, RotateCcw } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
 const invStatus: Record<string, { label: string; cls: string }> = {
@@ -163,9 +164,12 @@ export default function Accounting(props: { embedTab?: string } = {}) {
   }>>([]);
   const [incItemForm, setIncItemForm] = useState({ description: "", quantity: "1", unit: "кг", unitPrice: "", vatRate: "18" });
   const [recForm, setRecForm] = useState({ receiptNumber: "", supplierId: "", receiptDate: "", totalAmount: "0", notes: "" });
-  const [dnForm, setDnForm] = useState({ dnNumber: "", customerId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" });
+  const [dnForm, setDnForm] = useState({ dnNumber: "", customerId: "", orderId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" });
+  const { data: openOrders } = trpc.customers.orderList.useQuery(undefined, { enabled: tab === "delivery" || dnDialog });
+  const orderIdNum = dnForm.orderId ? parseInt(dnForm.orderId) : 0;
+  const { data: openOrderDetail } = trpc.customers.orderOpenItems.useQuery({ orderId: orderIdNum }, { enabled: !!orderIdNum && dnDialog });
   const [certDn, setCertDn] = useState<any>(null);
-  const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string; productId?: number; materialId?: number; weightPerUnit?: number; itemType?: "product" | "material" | "manual" }[]>([]);
+  const [dnItems, setDnItems] = useState<{ description: string; quantity: string; unit: string; productId?: number; materialId?: number; orderItemId?: number; weightPerUnit?: number; itemType?: "product" | "material" | "manual" }[]>([]);
   const { data: materialsData } = trpc.storage.materialList.useQuery({});
   const [reportPeriod, setReportPeriod] = useState(() => periodPreset("month"));
 
@@ -239,7 +243,17 @@ export default function Accounting(props: { embedTab?: string } = {}) {
     onSuccess: () => { utils.accounting.receiptList.invalidate(); setRecDialog(false); setRecForm({ receiptNumber: "", supplierId: "", receiptDate: "", totalAmount: "0", notes: "" }); },
   });
   const createDN = trpc.accounting.deliveryNoteCreate.useMutation({
-    onSuccess: () => { utils.accounting.deliveryNoteList.invalidate(); utils.accounting.finishedGoodsList.invalidate(); setDnDialog(false); setDnForm({ dnNumber: "", customerId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" }); setDnItems([]); },
+    onSuccess: (r: any) => {
+      utils.accounting.deliveryNoteList.invalidate();
+      utils.accounting.finishedGoodsList.invalidate();
+      utils.customers.orderList.invalidate();
+      setDnDialog(false);
+      setDnForm({ dnNumber: "", customerId: "", orderId: "", issueDate: "", deliveryDate: "", totalItems: 0, notes: "" });
+      setDnItems([]);
+      if (r?.backorders?.length) {
+        toast.message(`Backorder: ${r.backorders.map((b: any) => `${b.description} (${b.remaining})`).join(", ")}`);
+      }
+    },
   });
 
   // PDF upload ref
@@ -319,6 +333,22 @@ export default function Accounting(props: { embedTab?: string } = {}) {
       setDnForm(prev => ({ ...prev, dnNumber: nextDeliveryNoteNum }));
     }
   }, [dnDialog, nextDeliveryNoteNum]);
+
+  // Делумна испорака: пополнни ставки од остатокот на нарачката
+  useEffect(() => {
+    if (!openOrderDetail?.backorderItems?.length || !dnDialog) return;
+    setDnItems(openOrderDetail.backorderItems.map((it: any) => ({
+      description: it.description,
+      quantity: String(it.remaining),
+      unit: "ком",
+      productId: it.productId ?? undefined,
+      orderItemId: it.id,
+      itemType: it.productId ? "product" as const : "manual" as const,
+      weightPerUnit: 0,
+    })));
+    if (openOrderDetail.customerId) setDnForm((f) => ({ ...f, customerId: String(openOrderDetail.customerId) }));
+  }, [openOrderDetail?.orderId, dnDialog]);
+
 
   return (
     <div className="space-y-6">
@@ -608,10 +638,25 @@ export default function Accounting(props: { embedTab?: string } = {}) {
               <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нов испратник</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нов испратник</DialogTitle></DialogHeader>
-                <form onSubmit={(e) => { e.preventDefault(); createDN.mutate({ ...dnForm, customerId: parseInt(dnForm.customerId), issueDate: dnForm.issueDate, deliveryDate: dnForm.deliveryDate || undefined, items: dnItems.map(it => ({ description: it.description, quantity: it.quantity, unit: it.unit, productId: it.productId, materialId: it.materialId, itemType: it.itemType, weightKg: ((it.weightPerUnit ?? 0) * (Number(it.quantity) || 0)).toFixed(3) })) } as any); }} className="space-y-3">
+                <form onSubmit={(e) => { e.preventDefault(); createDN.mutate({ ...dnForm, customerId: parseInt(dnForm.customerId), orderId: dnForm.orderId ? parseInt(dnForm.orderId) : undefined, issueDate: dnForm.issueDate, deliveryDate: dnForm.deliveryDate || undefined, items: dnItems.map(it => ({ description: it.description, quantity: it.quantity, unit: it.unit, productId: it.productId, materialId: it.materialId, orderItemId: (it as any).orderItemId, itemType: it.itemType, weightKg: ((it.weightPerUnit ?? 0) * (Number(it.quantity) || 0)).toFixed(3) })) } as any); }} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Број *</Label><Input value={dnForm.dnNumber} onChange={(e) => setDnForm({ ...dnForm, dnNumber: e.target.value })} required /></div>
                     <div className="space-y-2"><Label>Клиент *</Label><Select value={dnForm.customerId} onValueChange={(v) => setDnForm({ ...dnForm, customerId: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{customers?.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Нарачка (делумна испорака / backorder)</Label>
+                    <Select value={dnForm.orderId || "__none"} onValueChange={(v) => setDnForm({ ...dnForm, orderId: v === "__none" ? "" : v })}>
+                      <SelectTrigger><SelectValue placeholder="Опционално — пополни остаток" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">— без нарачка —</SelectItem>
+                        {(openOrders ?? []).filter((o: any) => o.status !== "cancelled" && o.status !== "delivered").map((o: any) => (
+                          <SelectItem key={o.id} value={String(o.id)}>{o.orderNumber} · {o.status}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {openOrderDetail?.backorderItems?.length ? (
+                      <p className="text-xs text-muted-foreground">Остаток за испорака: {openOrderDetail.backorderItems.length} ставки. Намали количина за делумна DN; непреченото останува backorder.</p>
+                    ) : null}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Датум на издавање *</Label><DateInput value={dnForm.issueDate} onChange={(e) => setDnForm({ ...dnForm, issueDate: e.target.value })} required /></div>
@@ -797,6 +842,7 @@ export default function Accounting(props: { embedTab?: string } = {}) {
           { key: "outgoing", label: "Излезни фактури", icon: ArrowUpRight },
           { key: "incoming", label: "Влезни фактури", icon: ArrowDownLeft },
           { key: "delivery", label: "Испратници", icon: Truck },
+          { key: "returns", label: "Поврати", icon: RotateCcw },
           { key: "einvoice", label: "УЈП е-фактури", icon: FileText },
           { key: "parsed", label: "Влезни од PDF", icon: FileUp },
           { key: "email", label: "Влезни од е-пошта", icon: Upload },
@@ -953,6 +999,7 @@ export default function Accounting(props: { embedTab?: string } = {}) {
         </CardContent></Card>
       )}
 
+      {tab === "returns" && <SalesReturnsTab />}
       {tab === "einvoice" && <UJPEFakturaTab />}
 
       {/* ===== EMAIL INVOICES ===== */}

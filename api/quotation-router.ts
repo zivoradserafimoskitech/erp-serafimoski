@@ -658,6 +658,7 @@ export const quotationRouter = createRouter({
         marginAmount: q[0].marginAmount,
         marginPercent: q[0].marginPercent,
         deliveryDate: null,
+        salesperson: (q[0] as any).salesperson ?? null,
         notes: q[0].notes ? `Конвертирано од понуда ${q[0].quoteNumber}. ${q[0].notes}` : `Конвертирано од понуда ${q[0].quoteNumber}`,
       } as any);
       const orderId = Number(orderResult[0].insertId);
@@ -672,15 +673,21 @@ export const quotationRouter = createRouter({
           costPrice: i.totalCost,
           marginAmount: (parseFloat(i.totalPrice) - parseFloat(i.totalCost)).toFixed(2),
           material: i.itemType === "material" ? i.description : null,
-          productId: i.referenceId,
+          productId: i.itemType === "product" ? i.referenceId : null,
           weightPerUnit: i.weightPerUnit ?? "0",
           weightKg: i.weightKg ?? "0",
+          reservedQty: "0",
+          deliveredQty: "0",
           notes: i.notes,
         })));
       }
 
+      const { reserveOrderItems } = await import("./fg-stock-helper");
+      // Не-strict: дозволи backorder ако нема доволно FG при конверзија
+      const res = await reserveOrderItems(orderId, { strict: false });
+
       await db.update(quotations).set({ status: "converted", convertedOrderId: orderId }).where(eq(quotations.id, quotationId));
       await logAudit({ action: "CONVERT", entityType: "quotation", entityId: quotationId, description: `Конвертирана понуда ${q[0].quoteNumber} во нарачка ${orderNumber}` });
-      return { success: true, orderId };
+      return { success: true, orderId, warnings: res.warnings };
     }),
 });

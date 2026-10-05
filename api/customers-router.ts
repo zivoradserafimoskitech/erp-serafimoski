@@ -172,6 +172,7 @@ export const customersRouter = createRouter({
         priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
         deliveryDate: z.string().optional(),
         notes: z.string().optional(),
+        salesperson: z.string().max(160).optional(),
         items: z.array(
           z.object({
             description: z.string().min(1),
@@ -182,6 +183,7 @@ export const customersRouter = createRouter({
             material: z.string().optional(),
             dimensions: z.string().optional(),
             notes: z.string().optional(),
+            productId: z.number().optional(),
           })
         ).optional(),
       })
@@ -202,25 +204,36 @@ export const customersRouter = createRouter({
       const insertId = Number(result[0].insertId);
 
       if (items && items.length > 0) {
-        const reserve = input.status === "confirmed" || input.status === "pending";
         await db.insert(orderItems).values(
           items.map((item) => ({
-            ...item,
+            description: item.description,
+            drawingNumber: item.drawingNumber,
+            quantity: String(item.quantity),
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            material: item.material,
+            dimensions: item.dimensions,
+            notes: item.notes,
+            productId: item.productId ?? null,
             orderId: insertId,
-            reservedQty: reserve ? String(item.quantity) : "0",
+            reservedQty: "0",
             deliveredQty: "0",
           }))
         );
 
-        // Update total amount
         const total = items.reduce((sum, i) => sum + parseFloat(i.totalPrice), 0);
-        await db
-          .update(orders)
-          .set({ totalAmount: total.toFixed(2) })
-          .where(eq(orders.id, insertId));
+        await db.update(orders).set({ totalAmount: total.toFixed(2) }).where(eq(orders.id, insertId));
       }
 
-      return { success: true, id: insertId };
+      const { reserveOrderItems } = await import("./fg-stock-helper");
+      const strict = input.status === "confirmed";
+      const res = await reserveOrderItems(insertId, { strict }).catch(async (e) => {
+        // rollback soft: cancel order if strict reserve fails
+        await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, insertId));
+        throw e;
+      });
+
+      return { success: true, id: insertId, warnings: res.warnings };
     }),
 
   orderUpdate: publicQuery
@@ -231,6 +244,7 @@ export const customersRouter = createRouter({
         priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
         deliveryDate: z.string().optional(),
         notes: z.string().optional(),
+        salesperson: z.string().max(160).optional().nullable(),
       })
     )
     .mutation(async ({ input }) => {
@@ -241,7 +255,44 @@ export const customersRouter = createRouter({
         updateData.deliveryDate = new Date(data.deliveryDate);
       }
       await db.update(orders).set(updateData).where(eq(orders.id, id));
+      const { reserveOrderItems, releaseOrderReservations } = await import("./fg-stock-helper");
+      if (input.status === "cancelled") await releaseOrderReservations(id);
+      else if (input.status === "confirmed" || input.status === "pending" || input.status === "in_production") {
+        await reserveOrderItems(id, { strict: input.status === "confirmed" });
+      }
       return { success: true };
+    }),
+
+  /** Ставки од нарачка со остаток за испорака (делумна DN / backorder). */
+  orderOpenItems: publicQuery
+    .input(z.object({ orderId: z.number() }))
+    .query(async ({ input }) => {
+      const { getPool } = await import("./queries/connection");
+      const { remainingToDeliver, availableFgQty } = await import("./fg-stock-helper");
+      const o = (await getPool().query(`SELECT id, order_number, customer_id, status, salesperson FROM orders WHERE id = $1`, [input.orderId])).rows[0];
+      if (!o) throw new Error("Нарачката не постои");
+      const items = (await getPool().query(
+        `SELECT id, description, quantity, unit_price, total_price, product_id,
+                COALESCE(delivered_qty,0) AS delivered_qty, COALESCE(reserved_qty,0) AS reserved_qty
+         FROM order_items WHERE order_id = $1 ORDER BY id`, [input.orderId])).rows;
+      const out = [];
+      for (const it of items) {
+        const ordered = Number(it.quantity);
+        const delivered = Number(it.delivered_qty);
+        const remaining = remainingToDeliver(ordered, delivered);
+        let available: number | null = null;
+        if (it.product_id) available = await availableFgQty(Number(it.product_id), input.orderId);
+        out.push({
+          id: it.id, description: it.description, quantity: ordered, deliveredQty: delivered, remaining,
+          reservedQty: Number(it.reserved_qty), unitPrice: it.unit_price, totalPrice: it.total_price,
+          productId: it.product_id ? Number(it.product_id) : null, available,
+        });
+      }
+      return {
+        orderId: o.id, orderNumber: o.order_number, customerId: o.customer_id, status: o.status,
+        salesperson: o.salesperson, items: out,
+        backorderItems: out.filter((i) => i.remaining > 0.0005),
+      };
     }),
 
   orderDelete: publicQuery

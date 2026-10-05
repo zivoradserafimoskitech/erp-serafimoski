@@ -24,9 +24,9 @@ export default function DeliveryNotes() {
       <PageHeader
         title="Испратници"
         description="Испорака кон клиенти — создавање, печат и атести. Фактурите се во"
-        icon={<Truck className="h-6 w-6 text-amber-600" />}
+        icon={<Truck className="h-6 w-6 text-primary" />}
         actions={
-          <Link to="/smetkovodstvo" className="text-sm text-amber-700 hover:underline">
+          <Link to="/smetkovodstvo" className="text-sm text-primary hover:underline">
             Фактури →
           </Link>
         }
