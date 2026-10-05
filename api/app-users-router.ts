@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { appUsers } from "@db/schema";
-import { clearActorCache, gateActive } from "./context";
+import { clearActorCache, gateActive, needsSetup } from "./context";
 import { logAudit } from "./audit-helper";
 import { ensureAuthReady, hashCode, hintOf, revokeUserSessions, sessionCounts } from "./auth";
 import { randomInt } from "crypto";
@@ -83,7 +83,7 @@ export const appUsersRouter = createRouter({
     .mutation(async ({ input }) => {
       await ensureAuthReady();
       const db = getDb();
-      const gateBefore = await gateActive();
+      const setupBefore = await needsSetup();
       const existing = await db.select().from(appUsers).where(eq(appUsers.passcode, hashCode(input.passcode)));
       if (existing.length > 0) throw new Error("Овој код веќе го користи друг корисник");
       const res = await db.insert(appUsers).values({
@@ -99,8 +99,8 @@ export const appUsersRouter = createRouter({
         action: "CREATE", entityType: "app_user", entityId: res[0]?.id,
         description: `Нов корисник ${input.name} (${input.role})`,
       }).catch(() => {});
-      // првиот администратор со код ја затвора апликацијата — интерфејсот го најавува креаторот со тој код
-      return { success: true, id: res[0]?.id, gateActivated: !gateBefore && (await gateActive()) };
+      // првиот администратор го завршува setup режимот
+      return { success: true, id: res[0]?.id, gateActivated: setupBefore && !(await needsSetup()) };
     }),
 
   appUsersUpdate: publicQuery
@@ -118,7 +118,7 @@ export const appUsersRouter = createRouter({
       await ensureAuthReady();
       const db = getDb();
       const { id, ...rest } = input;
-      const gateBefore = await gateActive();
+      const setupBefore = await needsSetup();
 
       if (rest.passcode) {
         const clash = await db.select().from(appUsers).where(eq(appUsers.passcode, hashCode(rest.passcode)));
@@ -147,7 +147,7 @@ export const appUsersRouter = createRouter({
       if (rest.isActive === "inactive") await revokeUserSessions(id);
       else if (rest.passcode) await revokeUserSessions(id, ctx.req.headers.get("x-app-key"));
       clearActorCache();
-      return { success: true, gateActivated: !gateBefore && (await gateActive()) };
+      return { success: true, gateActivated: setupBefore && !(await needsSetup()) };
     }),
 
   appUsersDelete: publicQuery

@@ -27,8 +27,16 @@ const clientIp = (c: any) => (c.req.header("x-forwarded-for")?.split(",")[0]?.tr
 
 // Најава: кодот се проверува еднаш и се заменува со сесија со рок (прелистувачот го чува токенот, не кодот)
 app.post("/api/auth-check", async (c) => {
-  const { gateActive, resolveActor } = await import("./context");
+  const { gateActive, needsSetup, resolveActor } = await import("./context");
   if (!(await gateActive())) return c.json({ ok: true, gate: false, name: "Отворен пристап", role: "admin" });
+  if (await needsSetup()) {
+    return c.json({
+      ok: false,
+      gate: true,
+      needsSetup: true,
+      message: "Системот е затворен. Создај прв администратор или постави APP_PASSWORD во опкружувањето.",
+    });
+  }
   const auth = await import("./auth");
   const body = await c.req.json().catch(() => ({}));
   const provided = String(body?.password ?? c.req.header("x-app-key") ?? "");
@@ -46,6 +54,34 @@ app.post("/api/auth-check", async (c) => {
   auth.loginOk(ip);
   const token = await auth.createSession(actor, { ip, userAgent: c.req.header("user-agent") });
   return c.json({ ok: true, gate: true, name: actor.name, role: actor.role, token });
+});
+
+/** Првичен setup: создај прв администратор кога нема APP_PASSWORD ниту админ. */
+app.post("/api/setup-admin", async (c) => {
+  const { needsSetup, clearActorCache } = await import("./context");
+  if (!(await needsSetup())) {
+    return c.json({ ok: false, message: "Setup веќе е завршен — најави се нормално." }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const name = String(body?.name ?? "").trim();
+  const passcode = String(body?.passcode ?? "");
+  if (name.length < 2) return c.json({ ok: false, message: "Името е премногу кратко" }, 400);
+  if (passcode.length < 4 || passcode.includes("$") || passcode.startsWith("st_")) {
+    return c.json({ ok: false, message: "Невалиден код (мин. 4 знаци, без $ / st_)" }, 400);
+  }
+  const { appRouter } = await import("./router");
+  try {
+    const caller = appRouter.createCaller({
+      req: c.req.raw,
+      resHeaders: c.res.headers,
+      actor: undefined,
+    } as any);
+    const r = await caller.appUsers.appUsersCreate({ name, passcode, role: "admin" });
+    clearActorCache();
+    return c.json({ ok: true, id: r.id, gateActivated: r.gateActivated });
+  } catch (e: any) {
+    return c.json({ ok: false, message: e?.message ?? "Неуспешно создавање" }, 400);
+  }
 });
 app.post("/api/logout", async (c) => {
   const key = c.req.header("x-app-key") ?? "";
