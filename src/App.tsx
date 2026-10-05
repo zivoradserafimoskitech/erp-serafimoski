@@ -20,6 +20,7 @@ import Employees from "@/pages/Employees";
 import DealPipeline from "@/pages/DealPipeline";
 import Crm from "@/pages/Crm";
 import Reports from "@/pages/Reports";
+import DeliveryNotes from "@/pages/DeliveryNotes";
 import Portal from "@/pages/Portal";
 import SalesHub from "@/pages/SalesHub";
 import PriceLists from "@/pages/PriceLists";
@@ -81,6 +82,14 @@ export default function App() {
         element={
           <Layout>
             <Accounting />
+          </Layout>
+        }
+      />
+      <Route
+        path="/ispratnici"
+        element={
+          <Layout>
+            <DeliveryNotes />
           </Layout>
         }
       />

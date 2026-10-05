@@ -1,83 +1,84 @@
-# React + TypeScript + Vite
+# ERP Серафимоски Тек
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+ERP систем за метална фабрикација: склад, производство, понуди/нарачки, фактури, финансии (ДДВ), CRM, набавка, квалитет, HR и клиентски портал.
 
-Currently, two official plugins are available:
+**Стек:** React 19 + TypeScript + Vite 7 + Tailwind · Hono + tRPC 11 · PostgreSQL (Drizzle) · Vitest
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Барања
 
-## React Compiler
+- Node.js ≥ 20
+- PostgreSQL ≥ 14
+- `npm` (lockfile е вклучен)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-# Render deploy Thu Jul 16 03:13:18 CST 2026
-
-## Тестови
+## Брз старт (локално)
 
 ```bash
-npm test                      # единечни тестови (книжење, курсеви, плати, распоред, дозволи)
-TEST_DATABASE_URL=postgres://user:pass@localhost:5432/erp_test npm test   # + интеграциски тест на цел тек
+# 1) Клонирај и инсталирај
+git clone https://github.com/zivoradserafimoskitech/erp-serafimoski.git
+cd erp-serafimoski
+npm install
+
+# 2) Опкружување
+cp .env.example .env
+# Уреди DATABASE_URL=postgres://user:pass@localhost:5432/serafimoski
+
+# 3) API сервер (автоматски ги применува IF NOT EXISTS миграциите при старт)
+npm run dev
+# → http://127.0.0.1:3000  (служи API; frontend по build во dist/public)
+
+# 4) Frontend со HMR (втор терминал) — проксира /api кон :3000
+npm run build          # еднаш, за лого/статички фајлови ако треба
+npm run dev:client     # → http://127.0.0.1:5173
 ```
 
-Интеграцискиот тест **ја брише и ја создава одново** базата во `TEST_DATABASE_URL` — користи посебна празна база, никогаш продукциска.
+### Автентикација
+
+По подразбирање системот е **затворен** (fail-safe).
+
+| Режим | Како |
+|--------|------|
+| Продукција | Постави `APP_PASSWORD` **или** создај администратор при прв старт (setup екран) |
+| Локално отворено | `DISABLE_USER_GATE=true` во `.env` (**никогаш** на продукција) |
+
+## Скрипти
+
+| Команда | Опис |
+|---------|------|
+| `npm run dev` | API + сервер (`tsx watch api/railway.ts`) |
+| `npm run dev:client` | Vite frontend со HMR (прокси `/api` → `:3000`) |
+| `npm run build` | Typecheck + Vite build + bundle на серверот → `dist/` |
+| `npm start` | Продукциски сервер: `node dist/server.cjs` |
+| `npm run typecheck` / `npm run lint` | TypeScript проверка |
+| `npm test` | Vitest (unit); интеграциски само со `TEST_DATABASE_URL` |
+
+```bash
+# Интеграциски тест — користи ПОСЕБНА празна база (брише schema!)
+TEST_DATABASE_URL=postgres://user:pass@localhost:5432/erp_test npm test
+```
+
+## Структура
+
+```
+api/           tRPC рутери, auth, bootstrap на шема
+contracts/     споделена бизнис-логика (улоги, ДДВ, …)
+db/            Drizzle schema, seed
+src/pages/     UI екрани
+src/components/компоненти и дијалози
+public/        статички ресурси (лого)
+```
+
+## Deploy
+
+Види [DEPLOY-GUIDE.md](./DEPLOY-GUIDE.md) — Railway / Render + PostgreSQL.
+
+Накратко:
+
+```bash
+npm run build
+npm start
+# потребно: DATABASE_URL (postgres), и APP_PASSWORD или прв админ
+```
+
+## Лиценца
+
+Private — © Серафимоски Тек
