@@ -5,6 +5,7 @@ import { docCounters } from "@db/schema";
 
 const PREFIXES: Record<string, string> = {
   quote: "ПО",
+  salesReturn: "ВР",
   workOrder: "РН",
   deliveryNote: "ИС",
   proforma: "ПФ",

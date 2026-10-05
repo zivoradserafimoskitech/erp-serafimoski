@@ -474,6 +474,7 @@ export const quotationRouter = createRouter({
       paymentTerms: z.string().default("14 дена"),
       paymentSchedule: z.string().optional(),
       notes: z.string().optional(),
+      salesperson: z.string().max(160).optional(),
       items: z.array(z.object({
         itemType: z.enum(["material", "service", "product"]),
         referenceId: z.number().nullable().optional(),
@@ -540,6 +541,7 @@ export const quotationRouter = createRouter({
       paymentTerms: z.string().optional(),
       paymentSchedule: z.string().optional(),
       notes: z.string().optional(),
+      salesperson: z.string().max(160).optional().nullable(),
       items: z.array(z.object({
         itemType: z.enum(["material", "service", "product"]),
         referenceId: z.number().nullable().optional(),

@@ -20,7 +20,10 @@ import Employees from "@/pages/Employees";
 import DealPipeline from "@/pages/DealPipeline";
 import Crm from "@/pages/Crm";
 import Reports from "@/pages/Reports";
+import DeliveryNotes from "@/pages/DeliveryNotes";
 import Portal from "@/pages/Portal";
+import SalesHub from "@/pages/SalesHub";
+import PriceLists from "@/pages/PriceLists";
 
 export default function App() {
   return (
@@ -30,6 +33,8 @@ export default function App() {
       <Route path="/n/:id" element={<WorkOrderScan />} />
       {/* Портал за клиенти — таен линк, без најава и без менито */}
       <Route path="/portal/:token" element={<Portal />} />
+      <Route path="/prodazba" element={<Layout><SalesHub /></Layout>} />
+      <Route path="/cenovnici" element={<Layout><PriceLists /></Layout>} />
       <Route path="/crm" element={<Layout><Crm /></Layout>} />
       <Route path="/izvestai" element={<Layout><Reports /></Layout>} />
       <Route
@@ -77,6 +82,14 @@ export default function App() {
         element={
           <Layout>
             <Accounting />
+          </Layout>
+        }
+      />
+      <Route
+        path="/ispratnici"
+        element={
+          <Layout>
+            <DeliveryNotes />
           </Layout>
         }
       />

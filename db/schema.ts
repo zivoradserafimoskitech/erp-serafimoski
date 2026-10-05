@@ -482,6 +482,7 @@ export const orders = pgTable("orders", {
   marginPercent: decimal("margin_percent", { precision: 5, scale: 2 }).notNull().default("0"),
   deliveryDate: date("delivery_date"),
   notes: text("notes"),
+  salesperson: varchar("salesperson", { length: 160 }),
   createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -506,6 +507,8 @@ export const orderItems = pgTable("order_items", {
   productId: bigint("product_id", { mode: "number" }),
   weightPerUnit: decimal("weight_per_unit", { precision: 12, scale: 4 }).default("0"),
   weightKg: decimal("weight_kg", { precision: 12, scale: 3 }).default("0"),
+  deliveredQty: decimal("delivered_qty", { precision: 12, scale: 3 }).default("0"),
+  reservedQty: decimal("reserved_qty", { precision: 12, scale: 3 }).default("0"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -775,6 +778,7 @@ export const quotations = pgTable("quotations", {
   paymentSchedule: text("payment_schedule"), // JSON: [{ percent, when, days? }] — види contracts/payment-terms.ts
   notes: text("notes"),
   convertedOrderId: bigint("converted_order_id", { mode: "number" }),
+  salesperson: varchar("salesperson", { length: 160 }),
   createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

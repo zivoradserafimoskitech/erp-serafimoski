@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,9 +50,9 @@ export default function Crm() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Target className="h-6 w-6 text-primary" />Продажба</h2>
-          <p className="text-gray-500 mt-1">Барања и можности пред понудата, разговори и задачи, зошто губиме понуди</p>
+          <p className="text-gray-500 mt-1">Барања и можности пред понудата, разговори и задачи, зошто губиме понуди · <a className="text-primary hover:underline" href="/izvestai">Извештаи</a></p>
         </div>
-        <Button onClick={() => setEdit({ ...EMPTY })}><Plus className="h-4 w-4 mr-1.5" />Нова можност</Button>
+        <Button  onClick={() => setEdit({ ...EMPTY })}><Plus className="h-4 w-4 mr-1.5" />Нова можност</Button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -70,7 +71,7 @@ export default function Crm() {
               {list.map((o) => (
                 <button key={o.id} onClick={() => setEdit({ id: o.id, customerId: o.customerId, company: o.company ?? "", contactName: o.contactName ?? "", email: o.email ?? "", phone: o.phone ?? "", title: o.title, value: String(o.value),
                   probability: String(o.probability), stage: o.stage, expectedClose: o.expectedClose ?? "", source: o.source ?? "", lostReason: o.lostReason ?? "", notes: o.notes ?? "", quotationId: o.quotationId })}
-                  className="w-full text-left rounded-lg bg-white border px-2.5 py-2 hover:border-primary/50 shadow-sm">
+                  className="w-full text-left rounded-lg bg-white border px-2.5 py-2 hover:border-amber-400 shadow-sm">
                   <p className="text-sm font-medium leading-tight">{o.title}</p>
                   <p className="text-xs text-gray-500">{o.customer ?? o.company ?? "—"}{o.files ? <span className="ml-1"><Paperclip className="inline h-3 w-3" />{o.files}</span> : null}</p>
                   <p className="text-xs mt-1 flex justify-between"><span className="font-semibold">{fmt(o.value)} {o.currency === "MKD" ? "ден" : o.currency}</span><span className="text-gray-400">{o.probability}%{o.expectedClose ? ` · ${fmtD(o.expectedClose)}` : ""}</span></p>
@@ -122,7 +123,17 @@ function OppDialog({ opp, onClose }: { opp: Opp; onClose: () => void }) {
   const { data: files } = trpc.crm.oppFiles.useQuery({ id: opp.id ?? -1 }, { enabled: !!opp.id });
   const { data: quotes } = trpc.quotation.quotationList.useQuery({}, { enabled: !!f.customerId });
   const custItems = useMemo(() => (customers ?? []).map((c: any) => ({ id: c.id as number, label: c.company || c.name, sub: c.city ?? null })), [customers]);
+  const navigate = useNavigate();
   const save = trpc.crm.oppSave.useMutation({ onSuccess: () => { toast.success("Зачувано"); utils.crm.invalidate(); onClose(); }, onError: (e) => toast.error(e.message) });
+  const toQuote = trpc.crm.oppToQuotation.useMutation({
+    onSuccess: (r) => {
+      toast.success(r.existing ? "Понудата веќе постои" : `Креирана понуда ${r.quoteNumber}`);
+      utils.crm.invalidate();
+      onClose();
+      navigate(`/ponudi?open=${r.id}`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const del = trpc.crm.oppDelete.useMutation({ onSuccess: () => { utils.crm.invalidate(); onClose(); } });
   const [act, setAct] = useState({ kind: "call", subject: "", dueDate: "" });
   const addAct = trpc.crm.activitySave.useMutation({ onSuccess: () => { setAct({ ...act, subject: "", dueDate: "" }); utils.crm.invalidate(); }, onError: (e) => toast.error(e.message) });
@@ -178,8 +189,9 @@ function OppDialog({ opp, onClose }: { opp: Opp; onClose: () => void }) {
         <div className="flex justify-between pt-2">
           {f.id ? <Button variant="ghost" className="text-red-600" onClick={() => { if (confirm("Да се избрише можноста?")) del.mutate({ id: f.id! }); }}>Избриши</Button> : <span />}
           <div className="flex gap-2">
+            {f.id ? <Button variant="outline" disabled={toQuote.isPending} onClick={() => toQuote.mutate({ opportunityId: f.id! })}>Креирај понуда</Button> : null}
             <Button variant="outline" onClick={onClose}>Откажи</Button>
-            <Button disabled={f.title.length < 2 || save.isPending} onClick={() => save.mutate({
+            <Button  disabled={f.title.length < 2 || save.isPending} onClick={() => save.mutate({
               id: f.id, customerId: f.customerId, company: f.company || undefined, contactName: f.contactName || undefined, email: f.email || undefined, phone: f.phone || undefined,
               title: f.title, value: parseFloat(f.value) || 0, probability: parseInt(f.probability) || 0, stage: f.stage as any, expectedClose: f.expectedClose || null,
               source: f.source || undefined, lostReason: f.lostReason || null, quotationId: f.quotationId, notes: f.notes || undefined })}>Зачувај</Button>

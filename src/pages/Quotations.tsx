@@ -25,41 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Trash2, Eye, ArrowRight, FileText, Wrench, Package, Pencil, Truck, CalendarClock, CreditCard, Building2, Receipt, Mail } from "lucide-react";
 
 // Status configs
-const qStatus: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Нацрт", cls: "bg-gray-100 text-gray-700" },
-  sent: { label: "Испратена", cls: "bg-blue-100 text-blue-700" },
-  accepted: { label: "Прифатена", cls: "bg-emerald-100 text-emerald-700" },
-  rejected: { label: "Одбиена", cls: "bg-red-100 text-red-700" },
-  expired: { label: "Истечена", cls: "bg-warning/15 text-primary" },
-  converted: { label: "Конвертирана", cls: "bg-purple-100 text-purple-700" },
-};
-
-const svcCodes: Record<string, string> = {
-  laser_cutting: "ЛС", plasma_cutting: "ПС", bending: "ВТ", mig_welding: "МИГ",
-  tig_welding: "ТИГ", grinding: "БР", drilling: "ДП", electrostatic_paint: "ЕФ",
-  wet_paint: "МФ", galvanizing: "ПЦ", cnc_machining: "ЦНЦ", labor: "ТР",
-  design: "ДЗ", transport: "ТП", installation: "МН", other: "ДР",
-};
-const svcTypes: Record<string, string> = {
-  laser_cutting: "Ласерско сечење", plasma_cutting: "Плазма сечење", bending: "Виткање",
-  mig_welding: "MIG заварување", tig_welding: "TIG заварување", grinding: "Брусење",
-  drilling: "Дупчење", electrostatic_paint: "Електростатско фарбање", wet_paint: "Мокро бојадисување",
-  galvanizing: "Галванизација", cnc_machining: "ЦНЦ обработка", labor: "Работна рака",
-  design: "Проектирање", transport: "Транспорт", installation: "Монтажа", other: "Други",
-};
-const svcUnits: Record<string, string> = { m2: "м²", m: "м", kg: "кг", hour: "час", pcs: "ком", job: "посебно" };
-
-const prodCats: Record<string, string> = {
-  laser_fence: "Ласер ЦНЦ ограда", decorative_fence: "Декоративна ограда", metal_fence: "Метална ограда",
-  balcony_railing: "Балконски огради", stair_railing: "Скалилшни огради", gate: "Порта/Капија",
-  pergola: "Пергола", canopy: "Надвес/Настрешница", metal_door: "Метална врата",
-  industrial_product: "Индустриски производ", custom_metalwork: "Сопствен метален производ",
-  shelf: "Полица", worktable: "Работна маса", other: "Други",
-};
-const prodUnits: Record<string, string> = { m2: "м²", m: "м", kg: "кг", pcs: "ком", set: "комплет" };
-
-const matUnits: Record<string, string> = { kg: "кг", m: "м", m2: "м²", pcs: "ком", l: "л" };
-
+import { qStatus, svcCodes, svcTypes, svcUnits, prodCats, prodUnits, matUnits } from "./quotations/constants";
 export default function Quotations() {
   const utils = trpc.useUtils();
   const [tab, setTab] = useState("quotations");
@@ -110,7 +76,7 @@ export default function Quotations() {
     currency !== "MKD" || !isDomesticCountry(customers?.find((c: any) => String(c.id) === String(customerId))?.country);
   const [qForm, setQForm] = useState({
     quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14",
-    paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18",
+    paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18", salesperson: "",
   });
   const [qItems, setQItems] = useState<Array<{
     itemType: "material" | "service" | "product"; referenceId: number | null;
@@ -268,7 +234,7 @@ export default function Quotations() {
   }, [prodDialog]);
 
   const resetQForm = () => {
-    setQForm({ quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14", paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18" });
+    setQForm({ quoteNumber: "", customerId: "", validUntil: "", deliveryDays: "14", paymentTerms: "14 дена", notes: "", currency: "MKD", vatRate: "18", salesperson: "" });
     setQSchedule(DEFAULT_SCHEDULE);
     setQItems([]);
   };
@@ -285,6 +251,7 @@ export default function Quotations() {
       currency: qDetail.currency ?? "MKD",
       // странски клиент / валута -> без ДДВ; инаку стапката од понудата („18.00“ -> „18“)
       vatRate: isForeign(qDetail.customerId, qDetail.currency ?? "MKD") ? "0" : String(Number(qDetail.vatRate ?? 18)),
+      salesperson: (qDetail as any).salesperson ?? "",
     });
     setQSchedule(scheduleFrom(qDetail.paymentSchedule, qDetail.paymentTerms));
     setQItems((qDetail.items ?? []).map((i: any) => ({
@@ -388,6 +355,7 @@ export default function Quotations() {
     if (scheduleTotal(qSchedule) !== 100) { toast.error("Ратите за плаќање мора да се вкупно 100%"); return; }
     const payTerms = { paymentTerms: describeSchedule(qSchedule, "mk").slice(0, 255), paymentSchedule: JSON.stringify(qSchedule) };
     if (editingId) {
+      if (credit?.blocked) { toast.error("Кредитниот лимит е надминат — зачувувањето е блокирано (CREDIT_LIMIT_STRICT)"); return; }
       updateQFull.mutate({
         id: editingId,
         customerId: parseInt(qForm.customerId),
@@ -397,10 +365,12 @@ export default function Quotations() {
         notes: qForm.notes || undefined,
         vatRate: qForm.vatRate,
         currency: qForm.currency,
+        salesperson: qForm.salesperson || null,
         items: qItems.map(i => ({ ...i, referenceId: i.referenceId ?? undefined })),
       });
       return;
     }
+    if (credit?.blocked) { toast.error("Кредитниот лимит е надминат — зачувувањето е блокирано (CREDIT_LIMIT_STRICT)"); return; }
     createQ.mutate({
       quoteNumber: qForm.quoteNumber,
       customerId: parseInt(qForm.customerId),
@@ -413,6 +383,7 @@ export default function Quotations() {
       vatAmount: t.vatAmount,
       totalAmount: t.total,
       currency: qForm.currency,
+      salesperson: qForm.salesperson || undefined,
       items: qItems.map(i => ({ ...i, referenceId: i.referenceId ?? undefined })),
     });
   };
@@ -439,7 +410,7 @@ export default function Quotations() {
                 resetQForm();
               }
             }}>
-              <DialogTrigger asChild><Button onClick={() => setEditingId(null)}><Plus className="h-4 w-4 mr-2" />Нова понуда</Button></DialogTrigger>
+              <DialogTrigger asChild><Button  onClick={() => setEditingId(null)}><Plus className="h-4 w-4 mr-2" />Нова понуда</Button></DialogTrigger>
               <DialogContent className="sm:max-w-4xl max-h-[95vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editingId ? `Измени понуда ${qForm.quoteNumber}` : "Нова понуда"}</DialogTitle></DialogHeader>
                 <form onSubmit={handleQSubmit} className="space-y-4">
@@ -453,6 +424,7 @@ export default function Quotations() {
                     <div className="space-y-2"><Label>Испорака (денови)</Label><Input value={qForm.deliveryDays} onChange={e => setQForm({ ...qForm, deliveryDays: e.target.value })} /></div>
                     <div className="space-y-2"><Label>Валута</Label><Select value={qForm.currency} onValueChange={v => setQForm({ ...qForm, currency: v, vatRate: isForeign(qForm.customerId, v) ? "0" : (Number(qForm.vatRate) === 0 ? "18" : qForm.vatRate) })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MKD">MKD</SelectItem><SelectItem value="EUR">EUR</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                   </div>
+                  <div className="space-y-2"><Label>Продавач</Label><Input value={qForm.salesperson} onChange={e => setQForm({ ...qForm, salesperson: e.target.value })} placeholder="Име на продавач / комерцијалист" /></div>
                   <div className="flex flex-wrap items-center gap-4 rounded-md border px-3 py-2 bg-gray-50">
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={Number(qForm.vatRate) === 0} onChange={e => setQForm({ ...qForm, vatRate: e.target.checked ? "0" : "18" })} />
@@ -463,8 +435,8 @@ export default function Quotations() {
                         <Input type="number" className="w-20 h-8" value={qForm.vatRate} onChange={e => setQForm({ ...qForm, vatRate: e.target.value })} />
                       </label>
                     )}
-                    {credit && (credit.over || credit.overdueCount > 0) && (
-                      <span className="text-xs text-red-700 block">{credit.over ? `Над кредитниот лимит: отворено ${Math.round(credit.open).toLocaleString("mk-MK")} + оваа понуда > лимит ${Math.round(credit.limit ?? 0).toLocaleString("mk-MK")} ден. ` : ""}{credit.overdueCount ? `${credit.overdueCount} фактури по рок (${Math.round(credit.overdueMkd).toLocaleString("mk-MK")} ден).` : ""}</span>
+                    {credit && (credit.over || credit.overdueCount > 0 || credit.blocked) && (
+                      <span className="text-xs text-red-700 block">{credit.blocked ? "БЛОКИРАНО: строг кредитен лимит (CREDIT_LIMIT_STRICT). " : ""}{credit.over ? `Над кредитниот лимит: отворено ${Math.round(credit.open).toLocaleString("mk-MK")} + оваа понуда > лимит ${Math.round(credit.limit ?? 0).toLocaleString("mk-MK")} ден. ` : ""}{credit.overdueCount ? `${credit.overdueCount} фактури по рок (${Math.round(credit.overdueMkd).toLocaleString("mk-MK")} ден).` : ""}</span>
                     )}
                     {qForm.customerId && isForeign(qForm.customerId, qForm.currency) && Number(qForm.vatRate) !== 0 && (
                       <span className="text-xs text-primary">Клиентот е од странство / валутата не е денари — обично без ДДВ</span>
@@ -566,7 +538,7 @@ export default function Quotations() {
 
                   <div className="space-y-2"><Label>Белешки / Опис на понуда</Label><Textarea value={qForm.notes} onChange={e => setQForm({ ...qForm, notes: e.target.value })} placeholder="Технички детали, услови, напомени..." /></div>
                   <div className="space-y-1">
-                    <Button type="submit" className="w-full" disabled={createQ.isPending || updateQFull.isPending || !qForm.customerId || qItems.length === 0}>
+                    <Button type="submit" className="w-full" disabled={createQ.isPending || updateQFull.isPending || !qForm.customerId || qItems.length === 0 || !!credit?.blocked}>
                       {editingId ? (updateQFull.isPending ? "Зачувување..." : "Зачувај измени") : (createQ.isPending ? "Зачувување..." : "Креирај понуда")}
                     </Button>
                     {!qForm.customerId && <p className="text-xs text-red-500 text-center">Избери клиент за да продолжиш</p>}
@@ -618,7 +590,7 @@ export default function Quotations() {
           )}
           {tab === "services" && (
             <Dialog open={svcDialog} onOpenChange={setSvcDialog}>
-              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нова услуга</Button></DialogTrigger>
+              <DialogTrigger asChild><Button ><Plus className="h-4 w-4 mr-2" />Нова услуга</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нова услуга</DialogTitle></DialogHeader>
                 <form onSubmit={e => { e.preventDefault(); createSvc.mutate(svcForm as any); }} className="space-y-3">
@@ -650,7 +622,7 @@ export default function Quotations() {
           )}
           {tab === "products" && (
             <Dialog open={prodDialog} onOpenChange={setProdDialog}>
-              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нов производ</Button></DialogTrigger>
+              <DialogTrigger asChild><Button ><Plus className="h-4 w-4 mr-2" />Нов производ</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нов производ</DialogTitle><p className="text-xs text-gray-500">Производ = готов артикал што го изработуваш и продаваш (панел, ограда, порта...). Услугите се внесуваат одделно.</p></DialogHeader>
                 <form onSubmit={e => { e.preventDefault(); createProd.mutate(prodForm as any); }} className="space-y-3">
@@ -839,7 +811,7 @@ export default function Quotations() {
                   </div>
                 )}
                 {/* Totals — ВКУПНО dominant */}
-                <div className="rounded-xl bg-primary/10 border border-primary/20 p-6 flex items-center justify-between">
+                <div className="rounded-xl bg-primary/10/70 border border-primary/20 p-6 flex items-center justify-between">
                   <div className="flex gap-10">
                     <div>
                       <div className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1">Нето</div>

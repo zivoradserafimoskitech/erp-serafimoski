@@ -142,4 +142,29 @@ export const reportsRouter = createRouter({
     const sum = (kind: string, f: "budget" | "actual") => r2(rows.filter((r) => r.kind === kind).reduce((s, r) => s + r[f], 0));
     return { rows, upToMonth: input.upToMonth, totals: { revenue: { budget: sum("revenue", "budget"), actual: sum("revenue", "actual") }, expense: { budget: sum("expense", "budget"), actual: sum("expense", "actual") } } };
   }),
+
+  /** Продажба по период: промет, по клиент, по продавач (salesperson на понуда/нарачка). */
+  salesSummary: publicQuery.input(z.object({ from: dateStr, to: dateStr })).query(async ({ input }) => {
+    const byCustomer = await q(`SELECT COALESCE(c.company, c.name, '—') AS customer, COUNT(i.id)::int AS invoices,
+      COALESCE(SUM(CASE WHEN i.invoice_type = 'credit_note' THEN -ABS(i.subtotal) ELSE i.subtotal END), 0) AS revenue
+      FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+      WHERE i.invoice_type IN ('standard','credit_note') AND i.status NOT IN ('draft','cancelled')
+        AND i.issue_date BETWEEN $1 AND $2
+      GROUP BY 1 ORDER BY revenue DESC LIMIT 100`, [input.from, input.to]);
+    const bySalesperson = await q(`SELECT COALESCE(NULLIF(o.salesperson, ''), NULLIF(qt.salesperson, ''), '—') AS salesperson,
+      COUNT(DISTINCT o.id)::int AS orders, COALESCE(SUM(o.total_amount), 0) AS order_total
+      FROM orders o LEFT JOIN quotations qt ON qt.id = o.quote_id OR qt.converted_order_id = o.id
+      WHERE o.status <> 'cancelled' AND o.created_at::date BETWEEN $1 AND $2
+      GROUP BY 1 ORDER BY order_total DESC LIMIT 50`, [input.from, input.to]).catch(() => []);
+    const totals = await q(`SELECT COUNT(*)::int AS n,
+      COALESCE(SUM(CASE WHEN invoice_type = 'credit_note' THEN -ABS(subtotal) ELSE subtotal END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN invoice_type = 'credit_note' THEN -ABS(vat_amount) ELSE vat_amount END), 0) AS vat
+      FROM invoices WHERE invoice_type IN ('standard','credit_note') AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN $1 AND $2`, [input.from, input.to]);
+    return {
+      from: input.from, to: input.to,
+      totals: { invoices: totals[0]?.n ?? 0, revenue: Number(totals[0]?.revenue ?? 0), vat: Number(totals[0]?.vat ?? 0) },
+      byCustomer: byCustomer.map((r) => ({ customer: r.customer, invoices: r.invoices, revenue: Number(r.revenue) })),
+      bySalesperson: bySalesperson.map((r) => ({ salesperson: r.salesperson, orders: r.orders, orderTotal: Number(r.order_total) })),
+    };
+  }),
 });

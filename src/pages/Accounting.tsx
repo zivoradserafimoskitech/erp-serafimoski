@@ -26,7 +26,7 @@ import { DnCertificates } from "@/components/DnCertificates";
 import InvoiceItemForm from "./accounting/InvoiceItemForm";
 import UJPEFakturaTab from "./accounting/UJPEFakturaTab";
 import EmailInvoicesTab from "./accounting/EmailInvoicesTab";
-import { Search, Plus, Trash2, Eye, FileText, Download, FileUp, Truck, ArrowUpRight, ArrowDownLeft, Calculator, Upload, Building2, ShieldCheck, Undo2 } from "lucide-react";
+import { Search, Plus, Trash2, Eye, FileText, Download, FileUp, Truck, ArrowUpRight, ArrowDownLeft, Calculator, Upload, Building2, ShieldCheck, Undo2, BarChart3 } from "lucide-react";
 
 // ===== STATUS CONFIGS =====
 const invStatus: Record<string, { label: string; cls: string }> = {
@@ -89,10 +89,17 @@ function EcdFields({ invoice }: { invoice: any }) {
   );
 }
 
-export default function Accounting() {
+export default function Accounting(props: { embedTab?: string } = {}) {
+  const { embedTab } = props;
   const navigate = useNavigate();
   const utils = trpc.useUtils();
-  const [tab, setTab] = useState("outgoing");
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState(() => embedTab || params.get("tab") || "outgoing");
+  useEffect(() => {
+    const t0 = embedTab || params.get("tab");
+    if (t0 && t0 !== tab) setTab(t0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedTab, params]);
   const [search, setSearch] = useState("");
 
   // Data queries
@@ -114,7 +121,6 @@ export default function Accounting() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailType, setDetailType] = useState<"" | "out" | "inc">("");
   const [selId, setSelId] = useState<number | null>(null);
-  const [params, setParams] = useSearchParams();
   useEffect(() => {
     const id = Number(params.get("open"));
     const inId = Number(params.get("openIn")); // влезна фактура (од главната книга)
@@ -317,6 +323,7 @@ export default function Accounting() {
   return (
     <div className="space-y-6">
       {/* Header */}
+      {!embedTab && (
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Фактури и документи</h2>
@@ -649,6 +656,7 @@ export default function Accounting() {
             </Dialog>
           )}
           <Dialog open={reportDialog} onOpenChange={setReportDialog}>
+            <Button variant="outline" asChild><a href="/izvestai"><BarChart3 className="h-4 w-4 mr-2" />Сите извештаи</a></Button>
             <DialogTrigger asChild><Button variant="outline"><Calculator className="h-4 w-4 mr-2" />Извештај за сметководител</Button></DialogTrigger>
             <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Извештај за сметководител</DialogTitle></DialogHeader>
@@ -775,6 +783,7 @@ export default function Accounting() {
         </div>
       </div>
 
+      )}
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -782,6 +791,7 @@ export default function Accounting() {
       </div>
 
       {/* Tabs */}
+      {!embedTab && (<>
       <div className="flex flex-wrap gap-1 border-b border-gray-200">
         {[
           { key: "outgoing", label: "Излезни фактури", icon: ArrowUpRight },
@@ -799,6 +809,7 @@ export default function Accounting() {
           );
         })}
       </div>
+      </>)}
 
       {/* ===== OUTGOING INVOICES ===== */}
       {tab === "outgoing" && (
