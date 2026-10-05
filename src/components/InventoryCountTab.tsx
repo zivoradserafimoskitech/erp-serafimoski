@@ -21,7 +21,7 @@ import { ClipboardCheck, Plus, CheckCircle2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 const statusCfg: Record<string, { label: string; cls: string }> = {
-  pending: { label: "Во тек", cls: "bg-amber-100 text-amber-700" },
+  pending: { label: "Во тек", cls: "bg-warning/15 text-primary" },
   completed: { label: "Завршен", cls: "bg-emerald-100 text-emerald-700" },
 };
 
@@ -162,7 +162,7 @@ export default function InventoryCountTab() {
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">Периодично пребројување на магацин -- системот ја покажува разликата и, по потврда, ја усогласува залихата.</p>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нов попис</Button></DialogTrigger>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нов попис</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Нов попис</DialogTitle></DialogHeader>
             <div className="space-y-3">
@@ -186,7 +186,7 @@ export default function InventoryCountTab() {
                 <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
               <p className="text-xs text-gray-500">Пописот автоматски се пополнува со сите материјали и тековната системска количина од избраниот магацин -- потоа само ги внесуваш реално пребројаните количини.</p>
-              <Button className="w-full bg-amber-500 hover:bg-amber-600 text-white" disabled={!form.warehouseId || create.isPending}
+              <Button className="w-full" disabled={!form.warehouseId || create.isPending}
                 onClick={() => create.mutate({ countNumber: form.countNumber || nextNum || `ПП-${Date.now()}`, warehouseId: parseInt(form.warehouseId), countDate: form.countDate, notes: form.notes || undefined })}>
                 {create.isPending ? "Се креира..." : "Креирај попис"}
               </Button>

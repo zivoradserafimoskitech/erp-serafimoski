@@ -14,7 +14,7 @@ const fmtAt = (v: any) => formatDateTime(v);
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const ACTION: Record<string, { label: string; cls: string }> = {
   create: { label: "нов налог", cls: "bg-emerald-50 text-emerald-700" },
-  update: { label: "изменет", cls: "bg-amber-50 text-amber-800" },
+  update: { label: "изменет", cls: "bg-primary/10 text-foreground/80" },
   delete: { label: "избришан", cls: "bg-red-50 text-red-700" },
   storno: { label: "сторно", cls: "bg-violet-50 text-violet-700" },
   lock: { label: "заклучено", cls: "bg-slate-100 text-slate-700" },
@@ -62,7 +62,7 @@ export default function PeriodLockTab() {
           </Button>
           {cur && isAdmin && <Button variant="ghost" className="h-9 text-red-600" onClick={() => { if (confirm("Да се тргне целото заклучување? Ова се бележи во дневникот.")) set.mutate({ date: null, reason: reason || undefined }); }}>Тргни заклучување</Button>}
         </div>
-        {backwards && !isAdmin && <p className="text-xs text-amber-700">Отклучување смее само администратор.</p>}
+        {backwards && !isAdmin && <p className="text-xs text-primary">Отклучување смее само администратор.</p>}
         {!!lock?.history.length && (
           <div className="text-xs text-gray-500 space-y-0.5 border-t pt-2">
             {lock.history.map((h, i) => <p key={i}>{fmtAt(h.at)} · {h.actor} · {h.description}</p>)}

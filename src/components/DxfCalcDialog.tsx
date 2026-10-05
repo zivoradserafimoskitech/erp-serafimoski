@@ -110,12 +110,12 @@ export default function DxfCalcDialog({ open, onOpenChange, materials, onAdd }: 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[94vh] overflow-y-auto">
-        <DialogTitle className="flex items-center gap-2"><Ruler className="h-5 w-5 text-amber-600" />Калкулација од DXF цртеж</DialogTitle>
+        <DialogTitle className="flex items-center gap-2"><Ruler className="h-5 w-5 text-primary" />Калкулација од DXF цртеж</DialogTitle>
         <DialogDescription>Програмата ги мери линиите за сечење, бројот на пробивања и површината, па ги пресметува времето на машината, тежината и цената.</DialogDescription>
         <input ref={fileRef} type="file" accept=".dxf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = ""; }} />
         {!res ? (
-          <button type="button" onClick={() => fileRef.current?.click()} className="w-full rounded-lg border-2 border-dashed p-10 text-center hover:border-amber-400 hover:bg-amber-50/40">
-            <FileUp className="h-8 w-8 mx-auto text-amber-600" />
+          <button type="button" onClick={() => fileRef.current?.click()} className="w-full rounded-lg border-2 border-dashed p-10 text-center hover:border-primary/50 hover:bg-accent/40">
+            <FileUp className="h-8 w-8 mx-auto text-primary" />
             <p className="mt-2 font-medium">Избери DXF датотека</p>
             <p className="text-xs text-gray-500">од AutoCAD, SolidWorks, Inventor, QCAD... (ASCII DXF, мерки во mm или инчи)</p>
           </button>
@@ -149,7 +149,7 @@ export default function DxfCalcDialog({ open, onOpenChange, materials, onAdd }: 
                 </div>
               )}
               {(res.warnings.length > 0 || Object.keys(res.skipped).length > 0) && (
-                <p className="text-xs text-gray-500 flex items-start gap-1"><AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-gray-500 flex items-start gap-1"><AlertTriangle className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
                   {[...res.warnings, Object.keys(res.skipped).length ? `Прескокнато (не се сече): ${Object.entries(res.skipped).map(([k, v]) => `${k} ${v}`).join(", ")}` : ""].filter(Boolean).join(" · ")}
                 </p>
               )}
@@ -170,7 +170,7 @@ export default function DxfCalcDialog({ open, onOpenChange, materials, onAdd }: 
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1"><Label className="text-xs">Цена материјал ден/кг</Label><Input className={`h-9 ${!(parseFloat(pricePerKg) > 0) ? "border-amber-400" : ""}`} value={pricePerKg} onChange={(e) => setPricePerKg(e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-xs">Цена материјал ден/кг</Label><Input className={`h-9 ${!(parseFloat(pricePerKg) > 0) ? "border-primary/50" : ""}`} value={pricePerKg} onChange={(e) => setPricePerKg(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">Материјал се наплаќа по</Label>
                   <Select value={basis} onValueChange={(v) => setBasis(v as any)}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="bbox">габарит + раб</SelectItem><SelectItem value="net">нето (без отвори)</SelectItem></SelectContent></Select>
@@ -179,8 +179,8 @@ export default function DxfCalcDialog({ open, onOpenChange, materials, onAdd }: 
               <div className="space-y-1"><Label className="text-xs">Машина</Label>
                 <Select value={machineId} onValueChange={setMachineId}><SelectTrigger className="h-9"><SelectValue placeholder="Избери машина" /></SelectTrigger>
                   <SelectContent>{(st?.machines ?? []).map((m) => <SelectItem key={m.id} value={String(m.id)}>{m.name} · {fmt(m.perHour, 0)} ден/ч{m.perMeter ? ` + ${fmt(m.perMeter)} ден/m` : ""}</SelectItem>)}</SelectContent></Select>
-                {st && !st.machines.length && <p className="text-[11px] text-amber-700">Внеси машина со цена по час во Каталог → Машини.</p>}
-                {machine && !machine.perHour && !machine.perMeter && <p className="text-[11px] text-amber-700">Машината нема цена по час — пресметај ја во Каталог → Машини (амортизација, струја, гас, сервис), инаку сечењето излегува 0.</p>}
+                {st && !st.machines.length && <p className="text-[11px] text-primary">Внеси машина со цена по час во Каталог → Машини.</p>}
+                {machine && !machine.perHour && !machine.perMeter && <p className="text-[11px] text-primary">Машината нема цена по час — пресметај ја во Каталог → Машини (амортизација, струја, гас, сервис), инаку сечењето излегува 0.</p>}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1"><Label className="text-xs">Брзина m/min</Label><Input className="h-9" value={speed} onChange={(e) => { setSpeed(e.target.value); setSpeedTouched(true); }} /></div>
@@ -193,7 +193,7 @@ export default function DxfCalcDialog({ open, onOpenChange, materials, onAdd }: 
                 <div className="space-y-1"><Label className="text-xs">Подгот. мин</Label><Input className="h-9" value={setupMin} onChange={(e) => setSetupMin(e.target.value)} /></div>
               </div>
               {calc && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-1">
+                <div className="rounded-lg border border-primary/20 bg-primary/10 p-3 space-y-1">
                   <div className="flex justify-between"><span className="text-gray-600">Време по парче</span><b>{fmt(calc.minutes)} мин</b></div>
                   <div className="flex justify-between"><span className="text-gray-600">Тежина по парче</span><b>{fmt(calc.kg, 3)} кг</b></div>
                   <div className="flex justify-between"><span className="text-gray-600">Машина / материјал</span><span>{fmt(calc.machine)} / {fmt(calc.material)}</span></div>
@@ -202,7 +202,7 @@ export default function DxfCalcDialog({ open, onOpenChange, materials, onAdd }: 
                   <div className="flex justify-between text-xs text-gray-600"><span>Вкупно {qty} ком · {fmt(calc.totalMinutes, 1)} мин</span><span>{fmt(calc.totalPrice)} ден</span></div>
                 </div>
               )}
-              <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={!calc || saveDrawing.isPending} onClick={add}><Plus className="h-4 w-4 mr-1.5" />Додај во понудата</Button>
+              <Button className="w-full" disabled={!calc || saveDrawing.isPending} onClick={add}><Plus className="h-4 w-4 mr-1.5" />Додај во понудата</Button>
               <button type="button" className="text-xs text-gray-500 flex items-center gap-1 hover:text-gray-800" onClick={() => setShowTable(!showTable)}><Settings2 className="h-3.5 w-3.5" />Табела на брзини по дебелина</button>
               {showTable && (
                 <div className="rounded-lg border p-2 space-y-1 text-xs">

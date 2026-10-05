@@ -24,7 +24,7 @@ export default function AbsencesTab() {
   return (
     <div className="space-y-4">
       <Card><CardContent className="p-4 space-y-3">
-        <p className="font-semibold flex items-center gap-2"><CalendarDays className="h-4 w-4 text-amber-600" />Ново отсуство</p>
+        <p className="font-semibold flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" />Ново отсуство</p>
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1"><Label className="text-xs">Вработен</Label>
             <Select value={f.employeeId} onValueChange={(v) => setF({ ...f, employeeId: v })}><SelectTrigger className="h-9 w-56"><SelectValue placeholder="Избери" /></SelectTrigger>
@@ -38,7 +38,7 @@ export default function AbsencesTab() {
           <div className="space-y-1"><Label className="text-xs">До</Label><DateInput className="h-9 w-40" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></div>
           <div className="space-y-1"><Label className="text-xs">Денови</Label><Input className="h-9 w-20" placeholder="авто" value={f.days} onChange={(e) => setF({ ...f, days: e.target.value })} /></div>
           <div className="space-y-1 flex-1 min-w-[10rem]"><Label className="text-xs">Белешка</Label><Input className="h-9" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
-          <Button className="h-9 bg-amber-500 hover:bg-amber-600" disabled={!f.employeeId || !f.from || !f.to || save.isPending}
+          <Button className="h-9" disabled={!f.employeeId || !f.from || !f.to || save.isPending}
             onClick={() => save.mutate({ employeeId: Number(f.employeeId), kind: f.kind, from: f.from, to: f.to, days: f.days ? parseFloat(f.days) : undefined, note: f.note || undefined })}>Внеси</Button>
         </div>
         <p className="text-xs text-gray-500">Деновите се бројат сами (работни денови, без сабота и недела); за празник во периодот внеси ги рачно.</p>

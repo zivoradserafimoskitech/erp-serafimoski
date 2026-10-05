@@ -53,8 +53,8 @@ export default function CertificatesTab() {
           <div><p className="text-sm text-gray-500">Со шаржа / атест</p><p className="text-xl font-bold text-emerald-700">{stats?.withCert ?? 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="bg-amber-50 p-2.5 rounded-lg"><FileWarning className="h-5 w-5 text-amber-600" /></div>
-          <div><p className="text-sm text-gray-500">Без податок</p><p className="text-xl font-bold text-amber-700">{stats?.missing ?? 0}</p></div>
+          <div className="bg-primary/10 p-2.5 rounded-lg"><FileWarning className="h-5 w-5 text-primary" /></div>
+          <div><p className="text-sm text-gray-500">Без податок</p><p className="text-xl font-bold text-primary">{stats?.missing ?? 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="bg-red-50 p-2.5 rounded-lg"><FileWarning className="h-5 w-5 text-red-600" /></div>
@@ -100,7 +100,7 @@ export default function CertificatesTab() {
                   Нема партии. Партиите се создаваат кога ќе потврдиш приемница.
                 </TableCell></TableRow>
               ) : lots.map((l: any) => (
-                <TableRow key={l.id} className={!l.hasCert ? "bg-amber-50/40" : ""}>
+                <TableRow key={l.id} className={!l.hasCert ? "bg-primary/10" : ""}>
                   <TableCell>
                     <div className="text-sm font-medium leading-tight">{l.materialName ?? "—"}</div>
                     <div className="text-[11px] text-gray-400 font-mono">
@@ -202,7 +202,7 @@ export default function CertificatesTab() {
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setEditOpen(false)}>Откажи</Button>
-                <Button className="bg-amber-500 hover:bg-amber-600 text-white" disabled={updateMut.isPending}
+                <Button disabled={updateMut.isPending}
                   onClick={() => updateMut.mutate({
                     id: editForm.id,
                     heatNumber: editForm.heatNumber ?? "",

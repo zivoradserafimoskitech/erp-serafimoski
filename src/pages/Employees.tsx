@@ -28,7 +28,7 @@ function EmployeesTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />Прикажи и неактивни</label>
-        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => setF(empty)}><Plus className="h-4 w-4 mr-1.5" />Нов вработен</Button>
+        <Button onClick={() => setF(empty)}><Plus className="h-4 w-4 mr-1.5" />Нов вработен</Button>
       </div>
       <Card><CardContent className="p-0">
         <Table>
@@ -77,7 +77,7 @@ function EmployeesTab() {
                 <div className="space-y-1"><Label className="text-xs">Денови годишен одмор</Label><Input type="number" value={f.annualLeaveDays} onChange={(e) => setF({ ...f, annualLeaveDays: e.target.value })} /></div>
               </div>
               {!!f.id && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.isActive === "active"} onChange={(e) => setF({ ...f, isActive: e.target.checked ? "active" : "inactive" })} />Активен</label>}
-              <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={f.fullName.length < 3 || !(parseFloat(f.grossSalary) >= 0) || save.isPending}
+              <Button className="w-full" disabled={f.fullName.length < 3 || !(parseFloat(f.grossSalary) >= 0) || save.isPending}
                 onClick={() => save.mutate({ id: f.id || undefined, fullName: f.fullName, position: f.position || undefined, scanName: f.scanName || undefined,
                   grossSalary: parseFloat(f.grossSalary) || 0, hourlyCost: parseFloat(f.hourlyCost) || 0, startDate: f.startDate || undefined,
                   bankAccount: f.bankAccount || undefined, isActive: f.isActive as any, embg: f.embg || "", annualLeaveDays: parseInt(f.annualLeaveDays) || 20 })}>Зачувај</Button>
@@ -156,7 +156,7 @@ function PayrollTab() {
           <div className="space-y-1"><Label className="text-xs text-gray-500">Придонеси %</Label><Input type="number" className="w-24" value={params.contributionRate} disabled={posted} onChange={(e) => setParams({ ...params, contributionRate: e.target.value })} /></div>
           <div className="space-y-1"><Label className="text-xs text-gray-500">Персонален данок %</Label><Input type="number" className="w-24" value={params.incomeTaxRate} disabled={posted} onChange={(e) => setParams({ ...params, incomeTaxRate: e.target.value })} /></div>
           <div className="space-y-1"><Label className="text-xs text-gray-500">Лично ослободување (ден)</Label><Input type="number" className="w-32" value={params.personalExemption} disabled={posted} onChange={(e) => setParams({ ...params, personalExemption: e.target.value })} /></div>
-          <Button className="bg-amber-500 hover:bg-amber-600" disabled={posted || calc.isPending}
+          <Button disabled={posted || calc.isPending}
             onClick={() => calc.mutate({ period, params: { contributionRate: parseFloat(params.contributionRate) || 0, incomeTaxRate: parseFloat(params.incomeTaxRate) || 0, personalExemption: parseFloat(params.personalExemption) || 0 } })}>
             <Calculator className="h-4 w-4 mr-1.5" />{run ? "Пресметај повторно" : "Пресметај"}
           </Button>
@@ -226,7 +226,7 @@ export default function Employees() {
         <p className="text-gray-500 mt-1">Регистар на вработени, часови од подот и месечна пресметка на плата</p>
       </div>
       <Tabs defaultValue="employees">
-        <TabsList className="bg-amber-50">
+        <TabsList className="bg-primary/10">
           <TabsTrigger value="employees"><Users className="h-4 w-4 mr-1.5" />Вработени</TabsTrigger>
           <TabsTrigger value="payroll"><Banknote className="h-4 w-4 mr-1.5" />Плати</TabsTrigger>
           <TabsTrigger value="absences"><CalendarDays className="h-4 w-4 mr-1.5" />Отсуства</TabsTrigger>

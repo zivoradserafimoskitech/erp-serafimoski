@@ -40,7 +40,7 @@ export default function TerkTab() {
             При „Нов налог“ го избираш теркот од листата и ги пополнуваш само износите.
           </p>
         </div>
-        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => setDraft(blankDraft())}><Plus className="h-4 w-4 mr-1.5" />Нов терк</Button>
+        <Button onClick={() => setDraft(blankDraft())}><Plus className="h-4 w-4 mr-1.5" />Нов терк</Button>
       </div>
 
       {isLoading ? <p className="text-sm text-gray-400 py-8 text-center">Вчитување...</p>
@@ -136,10 +136,10 @@ export function TerkEditor({ draft, onClose, onSaved }: { draft: Draft | null; o
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 pt-2">
-          <span className={`text-sm ${blocker ? "text-amber-700" : "text-emerald-700"}`}>{blocker ?? `${filled.length} реда · ${filled.filter(l => l.side === "D").length} Должи, ${filled.filter(l => l.side === "P").length} Побарува`}</span>
+          <span className={`text-sm ${blocker ? "text-primary" : "text-emerald-700"}`}>{blocker ?? `${filled.length} реда · ${filled.filter(l => l.side === "D").length} Должи, ${filled.filter(l => l.side === "P").length} Побарува`}</span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Откажи</Button>
-            <Button className="bg-amber-500 hover:bg-amber-600" disabled={!!blocker || save.isPending}
+            <Button disabled={!!blocker || save.isPending}
               onClick={() => save.mutate({ id: d.id, name: d.name.trim(), description: d.description.trim() || undefined, lines: filled.map(l => ({ account: l.account, side: l.side, note: l.note.trim() || undefined })) })}>
               Зачувај терк</Button>
           </div>

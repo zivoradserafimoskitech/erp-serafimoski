@@ -16,7 +16,7 @@ export const DOWNTIME_REASONS: Record<string, string> = {
 };
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
-const tone = (v: number | null) => (v === null ? "text-gray-400" : v >= 0.85 ? "text-emerald-700" : v >= 0.6 ? "text-amber-700" : "text-red-600");
+const tone = (v: number | null) => (v === null ? "text-gray-400" : v >= 0.85 ? "text-emerald-700" : v >= 0.6 ? "text-primary" : "text-red-600");
 
 /** Застои на машините и OEE по машина (достапност × учинок × квалитет). */
 export default function OeeTab() {
@@ -70,7 +70,7 @@ export default function OeeTab() {
 
       <Card><CardContent className="p-4 space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <p className="font-semibold flex items-center gap-2"><Gauge className="h-4 w-4 text-amber-600" />OEE по машина</p>
+          <p className="font-semibold flex items-center gap-2"><Gauge className="h-4 w-4 text-primary" />OEE по машина</p>
           <div className="flex gap-2">
             <div className="space-y-1"><Label className="text-xs">Од</Label><DateInput className="h-9 w-40" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <div className="space-y-1"><Label className="text-xs">До</Label><DateInput className="h-9 w-40" value={to} onChange={(e) => setTo(e.target.value)} /></div>

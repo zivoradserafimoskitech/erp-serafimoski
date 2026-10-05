@@ -47,21 +47,21 @@ function Instruments() {
   return (
     <div className="space-y-3">
       {(overdue.length > 0 || soon.length > 0) && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 flex items-start gap-2">
+        <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-warning-foreground flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{overdue.length ? `Истечена калибрација: ${overdue.map((i) => i.name).join(", ")} — мерењата со нив не се примаат. ` : ""}{soon.length ? `Во следните 30 дена: ${soon.map((i) => `${i.name} (${fmtD(i.nextDue)})`).join(", ")}.` : ""}</span>
         </div>
       )}
       <div className="flex justify-between items-center">
         <p className="text-sm text-gray-600">Секој мерен инструмент (шублер, микрометар, аголник, метар...) со рок на калибрација. Со неважечка калибрација не може да се внесе мерење.</p>
-        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => setForm({ ...EMPTY })}><Plus className="h-4 w-4 mr-1.5" />Инструмент</Button>
+        <Button onClick={() => setForm({ ...EMPTY })}><Plus className="h-4 w-4 mr-1.5" />Инструмент</Button>
       </div>
       <Card><CardContent className="p-0">
         {!data?.length ? <p className="py-8 text-center text-sm text-gray-400">Нема внесени инструменти</p> : data.map((i) => (
           <div key={i.id} className={`flex flex-wrap items-center gap-3 border-b last:border-b-0 px-4 py-2 text-sm ${i.status !== "active" ? "opacity-60" : ""}`}>
             <span className="font-mono text-xs w-20">{i.code ?? ""}</span>
             <span className="flex-1 min-w-[12rem]"><b>{i.name}</b> <span className="text-xs text-gray-500">{[i.serialNo && `сер. ${i.serialNo}`, i.range, i.location].filter(Boolean).join(" · ")}</span></span>
-            <span className="text-xs w-44">калибриран {fmtD(i.lastCalibration)}<br /><span className={i.overdue ? "text-red-600 font-semibold" : i.dueSoon ? "text-amber-700" : "text-gray-500"}>следна {fmtD(i.nextDue)}</span></span>
+            <span className="text-xs w-44">калибриран {fmtD(i.lastCalibration)}<br /><span className={i.overdue ? "text-red-600 font-semibold" : i.dueSoon ? "text-primary" : "text-gray-500"}>следна {fmtD(i.nextDue)}</span></span>
             <span className="text-xs w-28 text-gray-500">{ST[i.status]}</span>
             <Button size="sm" variant="outline" className="h-7" onClick={() => setCalFor(i)}>Калибрација</Button>
             <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setForm({ id: i.id, name: i.name, code: i.code ?? "", serialNo: i.serialNo ?? "", range: i.range ?? "", location: i.location ?? "", intervalMonths: String(i.intervalMonths), lastCalibration: i.lastCalibration ?? "", status: i.status, notes: i.notes ?? "" })}><Pencil className="h-3.5 w-3.5" /></Button>
@@ -87,7 +87,7 @@ function Instruments() {
             </div>
             <div className="col-span-2 flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setForm(null)}>Откажи</Button>
-              <Button className="bg-amber-500 hover:bg-amber-600" disabled={!form.name || save.isPending} onClick={() => save.mutate({
+              <Button disabled={!form.name || save.isPending} onClick={() => save.mutate({
                 id: form.id, name: form.name, code: form.code || undefined, serialNo: form.serialNo || undefined, range: form.range || undefined, location: form.location || undefined,
                 intervalMonths: parseInt(form.intervalMonths) || 12, lastCalibration: form.lastCalibration || null, status: form.status, notes: form.notes || undefined })}>Зачувај</Button>
             </div>
@@ -117,7 +117,7 @@ function CalibrationDialog({ ins, onClose }: { ins: any; onClose: () => void }) 
           </div>
           <div className="space-y-1"><Label className="text-xs">Број на сертификат</Label><Input value={cert} onChange={(e) => setCert(e.target.value)} /></div>
           <div className="space-y-1"><Label className="text-xs">Лабораторија</Label><Input value={provider} onChange={(e) => setProvider(e.target.value)} /></div>
-          <Button className="col-span-2 bg-amber-500 hover:bg-amber-600" disabled={add.isPending} onClick={() => add.mutate({ instrumentId: ins.id, date, result, certificateNo: cert || undefined, provider: provider || undefined })}>Запиши калибрација</Button>
+          <Button className="col-span-2" disabled={add.isPending} onClick={() => add.mutate({ instrumentId: ins.id, date, result, certificateNo: cert || undefined, provider: provider || undefined })}>Запиши калибрација</Button>
         </div>
         <div className="text-sm space-y-1 border-t pt-2">
           {(data ?? []).map((c) => <p key={c.id} className="text-xs"><b>{fmtD(c.date)}</b> · {c.result === "pass" ? "во ред" : <span className="text-red-600">не одговара</span>}{c.certificateNo ? ` · серт. ${c.certificateNo}` : ""}{c.provider ? ` · ${c.provider}` : ""}{c.nextDue ? ` · следна ${fmtD(c.nextDue)}` : ""}</p>)}
@@ -172,7 +172,7 @@ function InspectionPlan() {
       </div>
       <div className="flex justify-between">
         <Button size="sm" variant="ghost" onClick={() => setRows([...rows, { characteristic: "", operation: "", nominal: "", tolPlus: "", tolMinus: "", unit: "mm", instrumentId: "", frequency: "" }])}><Plus className="h-3.5 w-3.5 mr-1" />Карактеристика</Button>
-        <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={save.isPending || rows.some((r) => !r.characteristic.trim())}
+        <Button size="sm" disabled={save.isPending || rows.some((r) => !r.characteristic.trim())}
           onClick={() => save.mutate({ productId: pid, items: rows.map((r) => ({ characteristic: r.characteristic.trim(), operation: r.operation || null, nominal: num(r.nominal), tolPlus: num(r.tolPlus), tolMinus: num(r.tolMinus), unit: r.unit || "mm", instrumentId: r.instrumentId ? Number(r.instrumentId) : null, frequency: r.frequency || undefined })) })}>
           Зачувај план
         </Button>
@@ -186,7 +186,7 @@ function SupplierRating() {
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(ymd(new Date()));
   const { data } = trpc.mfg.supplierRating.useQuery({ from, to });
-  const GR: Record<string, string> = { A: "bg-emerald-100 text-emerald-800", B: "bg-lime-100 text-lime-800", C: "bg-amber-100 text-amber-800", D: "bg-red-100 text-red-700" };
+  const GR: Record<string, string> = { A: "bg-emerald-100 text-emerald-800", B: "bg-lime-100 text-lime-800", C: "bg-warning/15 text-foreground/80", D: "bg-red-100 text-red-700" };
   return (
     <Card><CardContent className="p-4 space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2">

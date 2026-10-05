@@ -6,6 +6,7 @@ import GlobalSearch from "@/components/GlobalSearch";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/ThemeToggle";
 import {
   LayoutDashboard,
   Warehouse,
@@ -65,7 +66,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-background">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -78,19 +79,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-50
-          w-64 h-screen lg:h-full shrink-0 bg-slate-900 text-white flex flex-col
+          w-64 h-screen lg:h-full shrink-0 bg-sidebar text-sidebar-foreground flex flex-col
           transform transition-transform duration-200
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700 shrink-0">
+        <div className="flex items-center justify-between p-4 border-b border-sidebar-border shrink-0">
           <div className="flex items-center min-w-0 flex-1 mr-2">
             <img src="/logo.png?v=3" alt="Serafimoski Tech"
               className="w-full max-w-[180px] h-auto object-contain" />
           </div>
           <button
-            className="lg:hidden text-slate-400 hover:text-white"
+            className="lg:hidden text-sidebar-muted hover:text-sidebar-accent-foreground"
             onClick={() => setSidebarOpen(false)}
           >
             <X className="h-5 w-5" />
@@ -98,16 +99,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* User info */}
-        <div className="px-4 py-3 border-b border-slate-700 shrink-0">
+        <div className="px-4 py-3 border-b border-sidebar-border shrink-0">
           <div className="flex items-center gap-2 text-sm">
-            <ShieldCheck className="h-4 w-4 text-amber-400" />
-            <span className="text-slate-300">{me?.name || user?.name || "Корисник"}</span>
+            <ShieldCheck className="h-4 w-4 text-sidebar-primary" />
+            <span className="text-sidebar-foreground/80">{me?.name || user?.name || "Корисник"}</span>
           </div>
-          <div className="text-xs text-slate-500 mt-1 flex items-center justify-between gap-2">
+          <div className="text-xs text-sidebar-muted mt-1 flex items-center justify-between gap-2">
             <span>Улога: {ROLES[(me?.role ?? "viewer") as Role]?.label ?? "Преглед"}</span>
             {me?.gate && (
               <button
-                className="text-slate-400 hover:text-amber-400 underline"
+                className="text-sidebar-muted hover:text-sidebar-primary underline"
                 onClick={() => { void appLogout(); }}
               >
                 одјави
@@ -132,8 +133,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm
                   transition-colors
                   ${isActive
-                    ? "bg-amber-500 text-slate-900 font-medium"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   }
                 `}
               >
@@ -145,10 +146,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Logout */}
-        <div className="p-3 border-t border-slate-700 shrink-0">
+        <div className="p-3 border-t border-sidebar-border shrink-0">
           <Button
             variant="ghost"
-            className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-800"
+            className="w-full justify-start text-sidebar-muted hover:text-sidebar-accent-foreground hover:bg-sidebar-accent"
             onClick={() => { if (me?.gate) void appLogout(); else logout(); }}
           >
             <LogOut className="h-5 w-5 mr-2" />
@@ -160,22 +161,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
+        <header className="bg-header text-header-foreground border-b border-border px-4 py-3 flex items-center gap-3">
           <button
-            className="lg:hidden text-gray-600 hover:text-gray-900"
+            className="lg:hidden text-muted-foreground hover:text-foreground"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu className="h-6 w-6" />
           </button>
-          <h1 className="text-lg font-semibold text-gray-800">
+          <h1 className="text-lg font-semibold text-foreground">
             {navItems.find((n) => n.path === location.pathname)?.label || "ERP Систем"}
           </h1>
           <button onClick={() => setSearchOpen(true)}
-            className="ml-auto flex items-center gap-2 h-9 w-full max-w-xs rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-400 hover:bg-gray-100">
+            className="ml-auto flex items-center gap-2 h-9 w-full max-w-xs rounded-lg border border-border bg-muted/60 px-3 text-sm text-muted-foreground hover:bg-muted">
             <Search className="h-4 w-4" />
             <span className="flex-1 text-left truncate">Пребарај сè...</span>
-            <kbd className="hidden sm:inline text-[10px] font-mono border rounded px-1.5 py-0.5 bg-white text-gray-500">Ctrl K</kbd>
+            <kbd className="hidden sm:inline text-[10px] font-mono border rounded px-1.5 py-0.5 bg-card text-muted-foreground">Ctrl K</kbd>
           </button>
+          <ThemeToggle className="shrink-0 text-muted-foreground" />
         </header>
         <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 

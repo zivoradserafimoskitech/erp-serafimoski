@@ -44,15 +44,15 @@ export default function BankPostDialog({ tx, onClose, onDone }: { tx: any | null
           {String(tx.txDate).slice(0, 10).split("-").reverse().join(".")} · <b className={tx.direction === "in" ? "text-emerald-700" : "text-red-600"}>{tx.direction === "in" ? "+" : "−"}{den(tx.amount)}</b> · {tx.counterpartyName || "—"}
           {tx.purpose ? <span className="block text-xs text-gray-500 mt-0.5">{tx.purpose}</span> : null}
         </DialogDescription>
-        {unsure && !kind && <p className="text-xs rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-amber-800">Можеби е „{unsure.title}“ — не сум сигурен, избери ти.</p>}
+        {unsure && !kind && <p className="text-xs rounded-md bg-primary/10 border border-primary/20 px-2 py-1 text-foreground/80">Можеби е „{unsure.title}“ — не сум сигурен, избери ти.</p>}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {(data?.kinds ?? []).map(k => {
             const I = ICON[k.key] ?? HelpCircle; const on = kind === k.key;
             return (
               <button key={k.key} type="button" onClick={() => pick(k)}
-                className={`relative text-left rounded-lg border p-2.5 transition ${on ? "border-amber-400 bg-amber-50 ring-1 ring-amber-300" : "bg-white hover:border-amber-300"}`}>
-                {on && <Check className="absolute right-2 top-2 h-4 w-4 text-amber-600" />}
-                <div className="flex items-center gap-1.5 text-sm font-medium pr-5"><I className="h-4 w-4 text-amber-600 shrink-0" />{k.title}</div>
+                className={`relative text-left rounded-lg border p-2.5 transition ${on ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30" : "bg-white hover:border-primary/40"}`}>
+                {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
+                <div className="flex items-center gap-1.5 text-sm font-medium pr-5"><I className="h-4 w-4 text-primary shrink-0" />{k.title}</div>
                 <div className="text-[11px] text-gray-500 mt-0.5 leading-snug">{k.examples}{k.accountCode ? ` · конто ${k.accountCode}` : ""}</div>
               </button>);
           })}
@@ -71,7 +71,7 @@ export default function BankPostDialog({ tx, onClose, onDone }: { tx: any | null
           {tx.accountCode ? <Button variant="ghost" className="text-red-600" onClick={() => post.mutate({ txId: tx.id, accountCode: null })}>Тргни го книжењето</Button> : <span />}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Откажи</Button>
-            <Button className="bg-amber-500 hover:bg-amber-600" disabled={!account || post.isPending} onClick={() => post.mutate({ txId: tx.id, accountCode: account })}>Книжи{account ? ` на ${account}` : ""}</Button>
+            <Button disabled={!account || post.isPending} onClick={() => post.mutate({ txId: tx.id, accountCode: account })}>Книжи{account ? ` на ${account}` : ""}</Button>
           </div>
         </div>
       </DialogContent>

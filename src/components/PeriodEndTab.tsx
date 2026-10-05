@@ -38,7 +38,7 @@ export default function PeriodEndTab() {
       {/* Залихи на производи */}
       <Card><CardContent className="p-4 space-y-3">
         <div className="flex items-start gap-3">
-          <Factory className="h-5 w-5 text-amber-600 mt-0.5" />
+          <Factory className="h-5 w-5 text-primary mt-0.5" />
           <div>
             <p className="font-semibold">Залихи на недовршено производство и готови производи</p>
             <p className="text-sm text-gray-600">Материјалот и работата одат во трошок кога се трошат. На крајот на месецот, вредноста на сè што уште е во производство или на залиха како готов производ се враќа како залиха — инаку добивката е потценета. Се книжи само промената од претходната пресметка: 600/630 наспроти 490.</p>
@@ -68,7 +68,7 @@ export default function PeriodEndTab() {
           <div className="flex flex-wrap items-center gap-2">
             <Input className="h-9 flex-1 min-w-[12rem]" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Белешка (на пр. попис на 30.09)" />
             <span className="text-xs text-gray-600">{prev ? `Претходно (${fmtD(prev.date)}): ${den(prev.wip)} / ${den(prev.fg)} · ` : ""}се книжи промена {den(dW + dF)}</span>
-            <Button className="h-9 bg-amber-500 hover:bg-amber-600" disabled={save.isPending} onClick={() => save.mutate({ date, wip: parseFloat(wip) || 0, fg: parseFloat(fg) || 0, note: note || undefined })}>Зачувај и книжи</Button>
+            <Button className="h-9" disabled={save.isPending} onClick={() => save.mutate({ date, wip: parseFloat(wip) || 0, fg: parseFloat(fg) || 0, note: note || undefined })}>Зачувај и книжи</Button>
           </div>
         )}
         {!!vals?.length && (
@@ -86,7 +86,7 @@ export default function PeriodEndTab() {
 
       {/* Амортизација */}
       <Card><CardContent className="p-4 flex items-start gap-3">
-        <Building2 className="h-5 w-5 text-amber-600 mt-0.5" />
+        <Building2 className="h-5 w-5 text-primary mt-0.5" />
         <div className="flex-1">
           <p className="font-semibold">Амортизација — месечно</p>
           <p className="text-sm text-gray-600">Од 2026 годишната амортизација се книжи по 1/12 на крајот на секој месец (до тековниот), за месечната добивка да е точна. Пресметката и книжењето за годината се во Основни средства.</p>
@@ -97,7 +97,7 @@ export default function PeriodEndTab() {
       {/* Затворање на година */}
       <Card><CardContent className="p-4 space-y-3">
         <div className="flex items-start gap-3">
-          <Scale className="h-5 w-5 text-amber-600 mt-0.5" />
+          <Scale className="h-5 w-5 text-primary mt-0.5" />
           <div>
             <p className="font-semibold">Затворање на година</p>
             <p className="text-sm text-gray-600">Приходите (класа 7) и расходите (класа 4) се затвораат на 31.12 на конто {years?.resultAccount ?? "800"} (добивка или загуба). Ако подоцна се смени нешто во годината, затворањето се пресметува само. Се прави откако годината е завршена; повторно отворање — само администратор.</p>
@@ -125,7 +125,7 @@ export default function PeriodEndTab() {
 
       {/* Почетни салда */}
       <Card><CardContent className="p-4 flex items-start gap-3">
-        <CalendarCheck className="h-5 w-5 text-amber-600 mt-0.5" />
+        <CalendarCheck className="h-5 w-5 text-primary mt-0.5" />
         <div className="flex-1">
           <p className="font-semibold">Почетни салда</p>
           <p className="text-sm text-gray-600">Ако почнувате да водите книги во програмата среде година (или со состојба од претходна програма), внесете ги салдата од бруто билансот како еден налог со датум 01.01 (или денот кога почнувате): банка, благајна, купувачи и добавувачи по партнер, залихи, капитал. Најлесно е со терк „Почетна состојба“ — направете го еднаш во табот Терк. Салдата меѓу годините програмата ги пренесува сама.</p>

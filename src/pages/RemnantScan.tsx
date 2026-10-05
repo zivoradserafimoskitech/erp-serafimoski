@@ -50,7 +50,7 @@ export default function RemnantScan() {
   if (!r) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <AlertCircle className="h-12 w-12 text-amber-500" />
+        <AlertCircle className="h-12 w-12 text-primary" />
         <div>
           <p className="font-semibold">Не е пронајден остаток</p>
           <p className="text-sm text-gray-500 mt-1 font-mono">{code}</p>
@@ -75,7 +75,7 @@ export default function RemnantScan() {
         <div className="bg-white rounded-xl border shadow-sm p-5">
           <div className="flex items-start justify-between">
             <div>
-              <div className="font-mono text-2xl font-extrabold text-amber-700">{r.code}</div>
+              <div className="font-mono text-2xl font-extrabold text-primary">{r.code}</div>
               <div className="text-sm font-medium mt-1.5 leading-tight">{r.materialName}</div>
               <div className="text-xs text-gray-400 font-mono">{r.materialCode}</div>
             </div>
@@ -132,7 +132,7 @@ export default function RemnantScan() {
                 <p className="text-sm text-center text-gray-600">
                   Останува ≈ <b>{rest.toFixed(0)} mm</b>
                   {rest > 0 && rest < minRem && (
-                    <span className="text-amber-600"> — под {minRem} mm, оди во отпад</span>
+                    <span className="text-primary"> — под {minRem} mm, оди во отпад</span>
                   )}
                 </p>
               )}
@@ -144,7 +144,7 @@ export default function RemnantScan() {
                 onChange={(e) => setRef(e.target.value)} />
             </div>
 
-            <Button className="w-full h-14 text-base bg-amber-500 hover:bg-amber-600 text-white"
+            <Button className="w-full h-14 text-base"
               disabled={!usedLength || Number(usedLength) <= 0 || Number(usedLength) > total || useMut.isPending}
               onClick={() => useMut.mutate({
                 id: r.id, usedLengthMm: Number(usedLength),

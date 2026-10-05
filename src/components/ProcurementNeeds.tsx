@@ -90,7 +90,7 @@ export default function ProcurementNeeds() {
             <p className="text-xl font-bold text-red-600">{data?.totals.count ?? 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="bg-amber-50 p-2.5 rounded-lg"><Package className="h-5 w-5 text-amber-600" /></div>
+          <div className="bg-primary/10 p-2.5 rounded-lg"><Package className="h-5 w-5 text-primary" /></div>
           <div><p className="text-sm text-gray-500">Бараат отворени налози</p>
             <p className="text-xl font-bold">{data?.totals.fromWorkOrders ?? 0}</p></div>
         </CardContent></Card>
@@ -158,7 +158,7 @@ export default function ProcurementNeeds() {
                 const qty = qtyOf(r);
                 const sup = supplierOf(r);
                 return (
-                  <TableRow key={r.id} className={checked[r.id] ? "bg-amber-50/60" : ""}>
+                  <TableRow key={r.id} className={checked[r.id] ? "bg-primary/10" : ""}>
                     <TableCell>
                       <input type="checkbox" checked={!!checked[r.id]}
                         onChange={(e) => setChecked({ ...checked, [r.id]: e.target.checked })} />
@@ -167,7 +167,7 @@ export default function ProcurementNeeds() {
                       <div className="text-sm font-medium leading-tight">{r.name}</div>
                       <div className="text-[11px] text-gray-400 font-mono">{r.code}</div>
                       {r.workOrders.length > 0 && (
-                        <div className="text-[11px] text-amber-700 mt-0.5">
+                        <div className="text-[11px] text-primary mt-0.5">
                           {r.workOrders.slice(0, 3).join(", ")}
                           {r.workOrders.length > 3 ? ` +${r.workOrders.length - 3}` : ""}
                         </div>
@@ -182,7 +182,7 @@ export default function ProcurementNeeds() {
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {r.reservedQty > 0 ? (
-                        <span className="font-medium text-amber-700">{r.reservedQty.toLocaleString("mk-MK")}</span>
+                        <span className="font-medium text-primary">{r.reservedQty.toLocaleString("mk-MK")}</span>
                       ) : <span className="text-gray-300">—</span>}
                     </TableCell>
                     <TableCell className="text-right text-sm">
@@ -261,7 +261,7 @@ export default function ProcurementNeeds() {
               </span>
             )}
           </div>
-          <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+          <Button
             disabled={readyCount === 0 || createPOs.isPending} onClick={submit}>
             <ShoppingCart className="h-4 w-4 mr-2" />
             {createPOs.isPending ? "Се креира..." : `Креирај набавни нарачки (${readyCount})`}

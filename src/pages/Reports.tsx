@@ -27,7 +27,7 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="h-6 w-6 text-amber-600" />Извештаи</h2>
+        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="h-6 w-6 text-primary" />Извештаи</h2>
         <p className="text-gray-500 mt-1">Каде се заработува, што се движи низ годината и колку отстапуваме од планот</p>
       </div>
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -116,7 +116,7 @@ function Yoy() {
         <tbody>{(data?.months ?? []).map((m) => (
           <tr key={m.month} className={`border-b border-gray-100 ${m.month > (data?.upToMonth ?? 12) ? "opacity-40" : ""}`}>
             <td className="py-1.5">{MONTHS[m.month - 1]}</td>
-            <td className="pr-3"><div className="space-y-0.5"><div className="h-2 rounded bg-amber-500" style={{ width: `${(m.current.revenue / max) * 100}%` }} /><div className="h-2 rounded bg-gray-300" style={{ width: `${(m.previous.revenue / max) * 100}%` }} /></div></td>
+            <td className="pr-3"><div className="space-y-0.5"><div className="h-2 rounded bg-primary" style={{ width: `${(m.current.revenue / max) * 100}%` }} /><div className="h-2 rounded bg-gray-300" style={{ width: `${(m.previous.revenue / max) * 100}%` }} /></div></td>
             <td className="text-right tabular-nums">{fmt(m.current.revenue)}</td><td className="text-right tabular-nums text-gray-500">{fmt(m.previous.revenue)}</td>
             <td className="text-right">{pct(change(m.current.revenue, m.previous.revenue))}</td>
             <td className="text-right tabular-nums text-gray-600">{fmt(m.current.expense)}</td>
@@ -145,7 +145,7 @@ function Budget() {
         <div className="flex items-center gap-2"><Label className="text-xs">Година</Label><Input type="number" className="h-8 w-24" value={year} onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())} /></div>
         <div className="flex items-center gap-2"><Label className="text-xs">Остварено до месец</Label><Input type="number" min={1} max={12} className="h-8 w-20" value={upTo} onChange={(e) => setUpTo(Math.max(1, Math.min(12, parseInt(e.target.value) || 12)))} /></div>
         <span className="flex-1" />
-        <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={save.isPending}
+        <Button size="sm" disabled={save.isPending}
           onClick={() => save.mutate({ year, values: Object.entries(vals).map(([line, v]) => ({ line, month: 0, amount: parseFloat(v.replace(",", ".")) || 0 })) })}>Зачувај буџет</Button>
       </div>
       <p className="text-xs text-gray-500">Внеси годишен буџет по позиција (се дели рамномерно по месеци). Остварувањето е од главната книга; зелено = подобро од планот (повеќе приход / помал трошок).</p>

@@ -31,7 +31,7 @@ export default function RemindersCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><BellRing className="h-5 w-5 text-amber-600" />Автоматски потсетници по е-пошта</CardTitle>
+        <CardTitle className="flex items-center gap-2"><BellRing className="h-5 w-5 text-primary" />Автоматски потсетници по е-пошта</CardTitle>
         <p className="text-xs text-gray-500">Се праќаат сами секој ден по {s.sendHour}:00 (по македонско време) преку SMTP погоре. Бара серверот да е буден.</p>
       </CardHeader>
       <CardContent className="space-y-5">

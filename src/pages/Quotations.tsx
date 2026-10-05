@@ -30,7 +30,7 @@ const qStatus: Record<string, { label: string; cls: string }> = {
   sent: { label: "Испратена", cls: "bg-blue-100 text-blue-700" },
   accepted: { label: "Прифатена", cls: "bg-emerald-100 text-emerald-700" },
   rejected: { label: "Одбиена", cls: "bg-red-100 text-red-700" },
-  expired: { label: "Истечена", cls: "bg-amber-100 text-amber-700" },
+  expired: { label: "Истечена", cls: "bg-warning/15 text-primary" },
   converted: { label: "Конвертирана", cls: "bg-purple-100 text-purple-700" },
 };
 
@@ -439,7 +439,7 @@ export default function Quotations() {
                 resetQForm();
               }
             }}>
-              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setEditingId(null)}><Plus className="h-4 w-4 mr-2" />Нова понуда</Button></DialogTrigger>
+              <DialogTrigger asChild><Button onClick={() => setEditingId(null)}><Plus className="h-4 w-4 mr-2" />Нова понуда</Button></DialogTrigger>
               <DialogContent className="sm:max-w-4xl max-h-[95vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editingId ? `Измени понуда ${qForm.quoteNumber}` : "Нова понуда"}</DialogTitle></DialogHeader>
                 <form onSubmit={handleQSubmit} className="space-y-4">
@@ -467,7 +467,7 @@ export default function Quotations() {
                       <span className="text-xs text-red-700 block">{credit.over ? `Над кредитниот лимит: отворено ${Math.round(credit.open).toLocaleString("mk-MK")} + оваа понуда > лимит ${Math.round(credit.limit ?? 0).toLocaleString("mk-MK")} ден. ` : ""}{credit.overdueCount ? `${credit.overdueCount} фактури по рок (${Math.round(credit.overdueMkd).toLocaleString("mk-MK")} ден).` : ""}</span>
                     )}
                     {qForm.customerId && isForeign(qForm.customerId, qForm.currency) && Number(qForm.vatRate) !== 0 && (
-                      <span className="text-xs text-amber-700">Клиентот е од странство / валутата не е денари — обично без ДДВ</span>
+                      <span className="text-xs text-primary">Клиентот е од странство / валутата не е денари — обично без ДДВ</span>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -487,12 +487,12 @@ export default function Quotations() {
                       <MaterialPicker tile={{ icon: "📦", label: "Производ (каталог)" }} title="Избери производ — ќе се отвори естиматор" value={null}
                         materials={productsData?.map((p: any) => ({ id: p.id, code: p.code, name: p.name, unit: prodUnits[p.unit] || p.unit, lastPurchasePrice: p.defaultPrice })) as any}
                         onSelect={(p: any) => { setEstProduct(p.id); setEstForm({ area: "", perimeter: "", length: "", quantity: "1", width: "", height: "" }); setEstDialog(true); }} />
-                      <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300"
+                      <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-accent hover:border-primary/40"
                         onClick={() => { setCustomForm({ name: "", unit: "pcs", quantity: "1", salePrice: "" }); setEstMats([]); setEstSvcs([]); setCustomDialog(true); }}>
                         <span className="text-lg leading-none">✏️</span>
                         <span className="text-xs font-medium">Custom производ</span>
                       </Button>
-                      <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-amber-50 hover:border-amber-300" onClick={() => setDxfOpen(true)}>
+                      <Button type="button" variant="outline" className="w-full h-16 flex flex-col gap-1 items-center justify-center hover:bg-accent hover:border-primary/40" onClick={() => setDxfOpen(true)}>
                         <span className="text-lg leading-none">📐</span>
                         <span className="text-xs font-medium">Од DXF цртеж</span>
                       </Button>
@@ -529,7 +529,7 @@ export default function Quotations() {
                                     title={item.priceMode === "kg" ? "Цена по килограм — кликни за по единица" : "Цена по единица — кликни за по килограм"}
                                     className={`shrink-0 h-8 px-1.5 rounded border text-[10px] font-semibold ${
                                       item.priceMode === "kg"
-                                        ? "bg-amber-100 border-amber-300 text-amber-800"
+                                        ? "bg-warning/15 border-primary/40 text-foreground/80"
                                         : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"
                                     }`}>
                                     {item.priceMode === "kg" ? "кг" : item.unit}
@@ -566,7 +566,7 @@ export default function Quotations() {
 
                   <div className="space-y-2"><Label>Белешки / Опис на понуда</Label><Textarea value={qForm.notes} onChange={e => setQForm({ ...qForm, notes: e.target.value })} placeholder="Технички детали, услови, напомени..." /></div>
                   <div className="space-y-1">
-                    <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createQ.isPending || updateQFull.isPending || !qForm.customerId || qItems.length === 0}>
+                    <Button type="submit" className="w-full" disabled={createQ.isPending || updateQFull.isPending || !qForm.customerId || qItems.length === 0}>
                       {editingId ? (updateQFull.isPending ? "Зачувување..." : "Зачувај измени") : (createQ.isPending ? "Зачувување..." : "Креирај понуда")}
                     </Button>
                     {!qForm.customerId && <p className="text-xs text-red-500 text-center">Избери клиент за да продолжиш</p>}
@@ -604,7 +604,7 @@ export default function Quotations() {
                         ))}
                         {customForm.quantity && estCost > 0 && <p className="text-xs text-gray-600">Трошок по ЕМ: <b>{(estCost / Math.max(Number(customForm.quantity), 1)).toFixed(2)}</b> ден {customForm.salePrice && <>· маржа: <b>{(((Number(customForm.salePrice) * Number(customForm.quantity)) - estCost) / Math.max(estCost, 1) * 100).toFixed(0)}%</b></>}</p>}
                       </div>
-                      <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={!customForm.name || !customForm.salePrice}
+                      <Button className="w-full" disabled={!customForm.name || !customForm.salePrice}
                         onClick={() => {
                           const notes = JSON.stringify({ materials: estMats.map(m => ({ materialId: m.materialId, quantity: Number(m.quantity) * Number(customForm.quantity || 1) })), services: estSvcs.map(s => ({ serviceId: s.serviceId, quantity: s.quantity })) });
                           setQItems([...qItems, { itemType: "product", referenceId: null, description: customForm.name, quantity: customForm.quantity, unit: customForm.unit, unitPrice: customForm.salePrice, totalPrice: String(Number(customForm.salePrice) * Number(customForm.quantity || 1)), notes, sortOrder: qItems.length }]);
@@ -618,7 +618,7 @@ export default function Quotations() {
           )}
           {tab === "services" && (
             <Dialog open={svcDialog} onOpenChange={setSvcDialog}>
-              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нова услуга</Button></DialogTrigger>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нова услуга</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нова услуга</DialogTitle></DialogHeader>
                 <form onSubmit={e => { e.preventDefault(); createSvc.mutate(svcForm as any); }} className="space-y-3">
@@ -643,14 +643,14 @@ export default function Quotations() {
                   <div className="space-y-2"><Label>Цена на чинење</Label><Input type="number" step="0.01" value={svcForm.costRate} onChange={e => setSvcForm({ ...svcForm, costRate: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Продажна цена</Label><Input type="number" step="0.01" value={svcForm.saleRate} onChange={e => setSvcForm({ ...svcForm, saleRate: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Опис</Label><Textarea value={svcForm.description} onChange={e => setSvcForm({ ...svcForm, description: e.target.value })} /></div>
-                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createSvc.isPending}>{createSvc.isPending ? "Зачувување..." : "Зачувај услуга"}</Button>
+                  <Button type="submit" className="w-full" disabled={createSvc.isPending}>{createSvc.isPending ? "Зачувување..." : "Зачувај услуга"}</Button>
                 </form>
               </DialogContent>
             </Dialog>
           )}
           {tab === "products" && (
             <Dialog open={prodDialog} onOpenChange={setProdDialog}>
-              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нов производ</Button></DialogTrigger>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нов производ</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нов производ</DialogTitle><p className="text-xs text-gray-500">Производ = готов артикал што го изработуваш и продаваш (панел, ограда, порта...). Услугите се внесуваат одделно.</p></DialogHeader>
                 <form onSubmit={e => { e.preventDefault(); createProd.mutate(prodForm as any); }} className="space-y-3">
@@ -672,7 +672,7 @@ export default function Quotations() {
                     <div className="space-y-2"><Label>Трошок работа</Label><Input type="number" step="0.01" value={prodForm.laborCost} onChange={e => setProdForm({ ...prodForm, laborCost: e.target.value })} /></div>
                   </div>
                   <div className="space-y-2"><Label>Опис</Label><Textarea value={prodForm.description} onChange={e => setProdForm({ ...prodForm, description: e.target.value })} /></div>
-                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createProd.isPending}>{createProd.isPending ? "Зачувување..." : "Зачувај производ"}</Button>
+                  <Button type="submit" className="w-full" disabled={createProd.isPending}>{createProd.isPending ? "Зачувување..." : "Зачувај производ"}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -691,7 +691,7 @@ export default function Quotations() {
           { key: "products", label: "Производи", icon: Package },
         ].map(t => {
           const Icon = t.icon;
-          return (<button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? "border-amber-500 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}><Icon className="h-4 w-4" />{t.label}</button>);
+          return (<button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}><Icon className="h-4 w-4" />{t.label}</button>);
         })}
       </div>
 
@@ -828,18 +828,18 @@ export default function Quotations() {
               <div className="px-8 py-6 space-y-6">
                 <DealFlow quotationId={qDetail.id} onProforma={() => openProforma()} />
                 {Number(qDetail.vatRate) > 0 && isForeign(qDetail.customerId, qDetail.currency ?? "MKD") && (
-                  <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
-                    <span className="text-amber-800">
+                  <div className="flex items-center justify-between gap-4 rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
+                    <span className="text-foreground/80">
                       Понудата е за странство ({qDetail.currency !== "MKD" ? qDetail.currency : "клиент од друга држава"}), а има ДДВ {Number(qDetail.vatRate)}%.
                     </span>
-                    <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shrink-0" disabled={updateQ.isPending}
+                    <Button size="sm" className="shrink-0" disabled={updateQ.isPending}
                       onClick={() => updateQ.mutate({ id: qDetail.id, vatRate: "0" })}>
                       Без ДДВ (извоз)
                     </Button>
                   </div>
                 )}
                 {/* Totals — ВКУПНО dominant */}
-                <div className="rounded-xl bg-amber-50/70 border border-amber-200 p-6 flex items-center justify-between">
+                <div className="rounded-xl bg-primary/10 border border-primary/20 p-6 flex items-center justify-between">
                   <div className="flex gap-10">
                     <div>
                       <div className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1">Нето</div>
@@ -858,8 +858,8 @@ export default function Quotations() {
                     )}
                   </div>
                   <div className="text-right">
-                    <div className="text-xs font-medium uppercase tracking-wider text-amber-700/70 mb-1">Вкупно за плаќање</div>
-                    <div className="text-3xl font-bold text-amber-700 tracking-tight">{Number(qDetail.totalAmount).toLocaleString("mk-MK")} <span className="text-lg font-semibold">{qDetail.currency}</span></div>
+                    <div className="text-xs font-medium uppercase tracking-wider text-primary/70 mb-1">Вкупно за плаќање</div>
+                    <div className="text-3xl font-bold text-primary tracking-tight">{Number(qDetail.totalAmount).toLocaleString("mk-MK")} <span className="text-lg font-semibold">{qDetail.currency}</span></div>
                   </div>
                 </div>
 
@@ -909,7 +909,7 @@ export default function Quotations() {
                               <TableCell><Badge variant="outline" className="font-normal">{i.itemType === "material" ? "Мат" : i.itemType === "service" ? "Усл" : "Прд"}</Badge></TableCell>
                               <TableCell className="font-medium text-gray-800">{i.description}
                                 {/Цртеж #(\d+)/.test(i.notes ?? "") && (
-                                  <button type="button" className="block text-[11px] font-normal text-amber-700 hover:underline" onClick={async () => {
+                                  <button type="button" className="block text-[11px] font-normal text-primary hover:underline" onClick={async () => {
                                     const d = await utils.quotation.drawingGet.fetch({ id: Number(/Цртеж #(\d+)/.exec(i.notes)![1]) });
                                     if (!d) { toast.error("Цртежот не е пронајден"); return; }
                                     const url = URL.createObjectURL(new Blob([d.dxf], { type: "application/dxf" }));
@@ -1003,7 +1003,7 @@ export default function Quotations() {
                 <div className="space-y-1"><Label>Рок за плаќање</Label><DateInput value={pf.dueDate} onChange={e => setPf({ ...pf, dueDate: e.target.value })} /></div>
               </div>
               <div className="space-y-1">
-                <Label>Описи на ставките {pf.language === "en" && <span className="text-xs font-normal text-amber-600">— преведи ги на англиски</span>}</Label>
+                <Label>Описи на ставките {pf.language === "en" && <span className="text-xs font-normal text-primary">— преведи ги на англиски</span>}</Label>
                 <div className="space-y-1.5">
                   {pf.descriptions.map((d, i) => (
                     <div key={i} className="flex items-center gap-2">
@@ -1020,7 +1020,7 @@ export default function Quotations() {
               </div>
               <div className="space-y-1"><Label>Забелешка на документот</Label><Textarea rows={4} value={pf.notes} onChange={e => setPf({ ...pf, notes: e.target.value })} /></div>
               {(pf.language === "en" || pf.currency !== "MKD") && !companySettings?.iban && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                <p className="text-xs text-primary bg-primary/10 border border-primary/20 rounded p-2">
                   Нема внесено IBAN/SWIFT. Внеси ги во Подесувања → Фирма → Девизна сметка за да се печатат на про-фактурата.
                 </p>
               )}
@@ -1077,7 +1077,7 @@ export default function Quotations() {
           <DialogHeader><DialogTitle>Естиматор — {productsData?.find((x: any) => x.id === estProduct)?.name ?? "производ"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {estBom && estBom.length === 0 ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <div className="rounded-lg border border-primary/20 bg-primary/10 p-4 text-sm text-foreground/80">
                 Овој производ сè уште нема состав (норматив). Оди во Каталог → Нормативи (BOM) и додади материјали/услуги пред да можеш да естимираш.
               </div>
             ) : (

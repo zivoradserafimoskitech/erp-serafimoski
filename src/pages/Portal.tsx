@@ -31,7 +31,7 @@ export default function Portal() {
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6"><div className="max-w-md text-center"><p className="text-lg font-semibold text-slate-800">Линкот не важи</p><p className="text-sm text-slate-500 mt-2">{err}</p></div></div>;
-  if (!data) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-amber-500" /></div>;
+  if (!data) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   const openTotal = data.invoices.filter((i: any) => i.type === "standard").reduce((s: number, i: any) => s + (i.currency === "MKD" ? i.open : 0), 0);
   const TABS = [
     { k: "orders", l: "Нарачки", i: Package, n: data.orders.length },
@@ -50,13 +50,13 @@ export default function Portal() {
       </header>
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {openTotal > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+          <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm">
             Отворено за плаќање: <b>{fmt(openTotal)}</b>{data.company.bankAccount ? <> · жиро-сметка {data.company.bankAccount}{data.company.bankName ? ` (${data.company.bankName})` : ""}</> : null}
           </div>
         )}
         <div className="flex flex-wrap gap-1 rounded-lg bg-white border p-1 w-fit">
           {TABS.map((t) => { const I = t.i; return (
-            <button key={t.k} onClick={() => setTab(t.k)} className={`px-3 py-1.5 rounded-md text-sm flex items-center gap-1.5 ${tab === t.k ? "bg-amber-500 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+            <button key={t.k} onClick={() => setTab(t.k)} className={`px-3 py-1.5 rounded-md text-sm flex items-center gap-1.5 ${tab === t.k ? "bg-primary text-white" : "text-slate-600 hover:bg-slate-50"}`}>
               <I className="h-4 w-4" />{t.l}{t.n !== null ? <span className="text-xs opacity-70">{t.n}</span> : null}</button>
           ); })}
         </div>
@@ -77,7 +77,7 @@ export default function Portal() {
           <div className="rounded-xl border bg-white divide-y">
             {!data.invoices.length ? <p className="p-6 text-center text-sm text-slate-400">Нема фактури</p> : data.invoices.map((i: any) => (
               <div key={i.id} className="px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
-                <button className="font-mono font-semibold w-36 text-left text-amber-700 hover:underline" onClick={() => openInvoice(i.id)}>{i.number}</button>
+                <button className="font-mono font-semibold w-36 text-left text-primary hover:underline" onClick={() => openInvoice(i.id)}>{i.number}</button>
                 <span className="text-slate-500 w-24">{fmtD(i.date)}</span>
                 <span className="text-xs text-slate-500 w-28">{i.type === "proforma" ? "про-фактура" : i.type === "credit_note" ? "книжно одобрување" : `рок ${fmtD(i.dueDate)}`}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs ${i.status === "paid" ? "bg-emerald-100 text-emerald-700" : i.dueDate && i.dueDate < new Date().toISOString().slice(0, 10) && i.open > 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}`}>{INV[i.status] ?? i.status}</span>
@@ -94,7 +94,7 @@ export default function Portal() {
               <div key={c.id} className="px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
                 <span className="font-medium flex-1">{c.material ?? "Материјал"}{c.heat ? <span className="text-xs text-slate-500"> · шаржа {c.heat}</span> : null}{c.standard ? <span className="text-xs text-slate-500"> · {c.standard}</span> : null}</span>
                 <span className="text-xs text-slate-500">испратница {c.dn} · {fmtD(c.date)}</span>
-                {c.hasFile ? <a className="text-amber-700 hover:underline text-xs" href={`${base}/cert/${c.id}`} target="_blank" rel="noreferrer">сертификат {c.number ?? ""}</a> : <span className="text-xs">{c.number ?? ""}</span>}
+                {c.hasFile ? <a className="text-primary hover:underline text-xs" href={`${base}/cert/${c.id}`} target="_blank" rel="noreferrer">сертификат {c.number ?? ""}</a> : <span className="text-xs">{c.number ?? ""}</span>}
               </div>
             ))}
           </div>
@@ -141,7 +141,7 @@ function RfqForm({ base }: { base: string }) {
         <button type="button" className="border rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5" onClick={() => ref.current?.click()}><Paperclip className="h-4 w-4" />Прикачи цртежи (DXF, PDF, STEP...)</button>
         {files.map((f, i) => <span key={i} className="text-xs bg-slate-100 rounded px-2 py-0.5">{f.name} <button onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button></span>)}
       </div>
-      <button className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-lg py-2 font-medium disabled:opacity-50" disabled={title.trim().length < 3 || busy} onClick={send}>{busy ? "Се праќа..." : "Прати барање"}</button>
+      <button className="w-full rounded-lg py-2 font-medium disabled:opacity-50" disabled={title.trim().length < 3 || busy} onClick={send}>{busy ? "Се праќа..." : "Прати барање"}</button>
     </div>
   );
 }

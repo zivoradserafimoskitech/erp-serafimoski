@@ -46,7 +46,7 @@ import {
 const orderStatusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "На чекање", className: "bg-gray-100 text-gray-700" },
   confirmed: { label: "Потврдена", className: "bg-blue-100 text-blue-700" },
-  in_production: { label: "Во производство", className: "bg-amber-100 text-amber-700" },
+  in_production: { label: "Во производство", className: "bg-warning/15 text-primary" },
   ready: { label: "Готова", className: "bg-emerald-100 text-emerald-700" },
   delivered: { label: "Испорачана", className: "bg-teal-100 text-teal-700" },
   cancelled: { label: "Откажана", className: "bg-red-100 text-red-700" },
@@ -282,7 +282,7 @@ export default function Customers() {
                     Активен клиент
                   </label>
                 )}
-                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={custCreate.isPending || custUpdate.isPending}>
+                <Button type="submit" className="w-full" disabled={custCreate.isPending || custUpdate.isPending}>
                   {custCreate.isPending || custUpdate.isPending ? "Зачувување..." : editingCustId ? "Зачувај измени" : "Зачувај клиент"}
                 </Button>
               </form>
@@ -291,7 +291,7 @@ export default function Customers() {
 
           <Dialog open={orderDialog} onOpenChange={setOrderDialog}>
             <DialogTrigger asChild>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white">
+              <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 Нова нарачка
               </Button>
@@ -378,7 +378,7 @@ export default function Customers() {
                   <Label>Белешки</Label>
                   <Textarea value={orderForm.notes} onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })} />
                 </div>
-                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={orderCreate.isPending || !orderForm.customerId || items.length === 0}>
+                <Button type="submit" className="w-full" disabled={orderCreate.isPending || !orderForm.customerId || items.length === 0}>
                   {orderCreate.isPending ? "Зачувување..." : "Креирај нарачка"}
                 </Button>
               </form>
@@ -497,7 +497,7 @@ export default function Customers() {
                           <TableCell><Badge className={pr.className}>{pr.label}</Badge></TableCell>
                           <TableCell className="font-medium">{o.totalAmount} ден.</TableCell>
                           <TableCell className="text-gray-500">{formatDate(o.deliveryDate)}</TableCell>
-                          <TableCell>{o.status === "confirmed" ? <Button size="sm" variant="outline" onClick={() => chainWO.mutate({ orderId: o.id })} disabled={chainWO.isPending}>→ Налог</Button> : o.status === "in_production" ? <span className="text-xs text-amber-600">во налог</span> : <span className="text-xs text-gray-400">потврди прво</span>}</TableCell>
+                          <TableCell>{o.status === "confirmed" ? <Button size="sm" variant="outline" onClick={() => chainWO.mutate({ orderId: o.id })} disabled={chainWO.isPending}>→ Налог</Button> : o.status === "in_production" ? <span className="text-xs text-primary">во налог</span> : <span className="text-xs text-gray-400">потврди прво</span>}</TableCell>
                           <TableCell>
                             <div className="flex gap-1">
                               <Button size="sm" variant="outline" onClick={() => { setSelectedOrder(o.id); setDetailOpen(true); }}>

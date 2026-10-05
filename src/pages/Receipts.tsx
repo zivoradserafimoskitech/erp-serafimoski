@@ -715,9 +715,9 @@ export default function Receipts() {
           </div>
 
           {(draftReceipts?.length ?? 0) > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-              <div className="flex-1 min-w-[220px] text-sm text-amber-900">
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 px-4 py-3">
+              <AlertTriangle className="h-5 w-5 text-primary shrink-0" />
+              <div className="flex-1 min-w-[220px] text-sm text-warning-foreground">
                 <b>{draftReceipts!.length} {draftReceipts!.length === 1 ? "приемница е" : "приемници се"} во нацрт</b> — залихата за нив уште не е зголемена:{" "}
                 <span className="font-mono text-xs">{draftReceipts!.slice(0, 6).map((r: any) => r.receiptNumber).join(", ")}{draftReceipts!.length > 6 ? "…" : ""}</span>
               </div>

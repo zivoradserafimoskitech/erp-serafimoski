@@ -109,14 +109,14 @@ export default function StatementsTab() {
       </div>
 
       {notes.length > 0 && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 space-y-0.5">
+        <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-warning-foreground space-y-0.5">
           {notes.map((n, i) => <p key={i} className="flex items-start gap-1.5"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />{n}</p>)}
         </div>
       )}
       {editCodes && (
         <div className="rounded-lg border bg-white px-3 py-2 text-sm flex flex-wrap items-center justify-between gap-2">
           <span className="text-gray-600">Внеси ги броевите на полињата (АОП) од образецот што го користи сметководителот — се памтат и се печатат во извештајот.</span>
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={saveCodes.isPending} onClick={() => saveCodes.mutate({ kind: "statement", codes })}>Зачувај броеви</Button>
+          <Button size="sm" disabled={saveCodes.isPending} onClick={() => saveCodes.mutate({ kind: "statement", codes })}>Зачувај броеви</Button>
         </div>
       )}
 
@@ -131,7 +131,7 @@ export default function StatementsTab() {
           <tbody>
             {isLoading ? <tr><td colSpan={4} className="text-center py-8 text-gray-400">Вчитување...</td></tr> : lines.map((l) => (
               <Fragment key={l.key}>
-                <tr className={l.kind === "grand" ? "bg-gray-900 text-white" : l.kind === "section" ? "bg-gray-50 font-semibold" : l.kind === "total" ? "bg-amber-50 font-semibold border-t" : "border-b border-gray-100 hover:bg-amber-50/40"}>
+                <tr className={l.kind === "grand" ? "bg-gray-900 text-white" : l.kind === "section" ? "bg-gray-50 font-semibold" : l.kind === "total" ? "bg-primary/10 font-semibold border-t" : "border-b border-gray-100 hover:bg-accent/40"}>
                   <td className="px-3 py-1.5">
                     {editCodes ? <Input className="h-7 w-16 text-xs" value={codes[l.key] ?? ""} onChange={(e) => setCodes({ ...codes, [l.key]: e.target.value })} />
                       : <span className="font-mono text-xs text-gray-500">{codes[l.key] ?? ""}</span>}

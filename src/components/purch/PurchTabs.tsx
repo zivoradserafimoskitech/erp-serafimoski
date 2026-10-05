@@ -26,12 +26,12 @@ export function RfqTab() {
     <div className="space-y-3">
       <div className="flex justify-between items-center">
         <p className="text-sm text-gray-600">Барање за цена до повеќе добавувачи одеднаш — одговорите се споредуваат по ставка, а избраната понуда станува набавна нарачка.</p>
-        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => setCreate(true)}><Plus className="h-4 w-4 mr-1.5" />Ново барање</Button>
+        <Button onClick={() => setCreate(true)}><Plus className="h-4 w-4 mr-1.5" />Ново барање</Button>
       </div>
       <Card><CardContent className="p-0">
         {!data?.length ? <p className="py-8 text-center text-sm text-gray-400">Нема барања</p> : data.map((r) => (
           <div key={r.id} className="flex flex-wrap items-center gap-3 border-b last:border-b-0 px-4 py-2 text-sm">
-            <button className="font-mono text-xs w-28 text-left text-amber-700 hover:underline" onClick={() => setOpen(r.id)}>{r.number}</button>
+            <button className="font-mono text-xs w-28 text-left text-primary hover:underline" onClick={() => setOpen(r.id)}>{r.number}</button>
             <span className="flex-1 font-medium">{r.title}</span>
             <span className="text-xs text-gray-500">{r.answered}/{r.suppliers} одговори{r.neededBy ? ` · потребно ${fmtD(r.neededBy)}` : ""}</span>
             <span className="text-xs rounded bg-gray-100 px-1.5 py-0.5">{ST[r.status] ?? r.status}{r.poNumber ? ` ${r.poNumber}` : ""}</span>
@@ -80,10 +80,10 @@ function RfqCreate({ onClose }: { onClose: (id?: number) => void }) {
           <p className="text-xs font-semibold text-gray-500">До кои добавувачи</p>
           <div className="flex flex-wrap gap-1.5">{(sups ?? []).map((s: any) => (
             <button key={s.id} type="button" onClick={() => setSelSup(selSup.includes(s.id) ? selSup.filter((x) => x !== s.id) : [...selSup, s.id])}
-              className={`rounded-full border px-2.5 py-1 text-xs ${selSup.includes(s.id) ? "bg-amber-100 border-amber-400" : "bg-white"}`}>{s.name}</button>
+              className={`rounded-full border px-2.5 py-1 text-xs ${selSup.includes(s.id) ? "bg-warning/15 border-primary/50" : "bg-white"}`}>{s.name}</button>
           ))}</div>
         </div>
-        <Button className="bg-amber-500 hover:bg-amber-600" disabled={!valid || create.isPending} onClick={() => create.mutate({ title, neededBy: neededBy || null,
+        <Button disabled={!valid || create.isPending} onClick={() => create.mutate({ title, neededBy: neededBy || null,
           items: items.map((i) => ({ materialId: i.materialId, description: i.description, quantity: parseFloat(i.quantity), unit: i.unit || undefined })), supplierIds: selSup })}>Направи барање</Button>
       </DialogContent>
     </Dialog>
@@ -231,7 +231,7 @@ export function ApprovalsBar() {
   return (
     <div className="rounded-lg border bg-white px-3 py-2 text-sm space-y-1.5">
       <div className="flex flex-wrap items-center gap-2">
-        <ShieldCheck className="h-4 w-4 text-amber-600" />
+        <ShieldCheck className="h-4 w-4 text-primary" />
         <span>{data?.threshold ? `Набавни нарачки над ${fmt(data.threshold)} ден бараат одобрување од администратор пред праќање.` : "Нема праг за одобрување на набавни нарачки."}</span>
         {isAdmin && !edit && <Button size="sm" variant="ghost" className="h-7" onClick={() => { setThr(data?.threshold ? String(data.threshold) : ""); setEdit(true); }}>Промени</Button>}
         {edit && <><Input className="h-7 w-32" placeholder="праг (ден)" value={thr} onChange={(e) => setThr(e.target.value)} /><Button size="sm" className="h-7" onClick={() => saveThr.mutate({ threshold: thr ? parseFloat(thr) : null })}>Зачувај</Button></>}
@@ -239,7 +239,7 @@ export function ApprovalsBar() {
       {(data?.list ?? []).map((p) => (
         <div key={p.id} className="flex items-center gap-3 border-t pt-1.5">
           <span className="font-mono text-xs w-28">{p.number}</span><span className="flex-1">{p.supplier}</span><span className="tabular-nums">{fmt(p.total)} ден</span>
-          {isAdmin ? <Button size="sm" className="h-7 bg-emerald-600 hover:bg-emerald-700" onClick={() => approve.mutate({ poId: p.id, approve: true })}>Одобри</Button> : <span className="text-xs text-amber-700">чека одобрување</span>}
+          {isAdmin ? <Button size="sm" className="h-7 bg-emerald-600 hover:bg-emerald-700" onClick={() => approve.mutate({ poId: p.id, approve: true })}>Одобри</Button> : <span className="text-xs text-primary">чека одобрување</span>}
         </div>
       ))}
     </div>

@@ -105,9 +105,9 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                   <div className="text-xl font-bold text-emerald-700">{data.totals.recognized}</div>
                   <div className="text-[11px] text-emerald-700">препознаени</div>
                 </div>
-                <div className="rounded-lg bg-amber-50 border border-amber-200 py-2">
-                  <div className="text-xl font-bold text-amber-700">{data.totals.medium}</div>
-                  <div className="text-[11px] text-amber-700">за проверка</div>
+                <div className="rounded-lg bg-primary/10 border border-primary/20 py-2">
+                  <div className="text-xl font-bold text-primary">{data.totals.medium}</div>
+                  <div className="text-[11px] text-primary">за проверка</div>
                 </div>
                 <div className="rounded-lg bg-gray-50 border border-gray-200 py-2">
                   <div className="text-xl font-bold text-gray-600">{data.totals.unparsed}</div>
@@ -167,7 +167,7 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                         Нема што да се пополни
                       </TableCell></TableRow>
                     ) : filtered.map((r: any) => (
-                      <TableRow key={r.id} className={r.confidence === "medium" ? "bg-amber-50/50" : ""}>
+                      <TableRow key={r.id} className={r.confidence === "medium" ? "bg-primary/10" : ""}>
                         <TableCell>
                           <input type="checkbox" checked={!!checked[r.id]}
                             onChange={(e) => setChecked({ ...checked, [r.id]: e.target.checked })} />
@@ -180,7 +180,7 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                           <div className="text-xs font-medium">{r.shape}</div>
                           <div className="text-[11px] text-gray-500">{r.dims}</div>
                           {r.note && !matOverride[r.id] && (
-                            <div className="text-[11px] text-amber-700 flex items-start gap-1 mt-0.5">
+                            <div className="text-[11px] text-primary flex items-start gap-1 mt-0.5">
                               <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />{r.note}
                             </div>
                           )}
@@ -246,7 +246,7 @@ export function WeightAutofill({ onDone }: { onDone: () => void }) {
                 </p>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setOpen(false)}>Затвори</Button>
-                  <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+                  <Button
                     disabled={selectedCount === 0 || applyMutation.isPending} onClick={apply}>
                     {applyMutation.isPending ? "Се запишува..." : `Запиши ${selectedCount}`}
                   </Button>

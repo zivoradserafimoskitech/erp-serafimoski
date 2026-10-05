@@ -52,7 +52,7 @@ export default function AccountantPackActions({ report, from, to }: { report: an
     <>
       <div className="space-y-1.5">
         <div className="flex flex-wrap gap-2">
-          <Button className="bg-amber-500 hover:bg-amber-600" disabled={!!busy} onClick={() => setSendOpen(true)}>
+          <Button disabled={!!busy} onClick={() => setSendOpen(true)}>
             <Send className="h-4 w-4 mr-2" />Прати до сметководител</Button>
           <Button variant="outline" className="border-emerald-300 text-emerald-800 hover:bg-emerald-50" disabled={!!busy}
             onClick={() => run("xlsx", async () => { saveBlob(await xlsx(), name("xlsx")); toast.success("Excel е симнат"); })}>
@@ -151,7 +151,7 @@ function SendDialog({ open, onOpenChange, from, to, report, settings, mailReady,
   return (
     <Dialog open={open} onOpenChange={(o) => !step && onOpenChange(o)}>
       <DialogContent className="sm:max-w-xl">
-        <DialogTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-amber-600" />Прати до сметководител</DialogTitle>
+        <DialogTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-primary" />Прати до сметководител</DialogTitle>
         <DialogDescription>Период {fmt(from)} – {fmt(to)}. Во прилог: PDF и Excel{withZip ? ", и ZIP со фактурите" : ""}.</DialogDescription>
         <div className="space-y-3">
           <div className="space-y-1"><Label>До</Label>
@@ -161,15 +161,15 @@ function SendDialog({ open, onOpenChange, from, to, report, settings, mailReady,
           <div className="space-y-1"><Label>Наслов</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
           <div className="space-y-1"><Label>Порака</Label><Textarea rows={9} value={body} onChange={(e) => setBody(e.target.value)} className="text-sm" /></div>
           <label className="flex items-start gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={withZip} onChange={(e) => setWithZip(e.target.checked)} className="mt-1 h-4 w-4 accent-amber-500" />
+            <input type="checkbox" checked={withZip} onChange={(e) => setWithZip(e.target.checked)} className="mt-1 h-4 w-4 accent-primary" />
             <span>Приложи ги и фактурите (ZIP)<span className="block text-xs text-gray-500">излезните како PDF и скеновите од влезните — {(report?.outgoing?.count ?? 0) + (report?.incoming?.items ?? []).filter((i: any) => i.hasFile).length} документи</span></span>
           </label>
         </div>
         <div className="flex items-center justify-between gap-3 pt-2">
-          <span className={`text-sm ${blocker ? "text-amber-700" : "text-gray-500"}`}>{step || blocker || ""}</span>
+          <span className={`text-sm ${blocker ? "text-primary" : "text-gray-500"}`}>{step || blocker || ""}</span>
           <div className="flex gap-2">
             <Button variant="outline" disabled={!!step} onClick={() => onOpenChange(false)}>Откажи</Button>
-            <Button className="bg-amber-500 hover:bg-amber-600 min-w-[110px]" disabled={!!blocker || !!step} onClick={go}>
+            <Button className="min-w-[110px]" disabled={!!blocker || !!step} onClick={go}>
               {step ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}Прати</Button>
           </div>
         </div>

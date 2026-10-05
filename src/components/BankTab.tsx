@@ -173,9 +173,9 @@ export default function BankTab() {
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="bg-amber-50 p-2.5 rounded-lg"><AlertCircle className="h-5 w-5 text-amber-600" /></div>
+          <div className="bg-primary/10 p-2.5 rounded-lg"><AlertCircle className="h-5 w-5 text-primary" /></div>
           <div><p className="text-sm text-gray-500">Неповрзани ставки</p>
-            <p className="text-xl font-bold text-amber-700">{stats?.unmatched ?? 0}</p></div>
+            <p className="text-xl font-bold text-primary">{stats?.unmatched ?? 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="bg-emerald-50 p-2.5 rounded-lg"><ArrowDownLeft className="h-5 w-5 text-emerald-600" /></div>
@@ -196,7 +196,7 @@ export default function BankTab() {
         </div>
       )}
       {warn.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-4 py-2.5 space-y-1">
+        <div className="bg-primary/10 border border-primary/20 text-foreground/80 text-xs rounded-lg px-4 py-2.5 space-y-1">
           {warn.map((w, i) => <div key={i}>• {w}</div>)}
         </div>
       )}
@@ -206,7 +206,7 @@ export default function BankTab() {
         <input ref={fileRef} type="file" multiple className="hidden"
           accept=".300,.txt,.zip,.pdf,.sta,.mt940"
           onChange={(e) => handleFiles(e.target.files)} />
-        <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+        <Button
           disabled={busy || importMut.isPending}
           onClick={() => fileRef.current?.click()}>
           <Upload className="h-4 w-4 mr-2" />
@@ -256,18 +256,18 @@ export default function BankTab() {
       {recon && (recon.rows.length > 0 || recon.unposted.count > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {recon.rows.map(r => (
-            <div key={r.currency} className={`rounded-lg border p-3 ${Math.abs(r.diff) < 0.5 ? "border-emerald-200 bg-emerald-50/50" : "border-amber-300 bg-amber-50"}`}>
+            <div key={r.currency} className={`rounded-lg border p-3 ${Math.abs(r.diff) < 0.5 ? "border-emerald-200 bg-emerald-50/50" : "border-primary/40 bg-primary/10"}`}>
               <p className="text-xs text-gray-500">{r.currency === "MKD" ? "Денарска сметка" : "Девизни сметки (во денари)"} · конто {r.account} · на {r.date.split("-").reverse().join(".")}</p>
               <p className="text-sm mt-1">Извод <b>{den(r.statement)}</b> · Главна книга <b>{den(r.ledger)}</b></p>
-              <p className={`text-xs mt-0.5 ${Math.abs(r.diff) < 0.5 ? "text-emerald-700" : "text-amber-800"}`}>
+              <p className={`text-xs mt-0.5 ${Math.abs(r.diff) < 0.5 ? "text-emerald-700" : "text-foreground/80"}`}>
                 {Math.abs(r.diff) < 0.5 ? "Усогласено" : `Разлика ${den(r.diff)} — неокнижени ставки, или почетното салдо на сметката не е внесено (налог „Почетна состојба“)`}</p>
             </div>
           ))}
           {recon.unposted.count > 0 && (
-            <button onClick={() => setStatus("open")} className="text-left rounded-lg border border-amber-300 bg-amber-50 p-3">
+            <button onClick={() => setStatus("open")} className="text-left rounded-lg border border-primary/40 bg-primary/10 p-3">
               <p className="text-xs text-gray-500">Неокнижени ставки од изводите</p>
               <p className="text-sm mt-1"><b>{recon.unposted.count}</b> ставки · {den(recon.unposted.amount)} ден</p>
-              <p className="text-xs text-amber-800 mt-0.5">Секоја ставка мора да има налог: поврзи ја со фактура или „Книжи на конто“.</p>
+              <p className="text-xs text-foreground/80 mt-0.5">Секоја ставка мора да има налог: поврзи ја со фактура или „Книжи на конто“.</p>
             </button>
           )}
         </div>
@@ -317,13 +317,13 @@ export default function BankTab() {
                         <CheckCircle2 className="h-3 w-3 mr-1" />{t.matchedRef}
                       </Badge>
                     ) : t.matchStatus === "partial" ? (
-                      <Badge variant="outline" className="border-amber-300 text-amber-700 bg-amber-50">
+                      <Badge variant="outline" className="border-primary/40 text-primary bg-primary/10">
                         делумно · {t.matchedRef}
                       </Badge>
                     ) : t.matchStatus === "ignored" ? (
                       <span className="text-xs text-gray-400">занемарено</span>
                     ) : (
-                      <span className="text-xs text-amber-600">неповрзано</span>
+                      <span className="text-xs text-primary">неповрзано</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -335,7 +335,7 @@ export default function BankTab() {
                             {t.accountCode ? <BookOpen className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
                           </Button>
                           {t.matchStatus === "partial" && (
-                            <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" title="Остатокот книжи на конто"
+                            <Button size="sm" variant="outline" className="text-primary border-primary/40" title="Остатокот книжи на конто"
                               onClick={() => setPostTx(t)}>
                               <BookOpen className="h-3.5 w-3.5" />
                             </Button>
@@ -356,7 +356,7 @@ export default function BankTab() {
                             onClick={() => setMatchTx(t)}>
                             <Link2 className="h-3.5 w-3.5" />
                           </Button>
-                          <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" title="Книжи на конто (плата, ДДВ, провизија, кредит...)"
+                          <Button size="sm" variant="outline" className="text-primary border-primary/40" title="Книжи на конто (плата, ДДВ, провизија, кредит...)"
                             onClick={() => setPostTx(t)}>
                             <BookOpen className="h-3.5 w-3.5" />
                           </Button>
@@ -386,10 +386,10 @@ export default function BankTab() {
           <div className="space-y-4">
             <div className="flex gap-2">
               <Button size="sm" variant={openSide === "suppliers" ? "default" : "outline"}
-                className={openSide === "suppliers" ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}
+                className={openSide === "suppliers" ? "" : ""}
                 onClick={() => setOpenSide("suppliers")}>Кому должиме</Button>
               <Button size="sm" variant={openSide === "customers" ? "default" : "outline"}
-                className={openSide === "customers" ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}
+                className={openSide === "customers" ? "" : ""}
                 onClick={() => setOpenSide("customers")}>Кој ни должи</Button>
               <div className="ml-auto text-sm">
                 Вкупно: <b>{den(openItems?.total)} ден</b>
@@ -472,7 +472,7 @@ export default function BankTab() {
                       ? "bg-emerald-50 border-emerald-200 text-emerald-800"
                       : remaining < 0
                       ? "bg-red-50 border-red-200 text-red-700"
-                      : "bg-amber-50 border-amber-200 text-amber-800"
+                      : "bg-primary/10 border-primary/20 text-foreground/80"
                   }`}>
                     Нераспределено: <b>{den(remaining)}</b>
                   </div>
@@ -503,7 +503,7 @@ export default function BankTab() {
                         {docs.map((d: any) => {
                           const key = `${d.docType}:${d.docId}`;
                           return (
-                            <TableRow key={key} className={alloc[key] ? "bg-amber-50/60" : d.inPurpose ? "bg-blue-50/40" : ""}>
+                            <TableRow key={key} className={alloc[key] ? "bg-primary/10" : d.inPurpose ? "bg-blue-50/40" : ""}>
                               <TableCell>
                                 <div className="text-sm font-medium flex items-center gap-1.5">
                                   {d.ref}
@@ -545,7 +545,7 @@ export default function BankTab() {
                   </p>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => setAlloc({})}>Исчисти</Button>
-                    <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+                    <Button
                       disabled={allocated <= 0 || remaining < -0.005 || allocMut.isPending}
                       onClick={() => allocMut.mutate({
                         txId: matchTx.id,

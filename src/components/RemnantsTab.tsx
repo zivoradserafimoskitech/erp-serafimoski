@@ -157,7 +157,7 @@ export default function RemnantsTab() {
       {/* Статистика */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="bg-amber-50 p-2.5 rounded-lg"><Scissors className="h-5 w-5 text-amber-600" /></div>
+          <div className="bg-primary/10 p-2.5 rounded-lg"><Scissors className="h-5 w-5 text-primary" /></div>
           <div><p className="text-sm text-gray-500">Достапни парчиња</p><p className="text-xl font-bold">{stats?.totalPieces ?? 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
@@ -192,9 +192,9 @@ export default function RemnantsTab() {
       )}
 
       {lastResult && (
-        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-2.5">
+        <div className="flex items-center justify-between bg-primary/10 border border-primary/20 text-foreground/80 text-sm rounded-lg px-4 py-2.5">
           <span>{lastResult}</span>
-          <button onClick={() => setLastResult(null)} className="text-amber-500 hover:text-amber-700 px-2">×</button>
+          <button onClick={() => setLastResult(null)} className="text-primary hover:text-primary px-2">×</button>
         </div>
       )}
 
@@ -230,7 +230,7 @@ export default function RemnantsTab() {
         <Button variant="outline" onClick={openParams} title="Ширина на рез и минимален остаток">
           <Settings2 className="h-4 w-4" />
         </Button>
-        <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setNewOpen(true)}>
+        <Button onClick={() => setNewOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />Нов остаток
         </Button>
       </div>
@@ -261,7 +261,7 @@ export default function RemnantsTab() {
               ) : (
                 remnants.map((r: any) => (
                   <TableRow key={r.id} className={r.status !== "available" ? "opacity-55" : ""}>
-                    <TableCell className="font-mono text-xs font-semibold text-amber-700">{r.code}</TableCell>
+                    <TableCell className="font-mono text-xs font-semibold text-primary">{r.code}</TableCell>
                     <TableCell>
                       <div className="font-medium text-sm leading-tight">{r.materialName ?? "—"}</div>
                       <div className="text-[11px] text-gray-400 font-mono">{r.materialCode ?? ""}</div>
@@ -374,7 +374,7 @@ export default function RemnantsTab() {
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="outline" onClick={() => setNewOpen(false)}>Откажи</Button>
-              <Button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white" disabled={createMutation.isPending}>
+              <Button type="submit" disabled={createMutation.isPending}>
                 {createMutation.isPending ? "Се зачувува..." : "Зачувај"}
               </Button>
             </div>
@@ -419,7 +419,7 @@ export default function RemnantsTab() {
               </label>
               <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="outline" onClick={() => setUseOpen(false)}>Откажи</Button>
-                <Button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white" disabled={useMutation.isPending}>
+                <Button type="submit" disabled={useMutation.isPending}>
                   {useMutation.isPending ? "..." : "Потврди"}
                 </Button>
               </div>
@@ -447,7 +447,7 @@ export default function RemnantsTab() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setParamsOpen(false)}>Откажи</Button>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+              <Button
                 onClick={() => paramsMutation.mutate({ kerf: Number(paramForm.kerf) || 0, minRemnant: Number(paramForm.minRemnant) || 0 })}>
                 Зачувај
               </Button>

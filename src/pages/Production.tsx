@@ -24,7 +24,7 @@ import { useSearchParams, useNavigate } from "react-router";
 const statusCfg: Record<string, { label: string; cls: string }> = {
   pending: { label: "На чекање", cls: "bg-gray-100 text-gray-700" },
   in_progress: { label: "Во тек", cls: "bg-blue-100 text-blue-700" },
-  on_hold: { label: "Паузиран", cls: "bg-amber-100 text-amber-700" },
+  on_hold: { label: "Паузиран", cls: "bg-warning/15 text-primary" },
   completed: { label: "Завршено", cls: "bg-emerald-100 text-emerald-700" },
   cancelled: { label: "Откажано", cls: "bg-red-100 text-red-700" },
 };
@@ -180,7 +180,7 @@ export default function Production() {
           <h2 className="text-2xl font-bold text-gray-800">Производство</h2>
           <p className="text-gray-500 mt-1">Работни налози, операции и материјали</p>
         </div>
-        <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Нов работен налог</Button>
+        <Button onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Нов работен налог</Button>
         <WorkOrderCreateDialog open={dialogOpen} onOpenChange={setDialogOpen} onCreated={(id) => { setSelWO(id); setDetailOpen(true); }} />
       </div>
 
@@ -199,7 +199,7 @@ export default function Production() {
           { label: "Вкупно", value: stats?.total ?? 0, cls: "text-gray-700" },
           { label: "На чекање", value: stats?.pending ?? 0, cls: "text-gray-600" },
           { label: "Во тек", value: stats?.inProgress ?? 0, cls: "text-blue-600" },
-          { label: "Паузирани", value: stats?.onHold ?? 0, cls: "text-amber-600" },
+          { label: "Паузирани", value: stats?.onHold ?? 0, cls: "text-primary" },
           { label: "Завршени", value: stats?.completed ?? 0, cls: "text-emerald-600" },
         ].map((s) => (
           <Card key={s.label}><CardContent className="p-4"><p className="text-sm text-gray-500">{s.label}</p><p className={`text-2xl font-bold ${s.cls}`}>{s.value}</p></CardContent></Card>
@@ -282,7 +282,7 @@ export default function Production() {
               <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
                 <div className="min-w-0">
                   <DialogTitle className="text-2xl font-bold tracking-tight text-gray-900">
-                    Работен налог <span className="font-mono text-amber-600">{woDetail?.woNumber}</span>
+                    Работен налог <span className="font-mono text-primary">{woDetail?.woNumber}</span>
                   </DialogTitle>
                   <p className="text-sm text-gray-500 mt-1 truncate">
                     {woDetail?.description}
@@ -304,7 +304,7 @@ export default function Production() {
               </div>
             </DialogHeader>
             <div className="flex flex-wrap gap-2 mt-4">
-              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}><FileText className="h-3.5 w-3.5 mr-1.5" />Кон фактура</Button>
+              <Button size="sm" onClick={() => woDetail && chainInv.mutate({ workOrderId: woDetail.id })} disabled={chainInv.isPending}><FileText className="h-3.5 w-3.5 mr-1.5" />Кон фактура</Button>
               {woDetail?.status === "completed" && (
                 <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50" onClick={() => woDetail && chainDN.mutate({ workOrderId: woDetail.id })} disabled={chainDN.isPending}><Truck className="h-3.5 w-3.5 mr-1.5" />Кон испратница</Button>
               )}
@@ -342,12 +342,12 @@ export default function Production() {
             <div className="space-y-6 px-6 py-5">
               {/* Преглед */}
               <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_1fr] gap-3">
-                <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
-                  <p className="text-[11px] uppercase tracking-wider text-amber-700/80 font-semibold">Цена на налог</p>
-                  <p className="text-3xl font-bold text-amber-700 tracking-tight mt-1">{den(parseFloat(woDetail.costAmount ?? "0"))} <span className="text-base font-semibold">ден</span></p>
+                <div className="rounded-xl border border-primary/20 bg-primary/10 px-5 py-4">
+                  <p className="text-[11px] uppercase tracking-wider text-primary/80 font-semibold">Цена на налог</p>
+                  <p className="text-3xl font-bold text-primary tracking-tight mt-1">{den(parseFloat(woDetail.costAmount ?? "0"))} <span className="text-base font-semibold">ден</span></p>
                   <div className="flex items-center justify-between gap-2 mt-2">
-                    <p className="text-xs text-amber-800/70">Материјали {den(matsCost)} · Операции {den(opsCost)}</p>
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-amber-800 hover:bg-amber-100" onClick={() => costUpdateMut.mutate({ id: woDetail.id })} disabled={costUpdateMut.isPending}>
+                    <p className="text-xs text-foreground/80/70">Материјали {den(matsCost)} · Операции {den(opsCost)}</p>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-foreground/80 hover:bg-warning/15" onClick={() => costUpdateMut.mutate({ id: woDetail.id })} disabled={costUpdateMut.isPending}>
                       Пресметај
                     </Button>
                   </div>
@@ -407,7 +407,7 @@ export default function Production() {
                       </div>
                       {ops.map((op: any) => (
                         <div key={op.id} className="grid grid-cols-1 md:grid-cols-[2.5rem_1fr_6rem_11rem_6.5rem_8rem] gap-3 items-center px-4 py-3 border-t first:border-t-0 md:first:border-t">
-                          <span className="h-7 w-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">{op.sequence}</span>
+                          <span className="h-7 w-7 rounded-full bg-warning/15 text-primary text-xs font-bold flex items-center justify-center">{op.sequence}</span>
                           <div className="min-w-0">
                             <p className="font-medium text-sm text-gray-800">{opList[op.operation] || op.operation}</p>
                             {op.description && <p className="text-xs text-gray-400 truncate">{op.description}</p>}
@@ -442,7 +442,7 @@ export default function Production() {
                               defaultValue={op.costRate && parseFloat(op.costRate) > 0 ? parseFloat(op.costRate) : ""}
                               onBlur={(e) => { const v = e.target.value; if (v !== String(op.costRate ?? "")) opUpdateMut.mutate({ id: op.id, costRate: v || "0" } as any); }} />
                           </div>
-                          <span className="text-sm font-semibold text-amber-700 md:text-right whitespace-nowrap">{den(parseFloat(op.costAmount ?? "0"))} ден</span>
+                          <span className="text-sm font-semibold text-primary md:text-right whitespace-nowrap">{den(parseFloat(op.costAmount ?? "0"))} ден</span>
                           <Select value={op.status} onValueChange={(v) => opUpdateMut.mutate({ id: op.id, status: v as any })}>
                             <SelectTrigger className={`h-8 text-xs border-0 ${opStatus[op.status] ?? opStatus.pending}`}><SelectValue /></SelectTrigger>
                             <SelectContent><SelectItem value="pending">На чекање</SelectItem><SelectItem value="in_progress">Во тек</SelectItem><SelectItem value="completed">Завршено</SelectItem><SelectItem value="skipped">Прескокнато</SelectItem></SelectContent>
@@ -452,8 +452,8 @@ export default function Production() {
                     </div>
                   )}
 
-                  <form onSubmit={handleOpSubmit} className="rounded-xl border border-dashed border-amber-300 bg-amber-50/40 p-4">
-                    <p className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-1.5"><Plus className="h-4 w-4" />Нова операција</p>
+                  <form onSubmit={handleOpSubmit} className="rounded-xl border border-dashed border-primary/40 bg-primary/10 p-4">
+                    <p className="text-sm font-semibold text-foreground/80 mb-3 flex items-center gap-1.5"><Plus className="h-4 w-4" />Нова операција</p>
                     <div className="grid grid-cols-2 md:grid-cols-[4rem_1.3fr_1.5fr_7rem_7rem_auto] gap-3 items-end">
                       <div className="space-y-1"><Label className="text-xs text-gray-500">Ред. бр.</Label>
                         <Input type="number" min={1} className="bg-white" value={opForm.sequence} onChange={(e) => setOpForm({ ...opForm, sequence: parseInt(e.target.value) || 1 })} /></div>
@@ -468,7 +468,7 @@ export default function Production() {
                         <Input type="number" step="0.25" className="bg-white" placeholder="0" value={opForm.estimatedTime} onChange={(e) => setOpForm({ ...opForm, estimatedTime: e.target.value })} /></div>
                       <div className="space-y-1"><Label className="text-xs text-gray-500">Цена/час</Label>
                         <Input type="number" step="10" className="bg-white" placeholder="ден" value={opForm.costRate} onChange={(e) => setOpForm({ ...opForm, costRate: e.target.value })} /></div>
-                      <Button type="submit" className="bg-amber-500 hover:bg-amber-600 col-span-2 md:col-span-1" disabled={opCreateMut.isPending}><Plus className="h-4 w-4 mr-1" />Додади</Button>
+                      <Button type="submit" className="col-span-2 md:col-span-1" disabled={opCreateMut.isPending}><Plus className="h-4 w-4 mr-1" />Додади</Button>
                     </div>
                   </form>
                 </TabsContent>
@@ -551,7 +551,7 @@ export default function Production() {
                           </Badge>
                           <div>
                             {wm.isActual !== "actual" && (
-                              <Button size="sm" variant="outline" className="h-8 text-amber-700 border-amber-300 hover:bg-amber-50 text-xs" onClick={() => handleIssue(wm)} disabled={issueMut.isPending}>
+                              <Button size="sm" variant="outline" className="h-8 text-primary border-primary/40 hover:bg-accent text-xs" onClick={() => handleIssue(wm)} disabled={issueMut.isPending}>
                                 <ArrowDownLeft className="h-3 w-3 mr-1" /> Испорачај
                               </Button>
                             )}
@@ -561,8 +561,8 @@ export default function Production() {
                       ))}
                     </div>
                   )}
-                  <form onSubmit={handleMatSubmit} className="rounded-xl border border-dashed border-amber-300 bg-amber-50/40 p-4">
-                    <p className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-1.5"><Plus className="h-4 w-4" />Нов материјал</p>
+                  <form onSubmit={handleMatSubmit} className="rounded-xl border border-dashed border-primary/40 bg-primary/10 p-4">
+                    <p className="text-sm font-semibold text-foreground/80 mb-3 flex items-center gap-1.5"><Plus className="h-4 w-4" />Нов материјал</p>
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_8rem_auto] gap-3 items-end">
                       <div className="space-y-1"><Label className="text-xs text-gray-500">Материјал</Label>
                         <MaterialPicker materials={materialsData as any} value={matForm.materialId || null}
@@ -570,7 +570,7 @@ export default function Production() {
                           onSelect={(m: any) => setMatForm({ ...matForm, materialId: String(m.id) })} /></div>
                       <div className="space-y-1"><Label className="text-xs text-gray-500">Количина</Label>
                         <Input type="number" step="0.001" className="bg-white" placeholder="0" value={matForm.quantity} onChange={(e) => setMatForm({ ...matForm, quantity: e.target.value })} /></div>
-                      <Button type="submit" className="bg-amber-500 hover:bg-amber-600" disabled={matCreateMut.isPending || !matForm.materialId || !matForm.quantity}><Plus className="h-4 w-4 mr-1" />Додади</Button>
+                      <Button type="submit" disabled={matCreateMut.isPending || !matForm.materialId || !matForm.quantity}><Plus className="h-4 w-4 mr-1" />Додади</Button>
                     </div>
                   </form>
                 </TabsContent>

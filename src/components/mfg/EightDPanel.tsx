@@ -28,7 +28,7 @@ export default function EightDPanel({ issueId }: { issueId: number }) {
   return (
     <div className="rounded-lg border">
       <button type="button" className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium" onClick={() => setOpen(!open)}>
-        {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}<ListChecks className="h-4 w-4 text-amber-600" />8D извештај{open ? ` — ${done}/8` : ""}
+        {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}<ListChecks className="h-4 w-4 text-primary" />8D извештај{open ? ` — ${done}/8` : ""}
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-2">
@@ -38,7 +38,7 @@ export default function EightDPanel({ issueId }: { issueId: number }) {
               <Textarea rows={2} className="text-sm" placeholder={hint} value={d[k] ?? ""} onChange={(e) => setD({ ...d, [k]: e.target.value })} />
             </div>
           ))}
-          <div className="flex justify-end"><Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={save.isPending} onClick={() => save.mutate({ issueId, d })}>Зачувај 8D</Button></div>
+          <div className="flex justify-end"><Button size="sm" disabled={save.isPending} onClick={() => save.mutate({ issueId, d })}>Зачувај 8D</Button></div>
         </div>
       )}
     </div>

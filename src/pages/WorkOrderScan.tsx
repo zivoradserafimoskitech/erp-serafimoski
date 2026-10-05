@@ -134,7 +134,7 @@ export default function WorkOrderScan() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-5">
         <div className="w-full max-w-sm bg-white rounded-xl border shadow-sm p-6 space-y-4">
           <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-amber-600" />
+            <User className="h-5 w-5 text-primary" />
             <h1 className="font-semibold">Кој си ти?</h1>
           </div>
           <p className="text-sm text-gray-500">
@@ -143,7 +143,7 @@ export default function WorkOrderScan() {
           <Input className="h-12 text-lg" placeholder="Име и презиме" autoFocus
             value={operator} onChange={(e) => setOperator(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && saveName()} />
-          <Button className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-white"
+          <Button className="w-full h-12"
             disabled={!operator.trim()} onClick={saveName}>
             Продолжи
           </Button>
@@ -159,7 +159,7 @@ export default function WorkOrderScan() {
   if (!wo) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <AlertCircle className="h-12 w-12 text-amber-500" />
+        <AlertCircle className="h-12 w-12 text-primary" />
         <p className="font-semibold">Работниот налог не е пронајден</p>
         <Button variant="outline" onClick={() => navigate("/proizvodstvo")}>
           <ArrowLeft className="h-4 w-4 mr-2" />Кон производство
@@ -180,7 +180,7 @@ export default function WorkOrderScan() {
         <div className="bg-white rounded-xl border shadow-sm p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="font-mono text-xl font-extrabold text-amber-700">{wo.woNumber}</div>
+              <div className="font-mono text-xl font-extrabold text-primary">{wo.woNumber}</div>
               <div className="text-sm mt-1 leading-snug">{wo.description}</div>
             </div>
             <Badge variant="outline" className={
@@ -342,7 +342,7 @@ export default function WorkOrderScan() {
 
         {/* Материјал */}
         <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
-          <div className="flex items-center gap-2 font-semibold"><Package className="h-5 w-5 text-amber-600" />Материјал</div>
+          <div className="flex items-center gap-2 font-semibold"><Package className="h-5 w-5 text-primary" />Материјал</div>
           {(wo.materials ?? []).length === 0 && <p className="text-sm text-gray-400">Нема планиран материјал.</p>}
           {(wo.materials ?? []).map((m: any) => {
             const issued = m.isActual === "actual";
@@ -355,7 +355,7 @@ export default function WorkOrderScan() {
                 {issued ? (
                   <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">Издадено</Badge>
                 ) : (
-                  <Button className="h-11 bg-amber-500 hover:bg-amber-600 text-white" disabled={wo.status === "completed"}
+                  <Button className="h-11" disabled={wo.status === "completed"}
                     onClick={() => setIssueFor({ rowId: m.id, name: m.name, qty: String(parseFloat(m.quantity)), unit: m.unit })}>Земи од магацин</Button>
                 )}
               </div>
@@ -383,7 +383,7 @@ export default function WorkOrderScan() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1 h-12" onClick={() => setIssueFor(null)}>Откажи</Button>
-                <Button className="flex-1 h-12 bg-amber-500 hover:bg-amber-600 text-white"
+                <Button className="flex-1 h-12"
                   disabled={floorIssue.isPending || !(parseFloat(issueFor.qty) > 0) || (!issueFor.rowId && !extraMat)}
                   onClick={() => floorIssue.mutate({ workOrderId: woId, woMaterialId: issueFor.rowId, materialId: extraMat?.id, quantity: parseFloat(issueFor.qty), operator })}>
                   {floorIssue.isPending ? "..." : "Издај"}

@@ -86,7 +86,7 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
 
   if (state === "setup") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-sidebar px-4">
         <form
           className="bg-white rounded-xl shadow-xl p-8 w-full max-w-md space-y-4"
           onSubmit={async (e) => {
@@ -139,7 +139,7 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
             <input type="password" className="w-full border rounded-lg px-3 py-2 text-sm" value={setupCode2} onChange={(e) => setSetupCode2(e.target.value)} required minLength={4} />
           </div>
           {err && <p className="text-xs text-red-500 text-center">{err}</p>}
-          <button type="submit" disabled={busy} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-medium">
+          <button type="submit" disabled={busy} className="w-full disabled:opacity-60 text-white rounded-lg py-2 text-sm font-medium">
             {busy ? "Се создава..." : "Создај администратор"}
           </button>
         </form>
@@ -148,7 +148,7 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900">
+    <div className="min-h-screen flex items-center justify-center bg-sidebar">
       <form
         className="bg-white rounded-xl shadow-xl p-8 w-80 space-y-4"
         onSubmit={async (e) => {
@@ -181,7 +181,7 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
           autoFocus
         />
         {err && <p className="text-xs text-red-500 text-center">{err}</p>}
-        <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-lg py-2 text-sm font-medium">
+        <button type="submit" className="w-full rounded-lg py-2 text-sm font-medium">
           Влези
         </button>
       </form>

@@ -13,7 +13,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   draft: { label: "Нацрт", cls: "bg-gray-100 text-gray-700" },
   sent: { label: "Испратена", cls: "bg-blue-100 text-blue-700" },
   confirmed: { label: "Потврдена", cls: "bg-emerald-100 text-emerald-700" },
-  partial: { label: "Делумно примена", cls: "bg-amber-100 text-amber-800" },
+  partial: { label: "Делумно примена", cls: "bg-warning/15 text-foreground/80" },
   received: { label: "Примена", cls: "bg-teal-100 text-teal-700" },
   cancelled: { label: "Откажана", cls: "bg-red-100 text-red-700" },
 };
@@ -47,11 +47,11 @@ export default function PurchaseOrderDetailDialog({ poId, open, onOpenChange }: 
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col [&>button]:hidden">
           {/* Заглавие */}
-          <div className="flex items-start gap-3 px-6 py-5 bg-gradient-to-r from-amber-50 to-white border-b">
-            <div className="h-11 w-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm shrink-0"><ShoppingCart className="h-5 w-5" /></div>
+          <div className="flex items-start gap-3 px-6 py-5 bg-gradient-to-r from-primary/10 to-white border-b">
+            <div className="h-11 w-11 rounded-xl bg-primary text-white flex items-center justify-center shadow-sm shrink-0"><ShoppingCart className="h-5 w-5" /></div>
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2 flex-wrap">
-                Набавна нарачка <span className="font-mono text-amber-700">{po?.poNumber}</span>
+                Набавна нарачка <span className="font-mono text-primary">{po?.poNumber}</span>
                 <span className={`text-xs font-medium rounded-full px-2.5 py-0.5 ${st.cls}`}>{st.label}</span>
               </DialogTitle>
               <DialogDescription className="text-sm text-gray-500 mt-0.5">Креирана {formatDate(po?.createdAt)}{po?.expectedDate ? ` · рок за испорака ${formatDate(po.expectedDate)}` : ""}</DialogDescription>
@@ -68,7 +68,7 @@ export default function PurchaseOrderDetailDialog({ poId, open, onOpenChange }: 
               ))}
             </div>
             <Button size="sm" variant="outline" disabled={!po} onClick={() => po && printPurchaseOrder(po, settings, lang)}><Printer className="h-4 w-4 mr-1.5" />Печати / PDF</Button>
-            <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={!po || po.status === "cancelled"} onClick={() => setMailOpen(true)}><Mail className="h-4 w-4 mr-1.5" />Прати на добавувачот</Button>
+            <Button size="sm" disabled={!po || po.status === "cancelled"} onClick={() => setMailOpen(true)}><Mail className="h-4 w-4 mr-1.5" />Прати на добавувачот</Button>
             {po && ["sent", "confirmed", "partial", "draft"].includes(po.status) && (
               <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={() => { onOpenChange(false); navigate(`/priemnici?po=${po.id}`); }}>
                 <PackageCheck className="h-4 w-4 mr-1.5" />Прими роба
@@ -93,7 +93,7 @@ export default function PurchaseOrderDetailDialog({ poId, open, onOpenChange }: 
                     {sup.contactPerson && <div>{sup.contactPerson}</div>}
                     {sup.phone && <div className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{sup.phone}</div>}
                     {sup.email ? <div className="flex items-center gap-1.5"><AtSign className="h-3.5 w-3.5" />{sup.email}</div>
-                      : <div className="text-amber-700 text-xs">Нема внесено е-пошта — внеси ја при праќањето или кај добавувачот</div>}
+                      : <div className="text-primary text-xs">Нема внесено е-пошта — внеси ја при праќањето или кај добавувачот</div>}
                   </div>
                 </div>
                 <div className="rounded-xl border p-4 grid grid-cols-2 gap-3 content-start">
@@ -126,7 +126,7 @@ export default function PurchaseOrderDetailDialog({ poId, open, onOpenChange }: 
                             <td className="px-2 py-2.5 text-right tabular-nums">{qty(q)} <span className="text-gray-400 text-xs">{u}</span></td>
                             <td className="px-2 py-2.5 text-right tabular-nums">{money(it.unitPrice)}</td>
                             <td className="px-2 py-2.5 text-right tabular-nums font-medium">{money(it.totalPrice)}</td>
-                            <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${rec >= q && q > 0 ? "text-emerald-700" : rec > 0 ? "text-amber-700" : "text-gray-400"}`}>
+                            <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${rec >= q && q > 0 ? "text-emerald-700" : rec > 0 ? "text-primary" : "text-gray-400"}`}>
                               {rec >= q && q > 0 ? <span className="inline-flex items-center gap-1"><PackageCheck className="h-3.5 w-3.5" />целосно</span> : `${qty(rec)} / ${qty(q)}`}
                             </td>
                           </tr>
@@ -137,7 +137,7 @@ export default function PurchaseOrderDetailDialog({ poId, open, onOpenChange }: 
                 </div>
               </div>
 
-              {po.notes && <div className="rounded-lg bg-amber-50/60 border border-amber-100 px-4 py-3 text-sm text-gray-700"><span className="text-gray-500">Белешка:</span> {po.notes}</div>}
+              {po.notes && <div className="rounded-lg bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-gray-700"><span className="text-gray-500">Белешка:</span> {po.notes}</div>}
             </>)}
           </div>
         </DialogContent>

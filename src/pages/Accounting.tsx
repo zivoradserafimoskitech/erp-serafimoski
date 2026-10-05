@@ -32,7 +32,7 @@ import { Search, Plus, Trash2, Eye, FileText, Download, FileUp, Truck, ArrowUpRi
 const invStatus: Record<string, { label: string; cls: string }> = {
   draft: { label: "Нацрт", cls: "bg-gray-100 text-gray-700" },
   issued: { label: "Издадена", cls: "bg-blue-100 text-blue-700" },
-  sent: { label: "Испратена", cls: "bg-amber-100 text-amber-700" },
+  sent: { label: "Испратена", cls: "bg-warning/15 text-primary" },
   partial: { label: "Делумно платена", cls: "bg-teal-100 text-teal-700" },
   paid: { label: "Платена", cls: "bg-emerald-100 text-emerald-700" },
   overdue: { label: "Задоцнета", cls: "bg-red-100 text-red-700" },
@@ -78,7 +78,7 @@ function EcdFields({ invoice }: { invoice: any }) {
   });
   const changed = num !== (invoice.customsDeclaration ?? "") || date !== (invoice.customsDate ? String(invoice.customsDate).slice(0, 10) : "");
   return (
-    <div className={`rounded-lg border p-3 space-y-2 ${num ? "bg-gray-50" : "border-amber-300 bg-amber-50"}`}>
+    <div className={`rounded-lg border p-3 space-y-2 ${num ? "bg-gray-50" : "border-primary/40 bg-primary/10"}`}>
       <p className="text-xs font-medium">Царинска декларација (ЕЦД) за извоз {num ? "" : "— недостасува; без неа 0% ДДВ нема доказ"}</p>
       <div className="flex flex-wrap gap-2">
         <Input className="h-8 w-48" value={num} onChange={(e) => setNum(e.target.value)} placeholder="Број на ЕЦД" />
@@ -320,7 +320,7 @@ export default function Accounting() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Фактури и документи</h2>
-          <p className="text-gray-500 mt-1">Излезни и влезни фактури, испратници и е-фактури · банка, благајна, ДДВ и главна книга се во <button className="text-amber-700 hover:underline" onClick={() => navigate("/finansii")}>Финансии</button></p>
+          <p className="text-gray-500 mt-1">Излезни и влезни фактури, испратници и е-фактури · банка, благајна, ДДВ и главна книга се во <button className="text-primary hover:underline" onClick={() => navigate("/finansii")}>Финансии</button></p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {tab === "outgoing" && (
@@ -337,7 +337,7 @@ export default function Accounting() {
                 setOutItems([]);
               }
             }}>
-              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нова фактура</Button></DialogTrigger>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нова фактура</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нова излезна фактура</DialogTitle></DialogHeader>
                 <form onSubmit={(e) => {
@@ -427,7 +427,7 @@ export default function Accounting() {
                   </div>
 
                   <div className="space-y-2"><Label>Белешки</Label><Textarea value={outForm.notes} onChange={(e) => setOutForm({ ...outForm, notes: e.target.value })} /></div>
-                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createOut.isPending || outItems.length === 0}>{createOut.isPending ? "Зачувување..." : outItems.length === 0 ? "Додадете ставки" : "Креирај фактура"}</Button>
+                  <Button type="submit" className="w-full" disabled={createOut.isPending || outItems.length === 0}>{createOut.isPending ? "Зачувување..." : outItems.length === 0 ? "Додадете ставки" : "Креирај фактура"}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -440,7 +440,7 @@ export default function Accounting() {
                 setIncForm({ expenseAccount: "", supplierInvoiceNumber: "", supplierId: "", receivedDate: "", issueDate: "", dueDate: "", vatDate: "", reverseCharge: false, subtotal: "0", vatRate: "18", vatAmount: "0", totalAmount: "0", currency: "MKD", notes: "", pdfBase64: "" });
               }
             }}>
-              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нова влезна фактура</Button></DialogTrigger>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нова влезна фактура</Button></DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нова влезна фактура</DialogTitle></DialogHeader>
                 <form onSubmit={(e) => {
@@ -518,7 +518,7 @@ export default function Accounting() {
                       <p className="text-[11px] text-gray-500">Во кој месец влегува во ДДВ пријавата. По правило — кога е примена.</p>
                     </div>
                     <label className="flex items-start gap-2 text-sm cursor-pointer">
-                      <input type="checkbox" className="mt-1 h-4 w-4 accent-amber-500" checked={incForm.reverseCharge} onChange={(e) => setIncForm({ ...incForm, reverseCharge: e.target.checked })} />
+                      <input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={incForm.reverseCharge} onChange={(e) => setIncForm({ ...incForm, reverseCharge: e.target.checked })} />
                       <span><b>Услуга од странски добавувач</b> (обратно оданочување)
                         <span className="block text-[11px] text-gray-500">Добавувачот не пресметал ДДВ — програмата пресметува 18% и го книжи и како излезен и како претходен ДДВ. Не важи за увоз на стока (ДДВ се плаќа на царина).</span></span>
                     </label>
@@ -575,14 +575,14 @@ export default function Accounting() {
                   )}
 
                   <div className="space-y-1"><Label>Белешки</Label><Textarea value={incForm.notes} onChange={(e) => setIncForm({ ...incForm, notes: e.target.value })} /></div>
-                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createInc.isPending || !incForm.supplierId}>{createInc.isPending ? "Зачувување..." : "Зачувај влезна фактура"}</Button>
+                  <Button type="submit" className="w-full" disabled={createInc.isPending || !incForm.supplierId}>{createInc.isPending ? "Зачувување..." : "Зачувај влезна фактура"}</Button>
                 </form>
               </DialogContent>
             </Dialog>
           )}
           {tab === "receipts" && (
             <Dialog open={recDialog} onOpenChange={setRecDialog}>
-              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нов приемник</Button></DialogTrigger>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нов приемник</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нов приемник</DialogTitle></DialogHeader>
                 <form onSubmit={(e) => { e.preventDefault(); createRec.mutate({ ...recForm, supplierId: recForm.supplierId ? parseInt(recForm.supplierId) : undefined, receiptDate: recForm.receiptDate } as any); }} className="space-y-3">
@@ -591,14 +591,14 @@ export default function Accounting() {
                     <div className="space-y-2"><Label>Добавувач</Label><Select value={recForm.supplierId} onValueChange={(v) => setRecForm({ ...recForm, supplierId: v })}><SelectTrigger><SelectValue placeholder="Избери" /></SelectTrigger><SelectContent>{suppliers?.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="space-y-2"><Label>Датум *</Label><DateInput value={recForm.receiptDate} onChange={(e) => setRecForm({ ...recForm, receiptDate: e.target.value })} required /></div>
-                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createRec.isPending}>{createRec.isPending ? "Зачувување..." : "Креирај приемник"}</Button>
+                  <Button type="submit" className="w-full" disabled={createRec.isPending}>{createRec.isPending ? "Зачувување..." : "Креирај приемник"}</Button>
                 </form>
               </DialogContent>
             </Dialog>
           )}
           {tab === "delivery" && (
             <Dialog open={dnDialog} onOpenChange={setDnDialog}>
-              <DialogTrigger asChild><Button className="bg-amber-500 hover:bg-amber-600 text-white"><Plus className="h-4 w-4 mr-2" />Нов испратник</Button></DialogTrigger>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Нов испратник</Button></DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Нов испратник</DialogTitle></DialogHeader>
                 <form onSubmit={(e) => { e.preventDefault(); createDN.mutate({ ...dnForm, customerId: parseInt(dnForm.customerId), issueDate: dnForm.issueDate, deliveryDate: dnForm.deliveryDate || undefined, items: dnItems.map(it => ({ description: it.description, quantity: it.quantity, unit: it.unit, productId: it.productId, materialId: it.materialId, itemType: it.itemType, weightKg: ((it.weightPerUnit ?? 0) * (Number(it.quantity) || 0)).toFixed(3) })) } as any); }} className="space-y-3">
@@ -626,7 +626,7 @@ export default function Accounting() {
                         <span className="text-xs text-gray-500">
                           {it.unit}
                           {(it.weightPerUnit ?? 0) > 0 && (
-                            <span className="block text-[10px] text-amber-600 leading-none">
+                            <span className="block text-[10px] text-primary leading-none">
                               {((it.weightPerUnit ?? 0) * (Number(it.quantity) || 0)).toFixed(1)} кг
                             </span>
                           )}
@@ -637,13 +637,13 @@ export default function Accounting() {
                     {dnItems.some(it => (it.weightPerUnit ?? 0) > 0) && (
                       <div className="flex justify-between text-xs font-semibold border-t pt-2 mt-1">
                         <span>Вкупна тежина</span>
-                        <span className="text-amber-700">
+                        <span className="text-primary">
                           {dnItems.reduce((a, it) => a + (it.weightPerUnit ?? 0) * (Number(it.quantity) || 0), 0).toFixed(2)} кг
                         </span>
                       </div>
                     )}
                   </div>
-                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600" disabled={createDN.isPending}>{createDN.isPending ? "Зачувување..." : "Креирај испратник"}</Button>
+                  <Button type="submit" className="w-full" disabled={createDN.isPending}>{createDN.isPending ? "Зачувување..." : "Креирај испратник"}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -723,7 +723,7 @@ export default function Accounting() {
                         <Card className="bg-blue-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Излезни фактури</p><p className="text-lg font-bold text-blue-700">{reportData.outgoing.count} · {mkd(reportData.outgoing.total)}</p></CardContent></Card>
                         <Card className="bg-emerald-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Влезни фактури</p><p className="text-lg font-bold text-emerald-700">{reportData.incoming.count} · {mkd(reportData.incoming.total)}</p></CardContent></Card>
                         <Card className="bg-indigo-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Работни налози</p><p className="text-lg font-bold text-indigo-700">{wo.length} · {mkd(woCost)}</p></CardContent></Card>
-                        <Card className="bg-amber-50"><CardContent className="p-3"><p className="text-xs text-gray-600">ДДВ излез</p><p className="text-lg font-bold text-amber-700">{mkd(reportData.outgoing.totalVat)}</p></CardContent></Card>
+                        <Card className="bg-primary/10"><CardContent className="p-3"><p className="text-xs text-gray-600">ДДВ излез</p><p className="text-lg font-bold text-primary">{mkd(reportData.outgoing.totalVat)}</p></CardContent></Card>
                         <Card className="bg-purple-50"><CardContent className="p-3"><p className="text-xs text-gray-600">ДДВ влез</p><p className="text-lg font-bold text-purple-700">{mkd(reportData.incoming.totalVat)}</p></CardContent></Card>
                         <Card className="bg-orange-50"><CardContent className="p-3"><p className="text-xs text-gray-600">Требовања</p><p className="text-lg font-bold text-orange-700">{req.length} · {mkd(reportData.totalRequisitionCost)}</p></CardContent></Card>
                       </div>
@@ -793,7 +793,7 @@ export default function Accounting() {
         ].map(t => {
           const Icon = t.icon;
           return (
-            <button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? "border-amber-500 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+            <button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
               <Icon className="h-4 w-4" />{t.label}
             </button>
           );
@@ -938,7 +938,7 @@ export default function Accounting() {
       {tab === "bank" && (
         <Card><CardContent className="py-10 text-center space-y-3">
           <p className="text-gray-600">Банката е преместена во <b>Финансии</b>, заедно со благајната, ДДВ и главната книга.</p>
-          <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => navigate("/finansii?tab=bank")}>Отвори Финансии → Банка</Button>
+          <Button onClick={() => navigate("/finansii?tab=bank")}>Отвори Финансии → Банка</Button>
         </CardContent></Card>
       )}
 
@@ -956,7 +956,7 @@ export default function Accounting() {
               <p className="text-sm text-gray-600 mb-4">Вчитајте PDF фактура за автоматско препознавање на податоците (број на фактура, износ, добавувач).</p>
               <div className="flex gap-3">
                 <input type="file" ref={fileRef} accept=".pdf" className="hidden" onChange={handleFileUpload} />
-                <Button onClick={() => fileRef.current?.click()} className="bg-amber-500 hover:bg-amber-600">
+                <Button onClick={() => fileRef.current?.click()}>
                   <FileUp className="h-4 w-4 mr-2" />Избери PDF
                 </Button>
               </div>
@@ -978,7 +978,7 @@ export default function Accounting() {
                           {(p as any).supplierTaxId && (
                             <div className="text-[11px] text-gray-400 font-mono">
                               ЕДБ {(p as any).supplierTaxId}
-                              {!(p as any).matchedSupplierId && <span className="text-amber-600"> · нема во системот</span>}
+                              {!(p as any).matchedSupplierId && <span className="text-primary"> · нема во системот</span>}
                             </div>
                           )}
                         </TableCell>
@@ -1003,7 +1003,7 @@ export default function Accounting() {
                           <Badge className={
                             p.status === "imported" ? "bg-emerald-100 text-emerald-700"
                               : p.status === "verified" ? "bg-blue-100 text-blue-700"
-                              : p.status === "needs_review" ? "bg-amber-100 text-amber-800"
+                              : p.status === "needs_review" ? "bg-warning/15 text-foreground/80"
                               : "bg-gray-100 text-gray-700"}>
                             {p.status === "imported" ? "Импортирана"
                               : p.status === "verified" ? "Верифицирана"
@@ -1011,12 +1011,12 @@ export default function Accounting() {
                               : "Прочитана"}
                           </Badge>
                           {typeof (p as any).confidence === "number" && (
-                            <div className={`text-[11px] mt-0.5 ${(p as any).confidence >= 80 ? "text-emerald-600" : (p as any).confidence >= 60 ? "text-gray-400" : "text-amber-600"}`}>
+                            <div className={`text-[11px] mt-0.5 ${(p as any).confidence >= 80 ? "text-emerald-600" : (p as any).confidence >= 60 ? "text-gray-400" : "text-primary"}`}>
                               сигурност {(p as any).confidence}%
                             </div>
                           )}
                           {(p as any).parseNotes && (
-                            <div className="text-[10px] text-amber-700 max-w-[220px] leading-tight mt-0.5">
+                            <div className="text-[10px] text-primary max-w-[220px] leading-tight mt-0.5">
                               {(p as any).parseNotes}
                             </div>
                           )}

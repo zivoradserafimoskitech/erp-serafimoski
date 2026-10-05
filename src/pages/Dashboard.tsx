@@ -37,7 +37,7 @@ export default function Dashboard() {
   const cards = [
     { title: "Нарачки во тек", value: k?.ordersOpen ?? 0, icon: ClipboardList, color: "text-blue-600", bg: "bg-blue-50", href: "/tek",
       hint: `неиспорачани и неоткажани · вкупно ${k?.ordersTotal ?? 0} нарачки` },
-    { title: "Налози во производство", value: k?.woActive ?? 0, icon: Factory, color: "text-amber-600", bg: "bg-amber-50", href: "/proizvodstvo",
+    { title: "Налози во производство", value: k?.woActive ?? 0, icon: Factory, color: "text-primary", bg: "bg-primary/10", href: "/proizvodstvo",
       hint: `${k?.woInProgress ?? 0} во тек · ${k?.woPending ?? 0} чекаат` },
     { title: `Фактурирано ${k?.year ?? ""}`, value: den(k?.invoicedYear), icon: TrendingUp, color: "text-violet-600", bg: "bg-violet-50", href: "/smetkovodstvo",
       hint: `без ДДВ, од ${k?.invoicedYearCount ?? 0} издадени фактури (минус книжни одобренија)${k?.invoicedNoRate ? ` · ${k.invoicedNoRate} без курс не се бројат` : ""}` },
@@ -61,7 +61,7 @@ export default function Dashboard() {
           <p className="text-gray-500 mt-1">Преглед на клучни показатели за вашиот бизнис — кликни на картичка за детали</p>
         </div>
         <button onClick={() => { refetch(); refetchParsed(); }} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 rounded-md border bg-white px-2.5 py-1.5" title="Освежи сега">
-          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-amber-600" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-primary" : ""}`} />
           {isFetching ? "Се освежува..." : ago === null ? "Освежи" : ago < 5 ? "Освежено сега" : `Освежено пред ${ago < 60 ? ago + " сек" : Math.round(ago / 60) + " мин"}`}
         </button>
       </div>
@@ -72,7 +72,7 @@ export default function Dashboard() {
           const Icon = card.icon;
           return (
             <Card key={card.title} onClick={() => (card as any).href && navigate((card as any).href)}
-              className={`border-l-4 border-l-transparent hover:shadow-md transition-shadow ${(card as any).href ? "cursor-pointer hover:border-l-amber-400" : ""}`}>
+              className={`border-l-4 border-l-transparent hover:shadow-md transition-shadow ${(card as any).href ? "cursor-pointer hover:border-l-primary" : ""}`}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">
                   <div className="space-y-2">
@@ -97,7 +97,7 @@ export default function Dashboard() {
         <StatusCard title="Нарачки по статус" icon={Package} rows={[
           { label: "На чекање", value: stats?.orders.pending ?? 0, color: "bg-gray-400", href: "/tek" },
           { label: "Потврдени", value: stats?.orders.confirmed ?? 0, color: "bg-blue-400", href: "/tek" },
-          { label: "Во производство", value: stats?.orders.inProduction ?? 0, color: "bg-amber-400", href: "/tek" },
+          { label: "Во производство", value: stats?.orders.inProduction ?? 0, color: "bg-warning", href: "/tek" },
           { label: "Готови за испорака", value: stats?.orders.ready ?? 0, color: "bg-emerald-400", href: "/tek" },
           { label: "Испорачани", value: stats?.orders.delivered ?? 0, color: "bg-teal-500", href: "/tek" },
         ]} note={(stats?.orders.inProductionNoWo ?? 0) > 0 ? `${stats?.orders.inProductionNoWo} нарачки се „во производство“, а немаат отворен работен налог` : undefined}
@@ -105,13 +105,13 @@ export default function Dashboard() {
         <StatusCard title="Работни налози" icon={Factory} rows={[
           { label: "Чекаат почеток", value: stats?.production.pending ?? 0, color: "bg-gray-400", href: "/proizvodstvo" },
           { label: "Во тек", value: stats?.production.inProgress ?? 0, color: "bg-blue-400", href: "/proizvodstvo" },
-          { label: "Паузирани", value: stats?.production.onHold ?? 0, color: "bg-amber-400", href: "/proizvodstvo" },
+          { label: "Паузирани", value: stats?.production.onHold ?? 0, color: "bg-warning", href: "/proizvodstvo" },
           { label: "Завршени (вкупно)", value: stats?.production.completed ?? 0, color: "bg-emerald-400", href: "/proizvodstvo" },
         ]} footer="статус на секој работен налог" />
         <StatusCard title="Набавка" icon={ShoppingCart} rows={[
           { label: "Нарачки неиспратени до добавувач", value: stats?.procurement.draft ?? 0, color: "bg-gray-400", href: "/nabavka" },
           { label: "Испратени, чекаме стока", value: stats?.procurement.sent ?? 0, color: "bg-blue-400", href: "/nabavka" },
-          { label: "Делумно примени", value: stats?.procurement.partial ?? 0, color: "bg-amber-400", href: "/nabavka" },
+          { label: "Делумно примени", value: stats?.procurement.partial ?? 0, color: "bg-warning", href: "/nabavka" },
           { label: "Приемници во нацрт (непотврдени)", value: stats?.procurement.receiptsDraft ?? 0, color: "bg-violet-400", href: "/priemnici" },
           ...(pendingParsed > 0 ? [{ label: "Скенирани приемници за преглед", value: pendingParsed, color: "bg-indigo-400", href: "/priemnici" }] : []),
         ]} footer="нарачки кон добавувачи и приемници" />
@@ -137,7 +137,7 @@ export default function Dashboard() {
             { label: "Понуди што чекаат одговор", value: String(stats?.quotes.pending ?? 0), cls: "text-gray-800", href: "/ponudi",
               hint: `во нацрт или испратени · вкупно ${stats?.quotes.total ?? 0} понуди` },
           ].map(f => (
-            <button key={f.label} onClick={() => navigate(f.href)} className="text-left rounded-lg border p-3 hover:border-amber-300 hover:bg-amber-50/40 transition">
+            <button key={f.label} onClick={() => navigate(f.href)} className="text-left rounded-lg border p-3 hover:border-primary/40 hover:bg-accent/40 transition">
               <p className="text-xs text-gray-500">{f.label}</p>
               <p className={`text-xl font-bold tabular-nums ${f.cls}`}>{f.value}</p>
               <p className="text-[11px] text-gray-500 leading-snug mt-0.5">{f.hint}</p>
@@ -166,7 +166,7 @@ function StatusCard({ title, icon: Icon, rows, note, footer }: {
             <span className={`text-sm font-semibold ${r.value ? "text-gray-900" : "text-gray-300"}`}>{r.value}</span>
           </button>
         ))}
-        {note && <p className="flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800"><AlertTriangle className="h-3.5 w-3.5 mt-px shrink-0" />{note}</p>}
+        {note && <p className="flex items-start gap-1.5 rounded-md bg-primary/10 px-2 py-1.5 text-xs text-foreground/80"><AlertTriangle className="h-3.5 w-3.5 mt-px shrink-0" />{note}</p>}
         {footer && <p className="text-[11px] text-gray-400 pt-1">{footer}</p>}
       </CardContent>
     </Card>

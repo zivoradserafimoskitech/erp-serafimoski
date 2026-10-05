@@ -96,9 +96,9 @@ export default function SendEmailDialog(p: SendEmailProps) {
   return (
     <Dialog open={p.open} onOpenChange={p.onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-amber-600" />Прати по е-пошта</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-primary" />Прати по е-пошта</DialogTitle></DialogHeader>
         {status && !status.configured ? (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-sm text-foreground/80 bg-primary/10 border border-primary/20 rounded-lg p-3">
             Е-поштата за праќање не е поставена. Внеси ги SMTP податоците во <b>Подесувања → Фирма → Праќање е-пошта</b>.
           </p>
         ) : (
@@ -112,7 +112,7 @@ export default function SendEmailDialog(p: SendEmailProps) {
             <div className="space-y-1"><Label className="text-xs">Наслов</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
             <div className="space-y-1"><Label className="text-xs">Порака</Label><Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} /></div>
             <p className="text-xs text-gray-500 flex items-center gap-1.5"><Paperclip className="h-3.5 w-3.5" />{filename}{status?.from ? ` · од ${status.from}` : ""}</p>
-            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={busy || !to || !valid(to) || (!!cc && !valid(cc)) || !subject} onClick={onSend}>
+            <Button className="w-full" disabled={busy || !to || !valid(to) || (!!cc && !valid(cc)) || !subject} onClick={onSend}>
               {busy ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Се праќа...</> : "Прати"}
             </Button>
           </div>

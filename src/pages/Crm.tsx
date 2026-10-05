@@ -19,7 +19,7 @@ const fmtD = (d?: string | null) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d
 const today = () => new Date().toISOString().slice(0, 10);
 export const STAGE: Record<string, { label: string; cls: string }> = {
   new: { label: "Ново барање", cls: "bg-sky-50 border-sky-200" }, contacted: { label: "Во контакт", cls: "bg-indigo-50 border-indigo-200" },
-  quoting: { label: "Се прави понуда", cls: "bg-amber-50 border-amber-200" }, quoted: { label: "Понуда пратена", cls: "bg-violet-50 border-violet-200" },
+  quoting: { label: "Се прави понуда", cls: "bg-primary/10 border-primary/20" }, quoted: { label: "Понуда пратена", cls: "bg-violet-50 border-violet-200" },
   won: { label: "Добиена", cls: "bg-emerald-50 border-emerald-200" }, lost: { label: "Изгубена", cls: "bg-gray-50 border-gray-200" },
 };
 export const LOST: Record<string, string> = { price: "Цена", delivery: "Рок на испорака", competitor: "Отиде кај конкурент", spec: "Не можеме технички", no_response: "Нема одговор", cancelled: "Клиентот се откажа", other: "Друго" };
@@ -48,10 +48,10 @@ export default function Crm() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Target className="h-6 w-6 text-amber-600" />Продажба</h2>
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Target className="h-6 w-6 text-primary" />Продажба</h2>
           <p className="text-gray-500 mt-1">Барања и можности пред понудата, разговори и задачи, зошто губиме понуди</p>
         </div>
-        <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => setEdit({ ...EMPTY })}><Plus className="h-4 w-4 mr-1.5" />Нова можност</Button>
+        <Button onClick={() => setEdit({ ...EMPTY })}><Plus className="h-4 w-4 mr-1.5" />Нова можност</Button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -70,7 +70,7 @@ export default function Crm() {
               {list.map((o) => (
                 <button key={o.id} onClick={() => setEdit({ id: o.id, customerId: o.customerId, company: o.company ?? "", contactName: o.contactName ?? "", email: o.email ?? "", phone: o.phone ?? "", title: o.title, value: String(o.value),
                   probability: String(o.probability), stage: o.stage, expectedClose: o.expectedClose ?? "", source: o.source ?? "", lostReason: o.lostReason ?? "", notes: o.notes ?? "", quotationId: o.quotationId })}
-                  className="w-full text-left rounded-lg bg-white border px-2.5 py-2 hover:border-amber-400 shadow-sm">
+                  className="w-full text-left rounded-lg bg-white border px-2.5 py-2 hover:border-primary/50 shadow-sm">
                   <p className="text-sm font-medium leading-tight">{o.title}</p>
                   <p className="text-xs text-gray-500">{o.customer ?? o.company ?? "—"}{o.files ? <span className="ml-1"><Paperclip className="inline h-3 w-3" />{o.files}</span> : null}</p>
                   <p className="text-xs mt-1 flex justify-between"><span className="font-semibold">{fmt(o.value)} {o.currency === "MKD" ? "ден" : o.currency}</span><span className="text-gray-400">{o.probability}%{o.expectedClose ? ` · ${fmtD(o.expectedClose)}` : ""}</span></p>
@@ -84,7 +84,7 @@ export default function Crm() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card><CardContent className="p-4 space-y-2">
-          <p className="font-semibold flex items-center gap-2"><ListTodo className="h-4 w-4 text-amber-600" />Задачи</p>
+          <p className="font-semibold flex items-center gap-2"><ListTodo className="h-4 w-4 text-primary" />Задачи</p>
           {!tasks?.length ? <p className="text-sm text-gray-400">Нема отворени задачи</p> : tasks.map((t) => (
             <label key={t.id} className="flex items-start gap-2 text-sm border-t pt-1.5">
               <input type="checkbox" className="mt-1" onChange={() => done.mutate({ id: t.id, done: true })} />
@@ -156,7 +156,7 @@ function OppDialog({ opp, onClose }: { opp: Opp; onClose: () => void }) {
         </div>
         {!!files?.length && (
           <div className="text-sm space-y-1"><p className="text-xs font-semibold text-gray-500">Прикачени датотеки</p>
-            {files.map((x) => <button key={x.id} className="block text-amber-700 hover:underline text-xs" onClick={() => { const m = /^data:([^;]+);base64,(.*)$/s.exec(x.data); openBase64(m ? m[2] : x.data, m ? m[1] : x.mime ?? "application/octet-stream"); }}><Paperclip className="inline h-3 w-3 mr-1" />{x.fileName}</button>)}
+            {files.map((x) => <button key={x.id} className="block text-primary hover:underline text-xs" onClick={() => { const m = /^data:([^;]+);base64,(.*)$/s.exec(x.data); openBase64(m ? m[2] : x.data, m ? m[1] : x.mime ?? "application/octet-stream"); }}><Paperclip className="inline h-3 w-3 mr-1" />{x.fileName}</button>)}
           </div>
         )}
         {f.id && (
@@ -179,7 +179,7 @@ function OppDialog({ opp, onClose }: { opp: Opp; onClose: () => void }) {
           {f.id ? <Button variant="ghost" className="text-red-600" onClick={() => { if (confirm("Да се избрише можноста?")) del.mutate({ id: f.id! }); }}>Избриши</Button> : <span />}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Откажи</Button>
-            <Button className="bg-amber-500 hover:bg-amber-600" disabled={f.title.length < 2 || save.isPending} onClick={() => save.mutate({
+            <Button disabled={f.title.length < 2 || save.isPending} onClick={() => save.mutate({
               id: f.id, customerId: f.customerId, company: f.company || undefined, contactName: f.contactName || undefined, email: f.email || undefined, phone: f.phone || undefined,
               title: f.title, value: parseFloat(f.value) || 0, probability: parseInt(f.probability) || 0, stage: f.stage as any, expectedClose: f.expectedClose || null,
               source: f.source || undefined, lostReason: f.lostReason || null, quotationId: f.quotationId, notes: f.notes || undefined })}>Зачувај</Button>
