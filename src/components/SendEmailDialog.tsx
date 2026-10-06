@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Mail, Paperclip, Loader2 } from "lucide-react";
+import { Mail, Paperclip, Loader2, UserRound, Star } from "lucide-react";
 import { htmlToPdfBase64, type DocLang } from "@/lib/print-documents";
 
 export interface SendEmailProps {
@@ -23,6 +23,8 @@ export interface SendEmailProps {
   defaultLang?: DocLang;
   /** По успешно праќање (на пр. нарачката станува „Испратена“) */
   onSent?: () => void;
+  /** Фирма — нуди избор на контакт лица од CRM како примачи */
+  customerId?: number | null;
 }
 
 const TEXT = {
@@ -53,18 +55,37 @@ export default function SendEmailDialog(p: SendEmailProps) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState(false);
   const send = trpc.mail.sendDocument.useMutation();
+  const utils = trpc.useUtils();
+  const { data: contacts } = trpc.crm.contactList.useQuery({ customerId: p.customerId ?? 0 }, { enabled: p.open && !!p.customerId });
+  const withEmail = (contacts ?? []).filter((c: any) => c.email);
 
   useEffect(() => {
     if (!p.open) return;
     const l = p.defaultLang ?? "mk";
     setLang(l);
     setTo(p.defaultTo ?? "");
+    setPicked(false);
     setCc("");
     const num = l === "en" ? latin(p.docNumber) : p.docNumber;
     const t = TEXT[l][p.docType](num, p.companyName ?? "");
     setSubject(t.subject); setBody(t.body);
   }, [p.open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // кога ќе стигнат контактите: ако нема адреса, предложи го главниот контакт
+  useEffect(() => {
+    if (!p.open || picked || to.trim() || !withEmail.length) return;
+    const primary = withEmail.find((c: any) => c.isPrimary) ?? withEmail[0];
+    setTo(primary.email); setPicked(true);
+  }, [p.open, withEmail.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleContact = (email: string) => {
+    setPicked(true);
+    const list = emails(to);
+    const has = list.some((e) => e.toLowerCase() === email.toLowerCase());
+    setTo((has ? list.filter((e) => e.toLowerCase() !== email.toLowerCase()) : [...list, email]).join(", "));
+  };
 
   const switchLang = (l: DocLang) => {
     setLang(l);
@@ -81,8 +102,9 @@ export default function SendEmailDialog(p: SendEmailProps) {
     setBusy(true);
     try {
       const pdfBase64 = await htmlToPdfBase64(p.buildHtml(lang));
-      await send.mutateAsync({ to: emails(to), cc: cc ? emails(cc) : undefined, subject, body, filename, pdfBase64, docType: p.docType, docId: p.docId });
-      toast.success(`Пратено на ${emails(to).join(", ")}`);
+      const r: any = await send.mutateAsync({ to: emails(to), cc: cc ? emails(cc) : undefined, subject, body, filename, pdfBase64, docType: p.docType, docId: p.docId });
+      toast.success(`Пратено на ${emails(to).join(", ")}${r?.crm ? " · запишано во CRM, понудата е „Пратена“" : ""}`);
+      if (p.docType === "quotation") { utils.crm.invalidate(); utils.quotation.invalidate(); }
       p.onSent?.();
       p.onOpenChange(false);
     } catch (e: any) {
@@ -96,22 +118,42 @@ export default function SendEmailDialog(p: SendEmailProps) {
   return (
     <Dialog open={p.open} onOpenChange={p.onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-primary" />Прати по е-пошта</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-primary" />{p.docType === "quotation" ? "Прати понуда по мејл" : "Прати по е-пошта"}</DialogTitle></DialogHeader>
         {status && !status.configured ? (
-          <p className="text-sm text-foreground/80 bg-primary/10 border border-primary/20 rounded-lg p-3">
-            Е-поштата за праќање не е поставена. Внеси ги SMTP податоците во <b>Подесувања → Фирма → Праќање е-пошта</b>.
-          </p>
+          <div className="text-sm text-foreground/80 bg-primary/10 border border-primary/20 rounded-lg p-3 space-y-1.5">
+            <p><b>Е-поштата за праќање не е поставена</b> — пораката не може да се прати.</p>
+            <p>Внеси ги SMTP податоците во <b>Подесувања → Фирма → Праќање е-пошта</b>, или администраторот нека ги постави env променливите на серверот:</p>
+            <code className="block text-xs bg-card border border-border rounded px-2 py-1">SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM</code>
+          </div>
         ) : (
           <div className="space-y-3">
             <div className="flex gap-1">
               <Button size="sm" variant={lang === "mk" ? "default" : "outline"} onClick={() => switchLang("mk")}>Македонски</Button>
               <Button size="sm" variant={lang === "en" ? "default" : "outline"} onClick={() => switchLang("en")}>English</Button>
             </div>
+            {withEmail.length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-xs">Контакт лица</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {withEmail.map((c: any) => {
+                    const on = emails(to).some((e) => e.toLowerCase() === String(c.email).toLowerCase());
+                    return (
+                      <button key={c.id} type="button" onClick={() => toggleContact(c.email)}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${on ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground/80 hover:bg-muted"}`}
+                        title={c.email}>
+                        {c.isPrimary ? <Star className="h-3 w-3" /> : <UserRound className="h-3 w-3" />}{c.name}{c.position ? ` · ${c.position}` : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="space-y-1"><Label className="text-xs">До</Label><Input value={to} onChange={(e) => setTo(e.target.value)} placeholder={p.docType === "purchase_order" ? "dobavuvac@firma.com" : "klient@firma.com"} /></div>
             <div className="space-y-1"><Label className="text-xs">Копија (CC)</Label><Input value={cc} onChange={(e) => setCc(e.target.value)} /></div>
             <div className="space-y-1"><Label className="text-xs">Наслов</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
             <div className="space-y-1"><Label className="text-xs">Порака</Label><Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} /></div>
             <p className="text-xs text-gray-500 flex items-center gap-1.5"><Paperclip className="h-3.5 w-3.5" />{filename}{status?.from ? ` · од ${status.from}` : ""}</p>
+            {p.docType === "quotation" && <p className="text-[11px] text-muted-foreground">Пораката се запишува како активност на фирмата/контактот/зделката, а понудата се означува „Пратена“.</p>}
             <Button className="w-full" disabled={busy || !to || !valid(to) || (!!cc && !valid(cc)) || !subject} onClick={onSend}>
               {busy ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Се праќа...</> : "Прати"}
             </Button>

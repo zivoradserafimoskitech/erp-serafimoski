@@ -797,7 +797,7 @@ export default function Quotations() {
                         <FileText className="h-4 w-4 mr-1.5" />PDF EN
                       </Button>
                       <Button variant="outline" onClick={() => setMailOpen(true)}>
-                        <Mail className="h-4 w-4 mr-1.5" />Прати
+                        <Mail className="h-4 w-4 mr-1.5" />Прати по мејл
                       </Button>
                       <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => openProforma()}>
                         <Receipt className="h-4 w-4 mr-1.5" />Про-фактура
@@ -931,6 +931,7 @@ export default function Quotations() {
 
       {qDetail && (
         <SendEmailDialog open={mailOpen} onOpenChange={setMailOpen} docType="quotation" docId={qDetail.id} docNumber={qDetail.quoteNumber}
+          customerId={(qDetail as any).customerId ?? null}
           defaultTo={qDetail.customer?.email} companyName={companySettings?.nameEn || companySettings?.name}
           defaultLang={(qDetail.currency ?? "MKD") !== "MKD" ? "en" : "mk"}
           buildHtml={(lang) => quotationHtml(qDetail, companySettings, lang)} />

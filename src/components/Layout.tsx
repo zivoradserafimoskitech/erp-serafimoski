@@ -7,6 +7,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
+import NotificationBell from "@/components/crm/NotificationBell";
 import {
   LayoutDashboard, Warehouse, Factory, Users, ShoppingCart, LogOut, Menu, X,
   ShieldCheck, Calculator, FileText, ClipboardCheck, Settings, BookOpen,
@@ -204,6 +205,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="flex-1 text-left truncate">Пребарај сè...</span>
             <kbd className="hidden sm:inline text-[10px] font-mono border rounded px-1.5 py-0.5 bg-card text-muted-foreground">Ctrl K</kbd>
           </button>
+          <NotificationBell />
           <ThemeToggle className="shrink-0 text-muted-foreground" />
         </header>
 

@@ -466,6 +466,7 @@ serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   // Автоматски потсетници по е-пошта (работи само ако се вклучени во Подесувања)
   if (process.env.DATABASE_URL && process.env.DISABLE_REMINDERS !== "true") {
     import("./reminders").then(m => m.startReminderScheduler()).catch(e => console.error("[REMINDERS]", e));
+    import("./crm-reminders").then(m => m.startCrmReminderScheduler()).catch(e => console.error("[CRM-REMINDERS]", e));
     import("./backup").then(m => m.startBackupScheduler()).catch(e => console.error("[BACKUP]", e));
     if (process.env.DISABLE_AUTO_LEDGER !== "true") import("./finance-router").then(m => m.startLedgerNightly()).catch(e => console.error("[LEDGER]", e));
   }

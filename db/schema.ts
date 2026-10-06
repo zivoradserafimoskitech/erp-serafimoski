@@ -782,6 +782,7 @@ export const quotations = pgTable("quotations", {
   notes: text("notes"),
   convertedOrderId: bigint("converted_order_id", { mode: "number" }),
   opportunityId: integer("opportunity_id"),
+  sentAt: timestamp("sent_at"),
   salesperson: varchar("salesperson", { length: 160 }),
   createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),

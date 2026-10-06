@@ -13,6 +13,7 @@ import { iso } from "./rates-helper";
 import { openDocs, manualPartnerBalances } from "./payment-status";
 import { nextStepFromTimeline } from "./crm-next-step";
 import { crmProProcedures } from "./crm-pro";
+import { crmReminderProcedures } from "./crm-reminders";
 
 const q = async (text: string, params: any[] = []) => (await getPool().query(text, params)).rows as any[];
 const bad = (message: string) => new TRPCError({ code: "BAD_REQUEST", message });
@@ -45,6 +46,7 @@ export async function customerOpenBalance(customerId: number): Promise<number> {
 
 export const crmRouter = createRouter({
   ...crmProProcedures,
+  ...crmReminderProcedures,
   // ===== Зделки (crm_opportunities) =====
   oppList: publicQuery.input(z.object({ includeClosed: z.boolean().default(false), customerId: z.number().optional(), contactId: z.number().optional(), id: z.number().optional() }).optional()).query(async ({ input }) => {
     const w: string[] = [input?.includeClosed || input?.id ? "true" : "o.stage NOT IN ('won','lost')"]; const p: any[] = [];

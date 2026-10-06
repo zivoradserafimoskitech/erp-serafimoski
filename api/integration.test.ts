@@ -1024,4 +1024,68 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
     await caller.crm.contactDelete({ id: c2.id });
     expect((await caller.crm.contactList({ customerId: firm.id })).length).toBe(1);
   });
+
+  it("CRM: праќање понуда по е-пошта → лог/активност/„пратена“, автоматски потсетници и известувања", async () => {
+    const { getPool } = await import("./queries/connection");
+    const pool = getPool();
+    const nodemailer = (await import("nodemailer")).default;
+    const mail = await import("./mail-router");
+    const firm = await caller.crm.firmSave({ name: "Градба Плус ДОО", company: "Градба Плус", owner: "Елена" });
+    const sara = await caller.crm.contactSave({ customerId: firm.id, name: "Сара Николова", email: "sara@gradba.mk", isPrimary: true });
+    const deal = await caller.crm.oppSave({ customerId: firm.id, contactId: sara.id, title: "Скали", value: 210000, stage: "new", owner: "Елена", expectedClose: "2026-01-15" });
+    const qt: any = await caller.crm.oppToQuotation({ opportunityId: deal.id });
+
+    // без SMTP → јасна порака, не пад
+    const prevHost = process.env.SMTP_HOST; delete process.env.SMTP_HOST;
+    await expect(caller.mail.sendDocument({ to: ["sara@gradba.mk"], subject: "Понуда", body: "x", filename: "P.pdf", pdfBase64: "A".repeat(200), docType: "quotation", docId: qt.id }))
+      .rejects.toThrow(/SMTP_HOST/);
+    expect((await caller.mail.mailStatus()).configured).toBe(false);
+
+    // лажен SMTP транспорт (ништо не излегува од тестот)
+    mail.__setTestMailTransport({ t: nodemailer.createTransport({ jsonTransport: true }), from: "erp@test.mk" });
+    try {
+      const r: any = await caller.mail.sendDocument({ to: ["Sara@Gradba.mk"], cc: ["sef@gradba.mk"], subject: "Понуда П-1", body: "Почитувани,", filename: "Ponuda-P-1.pdf",
+        pdfBase64: Buffer.from("%PDF-1.4 test".repeat(20)).toString("base64"), docType: "quotation", docId: qt.id });
+      expect(r.success).toBe(true);
+      expect(r.crm.activities).toBe(1);
+    } finally {
+      mail.__setTestMailTransport(null);
+      if (prevHost !== undefined) process.env.SMTP_HOST = prevHost;
+    }
+    const qrow = (await pool.query(`SELECT status, sent_at FROM quotations WHERE id = $1`, [qt.id])).rows[0];
+    expect(qrow.status).toBe("sent");
+    expect(qrow.sent_at).not.toBeNull();
+    const emails: any[] = await caller.crm.firmEmailsList({ id: firm.id });
+    expect(emails[0]).toMatchObject({ direction: "out", subject: "Понуда П-1" });
+    expect((await caller.crm.firmEmailsList({ contactId: sara.id })).length).toBe(1);
+    const acts = (await pool.query(`SELECT * FROM crm_activities WHERE quotation_id = $1 AND kind = 'email'`, [qt.id])).rows;
+    expect(acts.length).toBe(1);
+    expect(Number(acts[0].contact_id)).toBe(sara.id);
+    expect(Number(acts[0].opportunity_id)).toBe(deal.id);
+    const d: any = (await caller.crm.oppList({ id: deal.id }))[0];
+    expect(d.stage).toBe("quoted");
+
+    // потсетници: 3 дена подоцна → follow-up задача за понудата + задача за поминат рок на зделката
+    const { runCrmReminders } = await import("./crm-reminders");
+    const sentDay = new Date(qrow.sent_at);
+    const later = new Date(sentDay.getTime() + 4 * 86400000).toISOString().slice(0, 10);
+    const r1 = await runCrmReminders({ today: later, sendDigest: false });
+    expect(r1.tasksCreated).toBeGreaterThanOrEqual(1);
+    const fu = (await pool.query(`SELECT * FROM crm_activities WHERE auto_key = $1`, [`quote_followup:${qt.id}`])).rows[0];
+    expect(fu).toBeTruthy();
+    expect(fu.assignee).toBe("Елена");
+    expect(fu.done_at).toBeNull();
+    // идемпотентно: второ извршување не создава дупликати
+    const r2 = await runCrmReminders({ today: later, sendDigest: false });
+    expect(r2.tasksCreated).toBe(0);
+    expect(r2.notificationsCreated).toBe(0);
+    const n: any = await caller.crm.notificationList();
+    expect(n.items.some((x: any) => x.kind === "quote_followup" && x.link === `/ponudi?open=${qt.id}`)).toBe(true);
+    expect(n.unread).toBeGreaterThan(0);
+    await caller.crm.notificationReadAll();
+    expect((await caller.crm.notificationList()).unread).toBe(0);
+    // поставки
+    await caller.crm.crmRemindersSet({ enabled: true, quoteFollowupDays: 5, digest: false, emails: { "Елена": "elena@firma.mk" } });
+    expect((await caller.crm.crmRemindersGet()).effectiveDays).toBe(5);
+  });
 });
