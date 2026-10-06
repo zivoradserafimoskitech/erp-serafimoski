@@ -7,6 +7,8 @@ import { createOAuthCallbackHandler } from "./kimi/auth";
 import { Paths } from "@contracts/constants";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { cors } from "hono/cors";
+import { registerMarketingPublic } from "./marketing-public";
+import { parseOrigins } from "@contracts/marketing";
 
 const app = new Hono();
 
@@ -91,6 +93,9 @@ app.post("/api/logout", async (c) => {
   clearActorCache();
   return c.json({ ok: true });
 });
+
+// ── Јавни адреси за веб-страницата (форма за барање, product feed) — свој CORS (ALLOWED_ORIGINS) ──
+registerMarketingPublic(app);
 
 // ── Портал за клиенти: без најава, само со таен токен (секој клиент го гледа само своето) ──
 const portalHits = new Map<string, { n: number; at: number }>();
@@ -277,7 +282,7 @@ app.get("/api/debug", async (c) => {
 
 // 3. CORS + tRPC API
 app.use("/api/*", cors({
-  origin: ["https://web-production-dceb8.up.railway.app", "http://localhost:5173", "https://erp-serafimoski.onrender.com"],
+  origin: ["https://web-production-dceb8.up.railway.app", "http://localhost:5173", "https://erp-serafimoski.onrender.com", ...parseOrigins(process.env.ALLOWED_ORIGINS, [])],
   credentials: true,
 }));
 
@@ -467,6 +472,7 @@ serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   if (process.env.DATABASE_URL && process.env.DISABLE_REMINDERS !== "true") {
     import("./reminders").then(m => m.startReminderScheduler()).catch(e => console.error("[REMINDERS]", e));
     import("./backup").then(m => m.startBackupScheduler()).catch(e => console.error("[BACKUP]", e));
+    if (process.env.MARKETING_SCHEDULER_DISABLED !== "true") import("./marketing-scheduler").then(m => m.startMarketingScheduler()).catch(e => console.error("[MKT]", e));
     if (process.env.DISABLE_AUTO_LEDGER !== "true") import("./finance-router").then(m => m.startLedgerNightly()).catch(e => console.error("[LEDGER]", e));
   }
 

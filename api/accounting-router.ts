@@ -163,6 +163,8 @@ export const accountingRouter = createRouter({
         dueDate: invData.dueDate ? new Date(invData.dueDate) : null,
       } as any);
       const insertId = Number(result[0].insertId);
+      // маркетинг: фактурата го наследува изворот/кампањата од нарачката/понудата
+      await import("./marketing-leads").then((m) => m.syncAttribution()).catch(() => {});
 
       if (items && items.length > 0) {
         await db.insert(documentItems).values(items.map(i => ({

@@ -24,6 +24,8 @@ import DeliveryNotes from "@/pages/DeliveryNotes";
 import Portal from "@/pages/Portal";
 import SalesHub from "@/pages/SalesHub";
 import PriceLists from "@/pages/PriceLists";
+import Leads from "@/pages/marketing/Leads";
+import WebFeed from "@/pages/marketing/WebFeed";
 
 export default function App() {
   return (
@@ -36,6 +38,8 @@ export default function App() {
       <Route path="/prodazba" element={<Layout><SalesHub /></Layout>} />
       <Route path="/cenovnici" element={<Layout><PriceLists /></Layout>} />
       <Route path="/crm" element={<Layout><Crm /></Layout>} />
+      <Route path="/marketing/baranja" element={<Layout><Leads /></Layout>} />
+      <Route path="/marketing/katalog" element={<Layout><WebFeed /></Layout>} />
       <Route path="/izvestai" element={<Layout><Reports /></Layout>} />
       <Route
         path="/"

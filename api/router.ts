@@ -28,6 +28,8 @@ import { mfgRouter } from "./mfg-router";
 import { crmRouter } from "./crm-router";
 import { purchRouter } from "./purch-router";
 import { reportsRouter } from "./reports-router";
+import { marketingRouter } from "./marketing-router";
+import { notificationsRouter } from "./notifications";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -62,6 +64,8 @@ export const appRouter = createRouter({
   crm: crmRouter,
   purch: purchRouter,
   reports: reportsRouter,
+  marketing: marketingRouter,
+  notifications: notificationsRouter,
 });
 
 export type AppRouter = typeof appRouter;

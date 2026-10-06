@@ -19,6 +19,7 @@ import { MaterialPicker } from "@/components/MaterialPicker";
 import { PaymentTermsEditor } from "@/components/PaymentTermsEditor";
 import { type Installment, parseSchedule, describeSchedule, scheduleTotal } from "@contracts/payment-terms";
 import { isDomesticCountry } from "@contracts/country";
+import { CHANNEL_LABEL, type Channel } from "@contracts/marketing";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -859,6 +860,14 @@ export default function Quotations() {
                     </div>
                   </div>
                 </div>
+
+                {(qDetail as any).mktSource && (
+                  <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-900">
+                    Извор: <b>{CHANNEL_LABEL[(qDetail as any).mktSource as Channel] ?? (qDetail as any).mktSource}</b>
+                    {(qDetail as any).mktCampaign ? <> · кампања <b>{(qDetail as any).mktCampaign}</b></> : null}
+                    {(qDetail as any).mktLeadId ? <> · <a className="underline" href={`/marketing/baranja?id=${(qDetail as any).mktLeadId}`}>барање #{(qDetail as any).mktLeadId}</a></> : null}
+                  </div>
+                )}
 
                 {/* Items */}
                 {qDetail.items && qDetail.items.length > 0 && (

@@ -486,6 +486,11 @@ export const orders = pgTable("orders", {
   createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // маркетинг атрибуција (извор/кампања од барањето)
+  mktLeadId: integer("mkt_lead_id"),
+  mktSource: varchar("mkt_source", { length: 30 }),
+  mktMedium: varchar("mkt_medium", { length: 160 }),
+  mktCampaign: varchar("mkt_campaign", { length: 160 }),
 });
 
 export type Order = typeof orders.$inferSelect;
@@ -737,6 +742,11 @@ export const products = pgTable("products", {
   totalCost: decimal("total_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   isActive: varchar("is_active", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // веб-каталог / feed (Meta, Google Merchant)
+  showOnWeb: boolean("show_on_web").notNull().default(false),
+  imageUrl: varchar("image_url", { length: 1000 }),
+  webUrl: varchar("web_url", { length: 1000 }),
+  publicPrice: decimal("public_price", { precision: 12, scale: 2 }),
 });
 
 export type Product = typeof products.$inferSelect;
@@ -782,6 +792,11 @@ export const quotations = pgTable("quotations", {
   createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // маркетинг атрибуција (извор/кампања од барањето)
+  mktLeadId: integer("mkt_lead_id"),
+  mktSource: varchar("mkt_source", { length: 30 }),
+  mktMedium: varchar("mkt_medium", { length: 160 }),
+  mktCampaign: varchar("mkt_campaign", { length: 160 }),
 });
 
 export type Quotation = typeof quotations.$inferSelect;
@@ -843,6 +858,11 @@ export const invoices = pgTable("invoices", {
   salesperson: varchar("salesperson", { length: 160 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // маркетинг атрибуција (извор/кампања од барањето)
+  mktLeadId: integer("mkt_lead_id"),
+  mktSource: varchar("mkt_source", { length: 30 }),
+  mktMedium: varchar("mkt_medium", { length: 160 }),
+  mktCampaign: varchar("mkt_campaign", { length: 160 }),
 });
 
 export type Invoice = typeof invoices.$inferSelect;

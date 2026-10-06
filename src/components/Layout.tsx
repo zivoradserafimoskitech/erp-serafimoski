@@ -7,11 +7,12 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
+import NotificationBell from "@/components/NotificationBell";
 import {
   LayoutDashboard, Warehouse, Factory, Users, ShoppingCart, LogOut, Menu, X,
   ShieldCheck, Calculator, FileText, ClipboardCheck, Settings, BookOpen,
   Building2, Landmark, Search, Workflow, Contact, Target, BarChart3, Truck,
-  ShoppingBag, Tags,
+  ShoppingBag, Tags, Inbox, Globe,
 } from "lucide-react";
 
 type NavItem = { path: string; label: string; icon: typeof LayoutDashboard };
@@ -36,6 +37,14 @@ const navGroups: NavGroup[] = [
       { path: "/tek", label: "Тек на нарачки", icon: Workflow },
       { path: "/ispratnici", label: "Испратници", icon: Truck },
       { path: "/smetkovodstvo", label: "Фактури", icon: Calculator },
+    ],
+  },
+  {
+    id: "marketing",
+    label: "Маркетинг",
+    items: [
+      { path: "/marketing/baranja", label: "Барања", icon: Inbox },
+      { path: "/marketing/katalog", label: "Веб каталог", icon: Globe },
     ],
   },
   {
@@ -193,6 +202,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="flex-1 text-left truncate">Пребарај сè...</span>
             <kbd className="hidden sm:inline text-[10px] font-mono border rounded px-1.5 py-0.5 bg-card text-muted-foreground">Ctrl K</kbd>
           </button>
+          <NotificationBell className="shrink-0 text-muted-foreground" />
           <ThemeToggle className="shrink-0 text-muted-foreground" />
         </header>
 

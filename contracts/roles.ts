@@ -71,6 +71,9 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   crm: "manager",
   purch: "manager",
   reports: "manager",
+  marketing: "manager",
+  // известувања: секој најавен ги означува своите како прочитани
+  notifications: "viewer",
   ops: "operator",
   hr: "admin",
   mail: "manager",
@@ -83,15 +86,15 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
 };
 
 /** Каде сметководителот смее да пишува. */
-export const ACCOUNTANT_ROUTERS = ["accounting", "finance", "settle", "reports", "bank", "assets", "mail", "ocr", "email", "customers"];
+export const ACCOUNTANT_ROUTERS = ["accounting", "finance", "settle", "reports", "bank", "assets", "mail", "ocr", "email", "customers", "notifications"];
 
 /** Мени по улога: патеки што ги гледа секоја улога (администраторот гледа сè). */
 export const MENU_BY_ROLE: Record<Role, string[] | "all"> = {
   admin: "all",
-  manager: ["/", "/prodazba", "/tek", "/crm", "/cenovnici", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva", "/ispratnici"],
+  manager: ["/", "/marketing/baranja", "/marketing/katalog", "/prodazba", "/tek", "/crm", "/cenovnici", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva", "/ispratnici"],
   accountant: ["/", "/tek", "/izvestai", "/smetkovodstvo", "/finansii", "/klienti", "/sredstva", "/ispratnici"],
   operator: ["/", "/proizvodstvo", "/sklad", "/kvalitet", "/priemnici", "/ispratnici"],
-  viewer: ["/", "/prodazba", "/tek", "/crm", "/cenovnici", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva", "/ispratnici"],
+  viewer: ["/", "/marketing/baranja", "/marketing/katalog", "/prodazba", "/tek", "/crm", "/cenovnici", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva", "/ispratnici"],
 };
 
 export function canSeeMenu(role: string | undefined | null, path: string): boolean {

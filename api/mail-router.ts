@@ -1,29 +1,25 @@
 // Праќање документи (понуда, фактура, про-фактура) по е-пошта преку SMTP на фирмата.
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import nodemailer from "nodemailer";
 import { createRouter, publicQuery } from "./middleware";
 import { getPool } from "./queries/connection";
 import { logAudit } from "./audit-helper";
+import { getMailer, mailerStatus, MAIL_MISSING } from "./mail-transport";
 
+/**
+ * Транспорт компатибилен со nodemailer (`t.sendMail`) — зад него е активниот провајдер
+ * (SMTP од Подесувања/env, Brevo или Mailgun; види mail-transport.ts).
+ */
 export async function mailTransport() {
-  const s = (await getPool().query(`SELECT * FROM company_settings LIMIT 1`)).rows[0];
-  if (!s?.smtp_host || !s?.smtp_user || !s?.smtp_password) {
-    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Не е поставена е-пошта за праќање. Внеси SMTP во Подесувања → Фирма." });
-  }
-  const port = Number(s.smtp_port) || 587;
-  const t = nodemailer.createTransport({
-    host: s.smtp_host, port, secure: Number(s.smtp_secure) === 1 || port === 465,
-    auth: { user: s.smtp_user, pass: s.smtp_password },
-  });
-  return { t, from: s.smtp_from || s.smtp_user, company: s.name as string };
+  const company = ((await getPool().query(`SELECT name FROM company_settings LIMIT 1`)).rows[0]?.name ?? "") as string;
+  const m = await getMailer();
+  if (!m) throw new TRPCError({ code: "PRECONDITION_FAILED", message: MAIL_MISSING });
+  const t = { sendMail: (o: any) => m.send({ from: o.from, to: o.to, cc: o.cc, replyTo: o.replyTo, subject: o.subject, text: o.text, html: o.html, headers: o.headers, attachments: o.attachments }) };
+  return { t, from: m.from, company };
 }
 
 export const mailRouter = createRouter({
-  mailStatus: publicQuery.query(async () => {
-    const s = (await getPool().query(`SELECT smtp_host, smtp_user, smtp_password, smtp_from FROM company_settings LIMIT 1`)).rows[0];
-    return { configured: !!(s?.smtp_host && s?.smtp_user && s?.smtp_password), from: s?.smtp_from || s?.smtp_user || null };
-  }),
+  mailStatus: publicQuery.query(async () => mailerStatus()),
 
   mailTest: publicQuery
     .input(z.object({ to: z.string().email() }))
