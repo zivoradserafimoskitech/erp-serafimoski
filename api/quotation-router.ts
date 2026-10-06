@@ -687,6 +687,8 @@ export const quotationRouter = createRouter({
       const res = await reserveOrderItems(orderId, { strict: false });
 
       await db.update(quotations).set({ status: "converted", convertedOrderId: orderId }).where(eq(quotations.id, quotationId));
+      // маркетинг: изворот/кампањата на понудата оди на нарачката (и понатаму на фактурата)
+      await import("./marketing-leads").then((m) => m.syncAttribution()).catch((e) => console.error("[MKT] attribution:", e?.message ?? e));
       await logAudit({ action: "CONVERT", entityType: "quotation", entityId: quotationId, description: `Конвертирана понуда ${q[0].quoteNumber} во нарачка ${orderNumber}` });
       return { success: true, orderId, warnings: res.warnings };
     }),

@@ -111,6 +111,26 @@ curl -s https://erp.vashdomain.mk/api/trpc/ping
 
 Во апликацијата: Подесувања → Бекап (ако е вклучен scheduler). Дополнително: редовен dump на PostgreSQL од провајдерот.
 
+## 8. Маркетинг (барања од веб, е-пошта, feed)
+
+| Променлива | Задолжително | Опис |
+|---|---|---|
+| `ALLOWED_ORIGINS` | не | Дополнителни домени за CORS на `/api/public/*` (запирка). `https://serafimoski.tech` и `https://www.serafimoski.tech` се секогаш дозволени. |
+| `APP_URL` | препорачано | Јавна адреса на ERP-то — линк во интерните е-пораки и URL на feed-от. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | за е-пошта | SMTP од env (резерва ако нема SMTP во Подесувања → Фирма). |
+| `MAIL_PROVIDER` + `BREVO_API_KEY` / `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_REGION` | не | Праќање преку API наместо SMTP. SES: преку SMTP. |
+| `MAIL_FROM` | со API провајдер | Испраќач, на пр. `Серафимоски <ponudi@serafimoski.tech>`. |
+| `LEAD_RATE_LIMIT` | не | Барања по IP за 10 мин (default 5). |
+| `FEED_TOKEN`, `FEED_BRAND`, `PUBLIC_SITE_URL` | не | Заштита и бренд на product feed-от. |
+| `MARKETING_SCHEDULER_DISABLED` | не | `true` го исклучува маркетинг планерот (не се извршува и кога `DISABLE_REMINDERS=true`). |
+
+Чекори по deploy:
+1. Миграцијата е автоматска (табели `mkt_leads`, `mkt_lead_files`, `mkt_lead_events`, `app_notifications`; колони `mkt_*` на понуди/нарачки/фактури; веб-полиња на производи).
+2. Е-пошта: Подесувања → Фирма → SMTP или `SMTP_*`. Без е-пошта барањата се примаат, само не се праќа автоматски одговор.
+3. **DNS на serafimoski.tech нема DMARC запис** — пред праќање кампањи додај `_dmarc` TXT: `v=DMARC1; p=none; rua=mailto:dmarc@serafimoski.tech` (SPF/DKIM за Titan веќе постојат; за Brevo/Mailgun додај ги нивните DKIM записи).
+4. Формата на веб-страницата: види [docs/WEBSITE-FORM.md](docs/WEBSITE-FORM.md).
+5. Проверка: `curl -i -X OPTIONS -H "Origin: https://serafimoski.tech" -H "Access-Control-Request-Method: POST" $APP_URL/api/public/lead` → `access-control-allow-origin: https://serafimoski.tech`.
+
 ## Застарено (не следи)
 
 Претходни верзии од овој водич спомнуваа **MySQL** и разделен Cloudflare Pages + API. Тековниот код е **PostgreSQL** + монолитен Node сервер.

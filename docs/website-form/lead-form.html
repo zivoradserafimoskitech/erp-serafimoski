@@ -1,0 +1,63 @@
+<!-- Форма „Побарај понуда“ — готова за лепење во било која страница (без React).
+     1) Замени ја адресата во action="…" со доменот на ERP-то.
+     2) _redirect: страница за благодарност (мора да е на serafimoski.tech или домен од ALLOWED_ORIGINS).
+     Со JavaScript формата се праќа во позадина; без JavaScript работи како обична форма (303 → _redirect). -->
+<form id="srf-lead" action="https://web-production-dceb8.up.railway.app/api/public/lead" method="POST" enctype="multipart/form-data" style="display:grid;gap:12px;max-width:640px;font:16px system-ui,sans-serif">
+  <input type="hidden" name="_redirect" value="https://serafimoski.tech/#/blagodarime">
+  <input type="hidden" name="_ts" value="">
+  <input type="hidden" name="utm_source"><input type="hidden" name="utm_medium"><input type="hidden" name="utm_campaign">
+  <input type="hidden" name="utm_content"><input type="hidden" name="utm_term"><input type="hidden" name="gclid"><input type="hidden" name="fbclid">
+  <input type="hidden" name="landing_page"><input type="hidden" name="referrer"><input type="hidden" name="lang" value="mk">
+  <!-- honeypot: не бришете, не прикажувајте -->
+  <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
+
+  <label>Име и презиме *<br><input name="name" required minlength="2" maxlength="160" autocomplete="name" style="width:100%;padding:10px"></label>
+  <label>Фирма<br><input name="company" maxlength="255" autocomplete="organization" style="width:100%;padding:10px"></label>
+  <label>Е-пошта *<br><input name="email" type="email" required maxlength="320" autocomplete="email" style="width:100%;padding:10px"></label>
+  <label>Телефон<br><input name="phone" type="tel" maxlength="60" autocomplete="tel" style="width:100%;padding:10px"></label>
+  <label>Производ / услуга<br>
+    <select name="product_type" style="width:100%;padding:10px">
+      <option value="">—</option><option>Ласерско сечење</option><option>Виткање</option><option>Заварени конструкции</option><option>Огради и порти</option><option>Метални полици</option><option>Друго</option>
+    </select></label>
+  <label>Количина<br><input name="quantity" maxlength="60" placeholder="пр. 200 парчиња" style="width:100%;padding:10px"></label>
+  <label>Порака<br><textarea name="message" rows="5" maxlength="5000" style="width:100%;padding:10px"></textarea></label>
+  <label>Цртежи / прилози (PDF, DXF, DWG, STEP — најмногу 5 × 10 MB)<br><input name="files" type="file" multiple accept=".pdf,.dxf,.dwg,.step,.stp,.igs,.iges,.png,.jpg,.jpeg"></label>
+  <label style="font-size:14px"><input type="checkbox" name="marketing_consent" value="on"> Сакам да добивам понуди и новости по е-пошта (може да се откажам во секое време).</label>
+  <p style="font-size:12px;opacity:.7;margin:0">Податоците ги користиме само за одговор на ова барање.</p>
+  <div id="srf-lead-msg" role="status"></div>
+  <button type="submit" style="padding:12px 18px;border:0;border-radius:8px;background:#0f172a;color:#fff;font-weight:600">Побарај понуда</button>
+</form>
+<script>
+(function () {
+  var KEY = "srf_attribution", P = ["utm_source","utm_medium","utm_campaign","utm_content","utm_term","gclid","fbclid"];
+  var f = document.getElementById("srf-lead"); if (!f) return;
+  f._ts.value = String(Date.now());
+  // извор: параметри пред или по # (hash рутирање), зачувани 90 дена; нова посета со UTM го заменува стариот
+  var qs = new URLSearchParams(location.search), hi = location.hash.indexOf("?");
+  if (hi >= 0) new URLSearchParams(location.hash.slice(hi + 1)).forEach(function (v, k) { if (!qs.has(k)) qs.set(k, v); });
+  var a = null; try { a = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) {}
+  if (a && (!a.at || Date.now() - a.at > 90 * 864e5)) a = null;
+  var fresh = {}, any = false; P.forEach(function (k) { var v = qs.get(k); if (v) { fresh[k] = v; any = true; } });
+  var ref = document.referrer, own = false; try { own = ref && new URL(ref).hostname.replace(/^www\./, "") === location.hostname.replace(/^www\./, ""); } catch (e) {}
+  if (!a || any || (ref && !own)) { a = Object.assign(fresh, { landing_page: location.href, referrer: own ? "" : ref, at: Date.now() }); try { localStorage.setItem(KEY, JSON.stringify(a)); } catch (e) {} }
+  P.concat(["landing_page", "referrer"]).forEach(function (k) { if (a[k] && f[k]) f[k].value = String(a[k]).slice(0, 1000); });
+
+  f.addEventListener("submit", function (ev) {
+    if (!window.fetch || !window.FormData) return; // обичен POST
+    ev.preventDefault();
+    var msg = document.getElementById("srf-lead-msg"), btn = f.querySelector("button[type=submit]");
+    btn.disabled = true; msg.textContent = "Се испраќа…";
+    var fd = new FormData(f); fd.delete("_redirect");
+    fetch(f.action, { method: "POST", body: fd, headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok && j.ok, j: j, s: r.status }; }); })
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.j.error || (r.s === 429 ? "Премногу обиди. Обидете се за неколку минути." : "Барањето не е испратено."));
+        f.reset(); msg.style.color = "#166534"; msg.textContent = "Благодариме! Барањето е примено — ќе ви одговориме со понуда наскоро.";
+        if (window.gtag) gtag("event", "generate_lead", { form: "quote" });
+        if (window.fbq) fbq("track", "Lead");
+      })
+      .catch(function (e) { msg.style.color = "#b91c1c"; msg.textContent = e.message || "Барањето не е испратено."; })
+      .finally(function () { btn.disabled = false; f._ts.value = String(Date.now() - 60000); });
+  });
+})();
+</script>
