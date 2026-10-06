@@ -11,6 +11,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getPool } from "./queries/connection";
 import { iso } from "./rates-helper";
 import { openDocs, manualPartnerBalances } from "./payment-status";
+import { nextStepFromTimeline } from "./crm-next-step";
 
 const q = async (text: string, params: any[] = []) => (await getPool().query(text, params)).rows as any[];
 const bad = (message: string) => new TRPCError({ code: "BAD_REQUEST", message });
@@ -28,7 +29,7 @@ const ACTIVITY = ["call", "meeting", "email", "visit", "note", "task"] as const;
 const mapOpp = (r: any) => ({
   id: r.id, customerId: r.customer_id, customer: r.customer ?? r.company ?? null, company: r.company, contactName: r.contact_name, email: r.email, phone: r.phone,
   title: r.title, value: Number(r.value), currency: r.currency, probability: r.probability, stage: r.stage, expectedClose: r.expected_close ? iso(r.expected_close) : null,
-  source: r.source, lostReason: r.lost_reason, quotationId: r.quotation_id, quoteNumber: r.quote_number ?? null, owner: r.owner, notes: r.notes,
+  source: r.source, lostReason: r.lost_reason, quotationId: r.quotation_id, quoteNumber: r.quote_number ?? null, owner: r.owner, notes: r.notes, products: r.products ?? null,
   files: Number(r.files ?? 0), createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
@@ -40,7 +41,7 @@ export async function customerOpenBalance(customerId: number): Promise<number> {
 }
 
 export const crmRouter = createRouter({
-  // ===== Можности =====
+  // ===== Потенцијални продажби (crm_opportunities) =====
   oppList: publicQuery.input(z.object({ includeClosed: z.boolean().default(false), customerId: z.number().optional() }).optional()).query(async ({ input }) => {
     const rows = await q(`SELECT o.*, COALESCE(c.company, c.name) AS customer, qt.quote_number, (SELECT COUNT(*) FROM crm_files f WHERE f.opportunity_id = o.id) AS files
       FROM crm_opportunities o LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN quotations qt ON qt.id = o.quotation_id
@@ -50,25 +51,43 @@ export const crmRouter = createRouter({
   }),
   oppSave: publicQuery
     .input(z.object({
-      id: z.number().optional(), customerId: z.number().nullable().optional(), company: z.string().max(255).optional(), contactName: z.string().max(255).optional(),
-      email: z.string().max(320).optional(), phone: z.string().max(60).optional(), title: z.string().min(2).max(300), value: z.number().min(0).default(0),
-      currency: z.string().max(10).default("MKD"), probability: z.number().int().min(0).max(100).default(30), stage: z.enum(STAGES).default("new"),
-      expectedClose: dateStr.nullable().optional(), source: z.string().max(30).optional(), lostReason: z.string().max(40).nullable().optional(),
-      quotationId: z.number().nullable().optional(), owner: z.string().max(160).optional(), notes: z.string().optional(),
+      id: z.number().optional(),
+      customerId: z.number(),
+      company: z.string().max(255).optional(),
+      contactName: z.string().max(255).optional(),
+      email: z.string().max(320).optional(),
+      phone: z.string().max(60).optional(),
+      title: z.string().min(2).max(300),
+      value: z.number().min(0).default(0),
+      currency: z.string().max(10).default("MKD"),
+      probability: z.number().int().min(0).max(100).default(30),
+      stage: z.enum(STAGES).default("new"),
+      expectedClose: dateStr.nullable().optional(),
+      source: z.string().max(30).optional(),
+      lostReason: z.string().max(40).nullable().optional(),
+      quotationId: z.number().nullable().optional(),
+      owner: z.string().max(160).optional(),
+      notes: z.string().optional(),
+      products: z.string().max(2000).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      if (input.stage === "lost" && !input.lostReason) throw bad("Избери зошто е изгубена — тоа е најкорисниот податок за следниот пат");
-      const prob = input.stage === "won" ? 100 : input.stage === "lost" ? 0 : input.probability;
-      const v = [input.customerId ?? null, input.company ?? null, input.contactName ?? null, input.email ?? null, input.phone ?? null, input.title, input.value, input.currency,
-        prob, input.stage, input.expectedClose ?? null, input.source ?? null, input.stage === "lost" ? input.lostReason ?? null : null, input.quotationId ?? null, input.owner ?? actor(ctx), input.notes ?? null];
+      if (!input.customerId) throw bad("Избери клиент (или креирај нов од формуларот)");
+      if (input.stage === "lost" && !input.lostReason) throw bad("Избери зошто е изгубена");
+      const cust = (await q(`SELECT id, name, company FROM customers WHERE id = $1`, [input.customerId]))[0];
+      if (!cust) throw bad("Клиентот не постои");
+      const company = input.company || cust.company || cust.name;
       if (input.id) {
         await q(`UPDATE crm_opportunities SET customer_id=$1, company=$2, contact_name=$3, email=$4, phone=$5, title=$6, value=$7, currency=$8, probability=$9, stage=$10,
-          expected_close=$11, source=$12, lost_reason=$13, quotation_id=$14, owner=$15, notes=$16, updated_at=now() WHERE id=$17`, [...v, input.id]);
+          expected_close=$11, source=$12, lost_reason=$13, quotation_id=$14, owner=$15, notes=$16, products=$17, updated_at=now() WHERE id=$18`,
+          [input.customerId, company, input.contactName ?? null, input.email ?? null, input.phone ?? null, input.title, input.value, input.currency, input.probability, input.stage,
+           input.expectedClose ?? null, input.source ?? null, input.lostReason ?? null, input.quotationId ?? null, input.owner ?? null, input.notes ?? null, input.products ?? null, input.id]);
         return { id: input.id };
       }
-      const r = await q(`INSERT INTO crm_opportunities (customer_id, company, contact_name, email, phone, title, value, currency, probability, stage, expected_close, source, lost_reason, quotation_id, owner, notes)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`, v);
-      return { id: r[0].id };
+      const r = await q(`INSERT INTO crm_opportunities (customer_id, company, contact_name, email, phone, title, value, currency, probability, stage, expected_close, source, lost_reason, quotation_id, owner, notes, products)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+        [input.customerId, company, input.contactName ?? null, input.email ?? null, input.phone ?? null, input.title, input.value, input.currency, input.probability, input.stage,
+         input.expectedClose ?? null, input.source ?? null, input.lostReason ?? null, input.quotationId ?? null, input.owner ?? actor(ctx), input.notes ?? null, input.products ?? null]);
+      return { id: Number(r[0].id) };
     }),
   oppDelete: publicQuery.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
     await q(`DELETE FROM crm_opportunities WHERE id = $1`, [input.id]);
@@ -127,7 +146,7 @@ export const crmRouter = createRouter({
     .input(z.object({ id: z.number().optional(), customerId: z.number().nullable().optional(), opportunityId: z.number().nullable().optional(), quotationId: z.number().nullable().optional(),
       kind: z.enum(ACTIVITY), subject: z.string().min(2).max(300), notes: z.string().optional(), dueDate: dateStr.nullable().optional(), done: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
-      if (!input.customerId && !input.opportunityId) throw bad("Активноста мора да е за клиент или можност");
+      if (!input.customerId && !input.opportunityId) throw bad("Активноста мора да е за клиент или потенцијална продажба");
       const done = input.kind === "task" ? (input.done ? new Date() : null) : new Date();
       if (input.id) {
         await q(`UPDATE crm_activities SET kind=$1, subject=$2, notes=$3, due_date=$4, done_at=$5 WHERE id=$6`, [input.kind, input.subject, input.notes ?? null, input.dueDate ?? null, done, input.id]);
@@ -168,8 +187,12 @@ export const crmRouter = createRouter({
     .input(z.object({ opportunityId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const opp = (await q(`SELECT * FROM crm_opportunities WHERE id = $1`, [input.opportunityId]))[0];
-      if (!opp) throw bad("Можноста не постои");
-      if (opp.quotation_id) return { id: Number(opp.quotation_id), quoteNumber: null as string | null, existing: true };
+      if (!opp) throw bad("Потенцијалната продажба не постои");
+      if (opp.quotation_id) {
+        await q(`UPDATE quotations SET opportunity_id = COALESCE(opportunity_id, $2) WHERE id = $1`, [opp.quotation_id, input.opportunityId]).catch(() => {});
+        const qn = (await q(`SELECT quote_number FROM quotations WHERE id = $1`, [opp.quotation_id]))[0];
+        return { id: Number(opp.quotation_id), quoteNumber: qn?.quote_number ?? null, existing: true };
+      }
       let customerId = opp.customer_id ? Number(opp.customer_id) : null;
       if (!customerId) {
         if (!opp.company && !opp.contact_name) throw bad("Избери клиент или внеси име на фирма пред понуда");
@@ -186,11 +209,11 @@ export const crmRouter = createRouter({
       const vatRate = 18;
       const sub = Number(opp.value) || 0;
       const vat = Math.round(sub * vatRate) / 100;
-      const notes = [opp.notes, opp.title ? `Од можност: ${opp.title}` : null].filter(Boolean).join("\n") || null;
+      const notes = [opp.notes, opp.title ? `Од потенцијална продажба: ${opp.title}` : null].filter(Boolean).join("\n") || null;
       const r = await q(
-        `INSERT INTO quotations (quote_number, customer_id, status, subtotal, vat_rate, vat_amount, total_amount, currency, notes, payment_terms, created_by)
-         VALUES ($1,$2,'draft',$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-        [quoteNumber, customerId, sub.toFixed(2), vatRate, vat.toFixed(2), (sub + vat).toFixed(2), opp.currency || "MKD", notes, "14 дена", actor(ctx)],
+        `INSERT INTO quotations (quote_number, customer_id, status, subtotal, vat_rate, vat_amount, total_amount, currency, notes, payment_terms, created_by, salesperson, opportunity_id)
+         VALUES ($1,$2,'draft',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+        [quoteNumber, customerId, sub.toFixed(2), vatRate, vat.toFixed(2), (sub + vat).toFixed(2), opp.currency || "MKD", notes, "14 дена", ctx?.actor?.id ?? null, opp.owner ?? actor(ctx), input.opportunityId],
       );
       const id = Number(r[0].id);
       if (sub > 0) {
@@ -205,6 +228,51 @@ export const crmRouter = createRouter({
         VALUES ($1,$2,$3,'note',$4,$5)`, [customerId, input.opportunityId, id, `Креирана понуда ${quoteNumber}`, actor(ctx)]);
       return { id, quoteNumber, existing: false };
     }),
+
+
+  /** Поврзани документи: понуда → нарачка → испратници → фактури. */
+  oppTimeline: publicQuery.input(z.object({ id: z.number() })).query(async ({ input }) => {
+    const opp = (await q(`SELECT * FROM crm_opportunities WHERE id = $1`, [input.id]))[0];
+    if (!opp) throw bad("Потенцијалната продажба не постои");
+    let quoteId = opp.quotation_id ? Number(opp.quotation_id) : null;
+    if (!quoteId) {
+      const via = (await q(`SELECT id FROM quotations WHERE opportunity_id = $1 ORDER BY id DESC LIMIT 1`, [input.id]).catch(() => []))[0];
+      if (via) quoteId = Number(via.id);
+    }
+    const quote = quoteId
+      ? (await q(`SELECT id, quote_number, status, total_amount, currency, converted_order_id FROM quotations WHERE id = $1`, [quoteId]))[0]
+      : null;
+    let orderId = quote?.converted_order_id ? Number(quote.converted_order_id) : null;
+    if (!orderId && quoteId) {
+      const o = (await q(`SELECT id FROM orders WHERE quote_id = $1 ORDER BY id DESC LIMIT 1`, [quoteId]).catch(() => []))[0];
+      if (o) orderId = Number(o.id);
+    }
+    const order = orderId
+      ? (await q(`SELECT id, order_number, status, total_amount FROM orders WHERE id = $1`, [orderId]))[0]
+      : null;
+    const dns = orderId
+      ? await q(`SELECT id, dn_number, status, issue_date FROM delivery_notes WHERE order_id = $1 AND status <> 'cancelled' ORDER BY id`, [orderId]).catch(() => [])
+      : [];
+    const invoices = orderId
+      ? await q(`SELECT id, invoice_number, status, invoice_type, total_amount FROM invoices WHERE order_id = $1 AND status <> 'cancelled' ORDER BY id`, [orderId]).catch(() => [])
+      : (quoteId
+        ? await q(`SELECT id, invoice_number, status, invoice_type, total_amount FROM invoices WHERE quotation_id = $1 AND status <> 'cancelled' ORDER BY id`, [quoteId]).catch(() => [])
+        : []);
+    const steps = [
+      quote ? { kind: "quote" as const, id: Number(quote.id), number: quote.quote_number, status: quote.status, href: `/ponudi?open=${quote.id}` } : null,
+      order ? { kind: "order" as const, id: Number(order.id), number: order.order_number, status: order.status, href: `/klienti?order=${order.id}` } : null,
+      ...dns.map((d: any) => ({ kind: "delivery" as const, id: Number(d.id), number: d.dn_number, status: d.status, href: `/ispratnici?open=${d.id}` })),
+      ...invoices.map((i: any) => ({ kind: "invoice" as const, id: Number(i.id), number: i.invoice_number, status: i.status, href: `/smetkovodstvo?open=${i.id}`, invoiceType: i.invoice_type })),
+    ].filter(Boolean);
+    return {
+      opportunityId: input.id,
+      customerId: opp.customer_id ? Number(opp.customer_id) : null,
+      quotationId: quoteId,
+      orderId,
+      steps,
+      next: nextStepFromTimeline({ stage: opp.stage, quote: quote ? { id: Number(quote.id), status: quote.status } : null, order: order ? { id: Number(order.id), status: order.status } : null, hasDn: dns.length > 0, hasInvoice: invoices.length > 0 }),
+    };
+  }),
 
   // ===== Продажни услови =====
   customerTerms: publicQuery.input(z.object({ customerId: z.number() })).query(async ({ input }) => {

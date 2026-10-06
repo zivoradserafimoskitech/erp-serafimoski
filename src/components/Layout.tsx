@@ -29,7 +29,7 @@ const navGroups: NavGroup[] = [
     label: "Продажба",
     items: [
       { path: "/prodazba", label: "Продажба (hub)", icon: ShoppingBag },
-      { path: "/crm", label: "Можности (CRM)", icon: Target },
+      { path: "/crm", label: "Потенцијални продажби", icon: Target },
       { path: "/ponudi", label: "Понуди", icon: FileText },
       { path: "/cenovnici", label: "Ценовници", icon: Tags },
       { path: "/klienti", label: "Клиенти и нарачки", icon: Users },

@@ -37,7 +37,7 @@ const CATALOG: ReportDef[] = [
   { id: "profit-order", category: "sales", title: "Добивка по нарачка", description: "План vs стварно по нарачка", href: "/finansii?tab=profit", icon: TrendingUp },
   { id: "sales-yoy", category: "sales", title: "Година спрема година", description: "Промет и тренд по месеци", view: "yoy", icon: CalendarRange },
   { id: "sales-budget", category: "sales", title: "Буџет vs остварување", description: "План и отстапувања", view: "budget", icon: Target },
-  { id: "crm-pipeline", category: "crm", title: "CRM pipeline", description: "Можности, win-rate, изгубени причини", href: "/crm", icon: Target },
+  { id: "crm-pipeline", category: "crm", title: "CRM pipeline", description: "Потенцијални продажби, win-rate, изгубени причини", href: "/crm", icon: Target },
   { id: "deal-flow", category: "sales", title: "Тек на нарачки", description: "Од понуда до наплата", href: "/tek", icon: TrendingUp },
   { id: "sales-summary", category: "sales", title: "Продажба по купувач / продавач", description: "Фактуриран промет и нарачки по продавач", view: "salesSummary", icon: ShoppingBag },
   { id: "price-lists", category: "sales", title: "Ценовници", description: "Попусти и цени по клиент", href: "/cenovnici", icon: Tags },

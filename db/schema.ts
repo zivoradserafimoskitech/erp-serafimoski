@@ -778,6 +778,7 @@ export const quotations = pgTable("quotations", {
   paymentSchedule: text("payment_schedule"), // JSON: [{ percent, when, days? }] — види contracts/payment-terms.ts
   notes: text("notes"),
   convertedOrderId: bigint("converted_order_id", { mode: "number" }),
+  opportunityId: integer("opportunity_id"),
   salesperson: varchar("salesperson", { length: 160 }),
   createdBy: bigint("created_by", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1144,6 +1145,7 @@ export const crmOpportunities = pgTable("crm_opportunities", {
   quotationId: integer("quotation_id"),
   owner: varchar("owner", { length: 160 }),
   notes: text("notes"),
+  products: text("products"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

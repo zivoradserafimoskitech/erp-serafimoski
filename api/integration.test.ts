@@ -848,7 +848,18 @@ describe.skipIf(!url)("целосен тек (интеграциски)", () => 
   it("Ф3: CRM, портал, продажни услови, отсуства и МПИН, RFQ/ценовници/одобрување, тристрано, извештаи и буџет", async () => {
     const { getPool } = await import("./queries/connection");
     const pool = getPool();
-    // CRM: можност → изгубена бара причина; активност
+    // CRM: потенцијална продажба → понуда (врска назад) + timeline; изгубена бара причина; активност
+    await expect(caller.crm.oppSave({ title: "без клиент", value: 1, stage: "new" } as any)).rejects.toThrow();
+    const linked = await caller.crm.oppSave({ customerId: ids.cust, title: "Ласерски рез", value: 50000, stage: "new", products: "плоча 2 mm", owner: "Марко" });
+    expect((await caller.crm.oppList({})).find((o: any) => o.id === linked.id)?.products).toBe("плоча 2 mm");
+    const fromOpp = await caller.crm.oppToQuotation({ opportunityId: linked.id });
+    expect(fromOpp.existing).toBe(false);
+    expect(Number((await pool.query(`SELECT opportunity_id FROM quotations WHERE id = $1`, [fromOpp.id])).rows[0].opportunity_id)).toBe(linked.id);
+    const tl = await caller.crm.oppTimeline({ id: linked.id });
+    expect(tl.next.action).toBe("open_quote");
+    expect(tl.steps.some((s: any) => s.kind === "quote")).toBe(true);
+    expect((await caller.crm.oppList({ customerId: ids.cust, includeClosed: true })).some((o: any) => o.id === linked.id)).toBe(true);
+
     const opp = await caller.crm.oppSave({ customerId: ids.cust, title: "Ограда 40 m", value: 300000, stage: "new" });
     await expect(caller.crm.oppSave({ id: opp.id, customerId: ids.cust, title: "Ограда 40 m", value: 300000, stage: "lost" })).rejects.toThrow(/зошто/);
     await caller.crm.activitySave({ customerId: ids.cust, opportunityId: opp.id, kind: "call", subject: "Повик за мерки" });

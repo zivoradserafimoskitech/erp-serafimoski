@@ -592,5 +592,9 @@ export function getExtraSql(): string[] {
       "order_item_id" bigint,
       "restock" boolean DEFAULT true NOT NULL
     )`,
+    `ALTER TABLE "crm_opportunities" ADD COLUMN IF NOT EXISTS "products" text`,
+    `ALTER TABLE "quotations" ADD COLUMN IF NOT EXISTS "opportunity_id" integer`,
+    `CREATE INDEX IF NOT EXISTS "quotations_opportunity_idx" ON "quotations" ("opportunity_id")`,
+
   ];
 }
