@@ -26,6 +26,9 @@ import SalesHub from "@/pages/SalesHub";
 import PriceLists from "@/pages/PriceLists";
 import Leads from "@/pages/marketing/Leads";
 import WebFeed from "@/pages/marketing/WebFeed";
+import Campaigns from "@/pages/marketing/Campaigns";
+import Audience from "@/pages/marketing/Audience";
+import AdSpend from "@/pages/marketing/AdSpend";
 
 export default function App() {
   return (
@@ -40,6 +43,9 @@ export default function App() {
       <Route path="/crm" element={<Layout><Crm /></Layout>} />
       <Route path="/marketing/baranja" element={<Layout><Leads /></Layout>} />
       <Route path="/marketing/katalog" element={<Layout><WebFeed /></Layout>} />
+      <Route path="/marketing/kampanji" element={<Layout><Campaigns /></Layout>} />
+      <Route path="/marketing/publika" element={<Layout><Audience /></Layout>} />
+      <Route path="/marketing/budzet" element={<Layout><AdSpend /></Layout>} />
       <Route path="/izvestai" element={<Layout><Reports /></Layout>} />
       <Route
         path="/"

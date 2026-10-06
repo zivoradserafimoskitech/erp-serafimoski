@@ -72,6 +72,7 @@ export const WRITE_ROLE_BY_ROUTER: Record<string, Role> = {
   purch: "manager",
   reports: "manager",
   marketing: "manager",
+  campaigns: "manager",
   // известувања: секој најавен ги означува своите како прочитани
   notifications: "viewer",
   ops: "operator",
@@ -91,10 +92,10 @@ export const ACCOUNTANT_ROUTERS = ["accounting", "finance", "settle", "reports",
 /** Мени по улога: патеки што ги гледа секоја улога (администраторот гледа сè). */
 export const MENU_BY_ROLE: Record<Role, string[] | "all"> = {
   admin: "all",
-  manager: ["/", "/marketing/baranja", "/marketing/katalog", "/prodazba", "/tek", "/crm", "/cenovnici", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva", "/ispratnici"],
+  manager: ["/", "/marketing/baranja", "/marketing/katalog", "/marketing/kampanji", "/marketing/publika", "/marketing/budzet", "/prodazba", "/tek", "/crm", "/cenovnici", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva", "/ispratnici"],
   accountant: ["/", "/tek", "/izvestai", "/smetkovodstvo", "/finansii", "/klienti", "/sredstva", "/ispratnici"],
   operator: ["/", "/proizvodstvo", "/sklad", "/kvalitet", "/priemnici", "/ispratnici"],
-  viewer: ["/", "/marketing/baranja", "/marketing/katalog", "/prodazba", "/tek", "/crm", "/cenovnici", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva", "/ispratnici"],
+  viewer: ["/", "/marketing/baranja", "/marketing/katalog", "/marketing/kampanji", "/marketing/publika", "/marketing/budzet", "/prodazba", "/tek", "/crm", "/cenovnici", "/izvestai", "/sklad", "/proizvodstvo", "/kvalitet", "/klienti", "/nabavka", "/smetkovodstvo", "/finansii", "/ponudi", "/priemnici", "/katalog", "/sredstva", "/ispratnici"],
 };
 
 export function canSeeMenu(role: string | undefined | null, path: string): boolean {

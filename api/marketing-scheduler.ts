@@ -1,9 +1,12 @@
 // Маркетинг позадински задачи: усогласување на изворот (понуда → нарачка → фактура).
 // Редицата за кампањи (М2) се закачува преку marketingTasks.
 import { syncAttribution } from "./marketing-leads";
+import { processCampaignQueue } from "./marketing-campaigns";
 
 export const marketingTasks: { name: string; everyMs: number; run: () => Promise<unknown>; last?: number }[] = [
   { name: "attribution", everyMs: 10 * 60_000, run: syncAttribution },
+  // редица за е-пошта кампањи: секоја минута по rate_per_minute пораки по кампања
+  { name: "campaign-queue", everyMs: 0, run: processCampaignQueue },
 ];
 
 let timer: ReturnType<typeof setInterval> | null = null;

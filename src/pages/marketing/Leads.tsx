@@ -315,9 +315,10 @@ function MarketingSettingsDialog({ open, onOpenChange }: { open: boolean; onOpen
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [emails, setEmails] = useState("");
+  const [doi, setDoi] = useState(true);
   useEffect(() => {
     if (!data) return;
-    setEnabled(data.autoReply.enabled); setSubject(data.autoReply.subject); setBody(data.autoReply.body); setEmails(data.notifyEmails.join(", "));
+    setEnabled(data.autoReply.enabled); setSubject(data.autoReply.subject); setBody(data.autoReply.body); setEmails(data.notifyEmails.join(", ")); setDoi(data.doubleOptIn);
   }, [data]);
   const save = trpc.marketing.marketingSettingsSave.useMutation({
     onSuccess: () => { utils.marketing.marketingSettingsGet.invalidate(); toast.success("Зачувано"); onOpenChange(false); },
@@ -356,11 +357,19 @@ function MarketingSettingsDialog({ open, onOpenChange }: { open: boolean; onOpen
             <Input placeholder="andrej@serafimoski.tech, prodazba@…" value={emails} onChange={(e) => setEmails(e.target.value)} />
             <p className="text-xs text-muted-foreground">За секое ново барање (покрај ѕвончето во апликацијата). Празно = само ѕвонче.</p>
           </section>
+          <section className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="doi" className="font-semibold">Потврда на согласност (double opt-in)</Label>
+              <Switch id="doi" checked={doi} onCheckedChange={setDoi} />
+            </div>
+            <p className="text-xs text-muted-foreground">Кога клиентот ќе штиклира „сакам понуди по е-пошта“, добива линк за потврда; дури по потврдата влегува во кампањите. Препорачано (доказ за согласност според ЗЗЛП/GDPR).</p>
+          </section>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Откажи</Button>
             <Button disabled={save.isPending || !subject.trim() || !body.trim()} onClick={() => save.mutate({
               autoReply: { enabled, subject: subject.trim(), body },
               notifyEmails: emails.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean),
+              doubleOptIn: doi,
             })}>Зачувај</Button>
           </div>
         </div>

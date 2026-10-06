@@ -10,9 +10,10 @@ import { toast } from "sonner";
 import { downloadTableXlsx } from "@/lib/xlsx";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/layout/EmptyState";
+import MarketingReport from "@/pages/marketing/MarketingReport";
 import {
   BarChart3, Users, Package, Cog, CalendarRange, Target, Download, Search,
-  Landmark, Receipt, TrendingUp, Scale, BookOpen, Warehouse, Factory, ExternalLink, ShoppingBag, Tags,
+  Landmark, Receipt, TrendingUp, Scale, BookOpen, Warehouse, Factory, ExternalLink, ShoppingBag, Tags, Megaphone, Wallet,
 } from "lucide-react";
 
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : Math.round(n).toLocaleString("mk-MK"));
@@ -23,7 +24,7 @@ const change = (cur: number, prev: number) => (prev ? (cur - prev) / Math.abs(pr
 
 type ReportDef = {
   id: string;
-  category: "sales" | "finance" | "ops" | "crm";
+  category: "sales" | "marketing" | "finance" | "ops" | "crm";
   title: string;
   description: string;
   view?: string;
@@ -42,6 +43,8 @@ const CATALOG: ReportDef[] = [
   { id: "sales-summary", category: "sales", title: "Продажба по купувач / продавач", description: "Фактуриран промет и нарачки по продавач", view: "salesSummary", icon: ShoppingBag },
   { id: "price-lists", category: "sales", title: "Ценовници", description: "Попусти и цени по клиент", href: "/cenovnici", icon: Tags },
 
+  { id: "marketing", category: "marketing", title: "Маркетинг: извори, кампањи, ROI", description: "Барања по извор/кампања, тек до фактура, приход и поврат на рекламите", view: "marketing", icon: Megaphone },
+  { id: "ad-spend", category: "marketing", title: "Буџет за реклами", description: "Внес на трошок по канал / кампања", href: "/marketing/budzet", icon: Wallet },
   { id: "vat", category: "finance", title: "ДДВ (КИФ / КУФ)", description: "Книги и рекапитулација", href: "/finansii?tab=vat", icon: Receipt },
   { id: "statements", category: "finance", title: "Биланси", description: "Биланс на состојба / успех", href: "/finansii?tab=statements", icon: BookOpen },
   { id: "trial", category: "finance", title: "Бруто биланс", description: "Салда по конта", href: "/finansii?tab=trial", icon: Scale },
@@ -54,6 +57,7 @@ const CATALOG: ReportDef[] = [
 
 const CAT_LABEL: Record<string, string> = {
   sales: "Продажба",
+  marketing: "Маркетинг",
   finance: "Финансии и сметководство",
   ops: "Операции (склад / производство)",
   crm: "CRM",
@@ -64,7 +68,7 @@ export default function Reports() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("all");
-  const view = (params.get("view") || "") as "customer" | "product" | "machine" | "yoy" | "budget" | "salesSummary" | "";
+  const view = (params.get("view") || "") as "customer" | "product" | "machine" | "yoy" | "budget" | "salesSummary" | "marketing" | "";
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [to, setTo] = useState(ymd(new Date()));
 
@@ -162,7 +166,7 @@ export default function Reports() {
               ← Назад кон сите извештаи
             </Button>
             <p className="text-sm font-medium text-gray-700">{active?.title ?? "Извештај"}</p>
-            {["customer", "product", "machine", "salesSummary"].includes(view) && (
+            {["customer", "product", "machine", "salesSummary", "marketing"].includes(view) && (
               <div className="flex gap-2">
                 <div className="space-y-1"><Label className="text-xs">Од</Label><DateInput className="h-9 w-40" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
                 <div className="space-y-1"><Label className="text-xs">До</Label><DateInput className="h-9 w-40" value={to} onChange={(e) => setTo(e.target.value)} /></div>
@@ -174,6 +178,7 @@ export default function Reports() {
           {view === "yoy" && <Yoy />}
           {view === "budget" && <Budget />}
           {view === "salesSummary" && <SalesSummary from={from} to={to} />}
+          {view === "marketing" && <MarketingReport from={from} to={to} />}
         </div>
       )}
     </div>

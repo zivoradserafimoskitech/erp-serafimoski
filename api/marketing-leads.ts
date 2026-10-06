@@ -23,6 +23,8 @@ export const marketingSettingsSchema = z.object({
   }).default({ enabled: true, subject: DEFAULT_AUTO_REPLY.subject, body: DEFAULT_AUTO_REPLY.body }),
   /** интерни адреси што добиваат е-пошта за секое ново барање */
   notifyEmails: z.array(z.string().email()).max(10).default([]),
+  /** согласност од формата → потврда по е-пошта (double opt-in) пред да влезе во кампањи */
+  doubleOptIn: z.boolean().default(true),
 });
 export type MarketingSettings = z.infer<typeof marketingSettingsSchema>;
 
