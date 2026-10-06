@@ -29,6 +29,7 @@ import { crmRouter } from "./crm-router";
 import { purchRouter } from "./purch-router";
 import { reportsRouter } from "./reports-router";
 import { marketingRouter } from "./marketing-router";
+import { campaignsRouter } from "./campaigns-router";
 import { notificationsRouter } from "./notifications";
 import { createRouter, publicQuery } from "./middleware";
 
@@ -65,6 +66,7 @@ export const appRouter = createRouter({
   purch: purchRouter,
   reports: reportsRouter,
   marketing: marketingRouter,
+  campaigns: campaignsRouter,
   notifications: notificationsRouter,
 });
 

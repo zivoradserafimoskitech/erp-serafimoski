@@ -67,6 +67,30 @@ import LeadForm from "./LeadForm";
 3. Автоматски одговор до клиентот од шаблон (Барања → Поставки), ако е поставена е-пошта за праќање (SMTP / `MAIL_PROVIDER`).
 4. Сомнителни барања (пребрзо, многу линкови) се чуваат со статус *Спам* без известување.
 
+## Пријава за билтен (double opt-in)
+
+Посебна мала форма (на пр. во footer-от) — само е-пошта:
+
+```html
+<form id="newsletter">
+  <input type="email" name="email" required placeholder="Ваша е-пошта">
+  <input type="text" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px">
+  <button>Пријави се</button>
+</form>
+<script>
+  document.getElementById("newsletter").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const r = await fetch("https://<ERP-домен>/api/public/subscribe", { method: "POST", body: new FormData(e.target) });
+    const j = await r.json(); alert(j.message || j.error);
+  });
+</script>
+```
+
+`POST /api/public/subscribe` (`email`, опционално `name`, `company`) → контакт „чека потврда“ + е-пошта со линк
+`/api/public/confirm/<token>`; по клик согласноста е „дадена“ (се чува IP, време, извор). Истото важи кога некој ќе
+штиклира „Сакам да добивам понуди“ во формата за барање (може да се исклучи во Барања → Поставки → double opt-in).
+Потребни: `APP_URL` и е-пошта за праќање. `429` по 5 обиди за 10 мин од иста IP.
+
 ## UTM за рекламите
 
 - **Google Ads**: вклучи *auto-tagging* (gclid) — доволно. Опционално Final URL suffix: `utm_source=google&utm_medium=cpc&utm_campaign={campaignid}`.

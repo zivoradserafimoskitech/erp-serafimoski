@@ -116,20 +116,27 @@ curl -s https://erp.vashdomain.mk/api/trpc/ping
 | Променлива | Задолжително | Опис |
 |---|---|---|
 | `ALLOWED_ORIGINS` | не | Дополнителни домени за CORS на `/api/public/*` (запирка). `https://serafimoski.tech` и `https://www.serafimoski.tech` се секогаш дозволени. |
-| `APP_URL` | препорачано | Јавна адреса на ERP-то — линк во интерните е-пораки и URL на feed-от. |
+| `APP_URL` | **за кампањи** | Јавна адреса на ERP-то — линкови за одјава, следење (клик/отворање), потврда на пријава (double opt-in), интерни е-пораки, feed. Без неа кампања не може да се закаже. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | за е-пошта | SMTP од env (резерва ако нема SMTP во Подесувања → Фирма). |
 | `MAIL_PROVIDER` + `BREVO_API_KEY` / `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_REGION` | не | Праќање преку API наместо SMTP. SES: преку SMTP. |
 | `MAIL_FROM` | со API провајдер | Испраќач, на пр. `Серафимоски <ponudi@serafimoski.tech>`. |
 | `LEAD_RATE_LIMIT` | не | Барања по IP за 10 мин (default 5). |
 | `FEED_TOKEN`, `FEED_BRAND`, `PUBLIC_SITE_URL` | не | Заштита и бренд на product feed-от. |
-| `MARKETING_SCHEDULER_DISABLED` | не | `true` го исклучува маркетинг планерот (не се извршува и кога `DISABLE_REMINDERS=true`). |
+| `MARKETING_SCHEDULER_DISABLED` | не | `true` го исклучува маркетинг планерот — редица за кампањи (секоја минута) и усогласување на изворот (не се извршува и кога `DISABLE_REMINDERS=true`). Без планер кампањите се праќаат рачно со „Прати серија“. |
+| `MARKETING_SECRET` | не | Тајна за потпис на линковите за клик. Ако ја нема, се генерира и чува во базата. |
 
 Чекори по deploy:
-1. Миграцијата е автоматска (табели `mkt_leads`, `mkt_lead_files`, `mkt_lead_events`, `app_notifications`; колони `mkt_*` на понуди/нарачки/фактури; веб-полиња на производи).
+1. Миграцијата е автоматска (табели `mkt_leads`, `mkt_lead_files`, `mkt_lead_events`, `app_notifications`, `mkt_contacts`, `mkt_consents`,
+   `mkt_suppressions`, `mkt_segments`, `mkt_campaigns`, `mkt_sends`, `mkt_clicks`, `mkt_ad_spend`; колони `mkt_*` на понуди/нарачки/фактури; веб-полиња на производи).
 2. Е-пошта: Подесувања → Фирма → SMTP или `SMTP_*`. Без е-пошта барањата се примаат, само не се праќа автоматски одговор.
 3. **DNS на serafimoski.tech нема DMARC запис** — пред праќање кампањи додај `_dmarc` TXT: `v=DMARC1; p=none; rua=mailto:dmarc@serafimoski.tech` (SPF/DKIM за Titan веќе постојат; за Brevo/Mailgun додај ги нивните DKIM записи).
 4. Формата на веб-страницата: види [docs/WEBSITE-FORM.md](docs/WEBSITE-FORM.md).
-5. Проверка: `curl -i -X OPTIONS -H "Origin: https://serafimoski.tech" -H "Access-Control-Request-Method: POST" $APP_URL/api/public/lead` → `access-control-allow-origin: https://serafimoski.tech`.
+5. Кампањи: **Маркетинг → Публика → Синхронизирај** (клиенти + барања) или увоз CSV. Клиентите влегуваат *без согласност* —
+   кампањите стандардно одат само до контакти со согласност; „клиенти без согласност (soft opt-in)“ е посебна опција во сегментот.
+   Секоја порака има `List-Unsubscribe` + `List-Unsubscribe-Post` (одјава со еден клик, бара Gmail/Yahoo за масовни испраќачи) и
+   линк за одјава; одјавените одат во листата за одјава и не добиваат повеќе (и по бришење/повторен увоз).
+   Брзина: Titan SMTP има дневни лимити — за повеќе од неколку стотини пораки користи Brevo/Mailgun (`MAIL_PROVIDER`).
+6. Проверка: `curl -i -X OPTIONS -H "Origin: https://serafimoski.tech" -H "Access-Control-Request-Method: POST" $APP_URL/api/public/lead` → `access-control-allow-origin: https://serafimoski.tech`.
 
 ## Застарено (не следи)
 

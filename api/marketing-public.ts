@@ -34,6 +34,11 @@ function safeRedirect(target: unknown, origins: string[]): string | null {
 }
 const withParam = (url: string, k: string, v: string) => { const u = new URL(url); u.searchParams.set(k, v); return u.toString(); };
 
+function c0html(title: string, body: string) {
+  return `<!doctype html><html lang="mk"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${escapeHtml(title)}</title>
+<body style="font-family:system-ui,sans-serif;max-width:520px;margin:15vh auto;padding:0 20px;color:#222;line-height:1.5"><h1 style="font-size:22px">${escapeHtml(title)}</h1>${body}</body></html>`;
+}
+
 function thanksPage(ok: boolean, msg: string) {
   return `<!doctype html><html lang="mk"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${ok ? "Благодариме" : "Грешка"}</title>
 <body style="font-family:system-ui,sans-serif;max-width:520px;margin:15vh auto;padding:0 20px;color:#222"><h1 style="font-size:22px">${ok ? "Благодариме!" : "Барањето не е испратено"}</h1><p>${escapeHtml(msg)}</p><p><a href="javascript:history.back()">← Назад</a></p></body></html>`;
@@ -105,6 +110,65 @@ export function registerMarketingPublic(app: Hono) {
       if (!r.ok) return respond(false, 400, { ok: false, error: r.error });
       return respond(true, 200, { ok: true, id: r.spam ? undefined : r.id });
     });
+
+  // ───── е-пошта кампањи: пиксел за отворање, клик, одјава, double opt-in ─────
+  const GIF = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+  app.get("/api/m/o/:file", async (c) => {
+    const token = c.req.param("file").replace(/\.gif$/, "");
+    const { trackOpen } = await import("./marketing-campaigns");
+    await trackOpen(token).catch(() => {});
+    return c.body(GIF, 200, { "Content-Type": "image/gif", "Cache-Control": "no-store, no-cache, must-revalidate, private" });
+  });
+  app.get("/api/m/c/:token", async (c) => {
+    const token = c.req.param("token"), url = c.req.query("u") ?? "", sig = c.req.query("s") ?? "";
+    const { verifyUrl, trackClick } = await import("./marketing-campaigns");
+    const fallback = process.env.PUBLIC_SITE_URL || "https://serafimoski.tech";
+    if (!/^https?:\/\//i.test(url) || !(await verifyUrl(token, url, sig).catch(() => false))) return c.redirect(fallback, 302);
+    await trackClick(token, url, { ip: ipOf(c), userAgent: c.req.header("user-agent") ?? null }).catch(() => {});
+    return c.redirect(url, 302);
+  });
+  const unsubPage = (title: string, body: string) => c0html(title, body);
+  app.get("/api/m/u/:token", async (c) => {
+    const token = c.req.param("token");
+    if (token === "preview") return c.html(unsubPage("Одјава", "<p>Ова е преглед — линкот за одјава работи во вистинската порака.</p>"));
+    return c.html(unsubPage("Одјава од е-пошта", `<p>Дали сакате да не добивате повеќе пораки со понуди и новости?</p>
+<form method="POST"><button type="submit" style="padding:12px 20px;border:0;border-radius:8px;background:#0f172a;color:#fff;font:inherit;font-weight:600;cursor:pointer">Одјави ме</button></form>`));
+  });
+  app.post("/api/m/u/:token", async (c) => {
+    const { unsubscribeByToken } = await import("./marketing-campaigns");
+    // RFC 8058: поштенскиот клиент праќа List-Unsubscribe=One-Click; формата од страницата праќа празно тело
+    const body = await c.req.parseBody().catch(() => ({} as Record<string, unknown>));
+    const oneClick = String((body as any)["List-Unsubscribe"] ?? "") === "One-Click";
+    const r = await unsubscribeByToken(c.req.param("token"), { ip: ipOf(c), userAgent: c.req.header("user-agent") ?? null, via: oneClick ? "one_click" : "page" });
+    if (oneClick) return c.text(r ? "unsubscribed" : "not found", r ? 200 : 404);
+    return c.html(unsubPage("Одјавени сте", r ? `<p>Адресата <b>${escapeHtml(r.email)}</b> е одјавена. Нема повеќе да добивате маркетинг пораки од нас.</p><p style="font-size:13px;opacity:.7">Ако сте се одјавиле по грешка, пишете ни и ќе ве вратиме.</p>` : "<p>Линкот не важи.</p>"), r ? 200 : 404);
+  });
+
+  const subRate = rateLimiter(5, 10 * 60_000);
+  app.post("/api/public/subscribe", async (c) => {
+    if (!subRate.hit(ipOf(c))) return c.json({ ok: false, error: "Премногу обиди. Обидете се за неколку минути." }, 429);
+    const ct = String(c.req.header("content-type") ?? "");
+    const b: any = ct.includes("application/json") ? await c.req.json().catch(() => ({})) : await c.req.parseBody().catch(() => ({}));
+    if (String(b?.[HONEYPOT_FIELD] ?? "").trim()) return c.json({ ok: true });
+    const email = String(b?.email ?? "").trim().toLowerCase();
+    const { EMAIL_RE } = await import("@contracts/marketing-campaigns");
+    if (!EMAIL_RE.test(email) || email.length > 320) return c.json({ ok: false, error: "Неважечка е-пошта" }, 400);
+    const { subscribe } = await import("./marketing-campaigns");
+    try {
+      const r = await subscribe({ email, name: b?.name ? String(b.name).slice(0, 160) : undefined, company: b?.company ? String(b.company).slice(0, 255) : undefined }, { ip: ipOf(c), userAgent: c.req.header("user-agent") ?? null });
+      return c.json({ ok: true, confirmed: r.alreadyConfirmed, message: r.alreadyConfirmed ? "Веќе сте пријавени." : "Проверете ја е-поштата и потврдете ја пријавата." });
+    } catch (e: any) {
+      console.error("[MKT] subscribe:", e?.message ?? e);
+      return c.json({ ok: false, error: "Пријавата моментално не е достапна. Обидете се подоцна." }, 503);
+    }
+  });
+  app.get("/api/public/confirm/:token", async (c) => {
+    const { confirmDoi } = await import("./marketing-campaigns");
+    const ok = await confirmDoi(c.req.param("token"), { ip: ipOf(c), userAgent: c.req.header("user-agent") ?? null });
+    return c.html(unsubPage(ok ? "Пријавата е потврдена" : "Линкот не важи", ok
+      ? "<p>Благодариме! Ќе добивате понуди и новости по е-пошта. Може да се одјавите во секое време преку линкот во секоја порака.</p>"
+      : "<p>Линкот за потврда не важи или е веќе искористен.</p>"), ok ? 200 : 404);
+  });
 
   const feedAllowed = (c: any) => !process.env.FEED_TOKEN || c.req.query("key") === process.env.FEED_TOKEN;
   const feedData = async () => {
