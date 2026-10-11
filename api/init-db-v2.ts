@@ -1,8 +1,11 @@
 // Табели за: курсна листа, благајна, главна книга, распоред, квалитет, одржување, вработени/плати.
 // Сите се идемпотентни (IF NOT EXISTS) и се извршуваат при секое стартување.
 
+import { SPACEFRE_SQL } from "./spacefre-connector";
+
 export function getExtraSql(): string[] {
   return [
+    ...SPACEFRE_SQL,
     // ===== КУРСНА ЛИСТА =====
     `CREATE TABLE IF NOT EXISTS "exchange_rates" (
       "id" serial PRIMARY KEY NOT NULL,

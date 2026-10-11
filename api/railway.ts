@@ -7,6 +7,7 @@ import { createOAuthCallbackHandler } from "./kimi/auth";
 import { Paths } from "@contracts/constants";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { cors } from "hono/cors";
+import { registerSpacefreConnector } from "./spacefre-connector";
 
 const app = new Hono();
 
@@ -108,6 +109,9 @@ const portalCaller = async () => {
   const mod: any = await import("./router");
   return mod.appRouter.createCaller({ req: new Request("http://portal"), resHeaders: new Headers(), actor: { id: null, name: "портал", role: "admin" } });
 };
+// ── Spacefre мрежа: потпишани webhooks (неактивно додека не се постават SPACEFRE_CONNECTOR_KEY / SPACEFRE_WEBHOOK_SECRET) ──
+registerSpacefreConnector(app);
+
 app.get("/api/portal/:token", async (c) => {
   const { portalCustomer, portalData } = await import("./crm-router");
   const cid = await portalCustomer(c.req.param("token"));
