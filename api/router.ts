@@ -28,6 +28,7 @@ import { mfgRouter } from "./mfg-router";
 import { crmRouter } from "./crm-router";
 import { purchRouter } from "./purch-router";
 import { reportsRouter } from "./reports-router";
+import { spacefreRouter } from "./spacefre-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -62,6 +63,7 @@ export const appRouter = createRouter({
   crm: crmRouter,
   purch: purchRouter,
   reports: reportsRouter,
+  spacefre: spacefreRouter,
 });
 
 export type AppRouter = typeof appRouter;

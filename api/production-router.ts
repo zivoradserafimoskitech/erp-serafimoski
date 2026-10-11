@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { onErpWorkOrderStatus, onErpInvoice, spacefreInvoiceTerms } from "./spacefre-connector";
 import { eq, desc } from "drizzle-orm";
 // PostgreSQL compat
 import { createRouter, publicQuery } from "./middleware";
@@ -283,6 +284,7 @@ export const productionRouter = createRouter({
       }
 
       await db.update(workOrders).set(updateData).where(eq(workOrders.id, id));
+      if (input.status) void onErpWorkOrderStatus(id, input.status); // Spacefre: push progress (no-op when not configured)
       return { success: true, finishedGoodsRegistered };
     }),
 
@@ -766,12 +768,15 @@ export const productionRouter = createRouter({
             const price = Math.round(cost * (1 + input.marginPercent / 100) * 100) / 100;
             return [{ description: wo[0].description ?? `Работен налог ${wo[0].woNumber}`, quantity: "1", unit: "pcs", unitPrice: String(price), totalPrice: String(price) }];
           })();
-      const subtotal = Math.round(lines.reduce((a: any, l: any) => a + Number(l.totalPrice), 0) * 100) / 100;
+      let subtotal = Math.round(lines.reduce((a: any, l: any) => a + Number(l.totalPrice), 0) * 100) / 100;
       if (!(subtotal > 0)) throw new Error("Налогот нема цена (ни во нарачката, ни пресметан трошок) — креирај фактура рачно");
       // Валута и ДДВ од понудата од која е нарачката (извоз во EUR = 0% ДДВ); без понуда -- денари, 18%
       const { quotations } = await import("@db/schema");
       const quo = oItems.length > 0 ? (await db.select().from(quotations).where(eq(quotations.convertedOrderId, wo[0].orderId!)))[0] : undefined;
-      const currency = quo?.currency || "MKD";
+      // Spacefre нарачка: валута и нето износ од Spacefre (избрана валута, заклучен курс)
+      const sf = await spacefreInvoiceTerms(wo[0].orderId);
+      if (sf) subtotal = sf.subtotal;
+      const currency = sf?.currency || quo?.currency || "MKD";
       const vatRate = quo ? Number(quo.vatRate ?? 18) : 18;
       const vat = Math.round(subtotal * vatRate) / 100;
 
@@ -794,6 +799,7 @@ export const productionRouter = createRouter({
           documentId: invId, documentType: "invoice", ...l, vatRate: vatRate.toFixed(2), itemType: "manual",
         })) as any);
       }
+      if (sf && wo[0].orderId) void onErpInvoice(wo[0].orderId, invoiceNumber, subtotal.toFixed(2), currency, today);
       return { success: true, invoiceNumber, id: invId };
     }),
 
